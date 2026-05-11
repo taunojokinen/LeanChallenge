@@ -1,0 +1,19 @@
+.cockpit-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 20px;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.cockpit-main {
+  display: grid;
+  gap: 18px;
+}
+
+@media (max-width: 980px) {
+  .cockpit-layout {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,29 @@
+.sidebar {
+  border: 3px solid #133a5a;
+  border-radius: 28px;
+  background: #d8cfb0;
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.sidebar h2 {
+  margin: 0;
+  text-align: center;
+  font-size: 2rem;
+}
+
+.sidebar-list {
+  display: grid;
+  gap: 10px;
+}
+
+.sidebar-item {
+  border: 3px solid #133a5a;
+  border-radius: 20px;
+  background: #f3f3f3;
+  color: #205f95;
+  font-size: 1.8rem;
+  min-height: 72px;
+}

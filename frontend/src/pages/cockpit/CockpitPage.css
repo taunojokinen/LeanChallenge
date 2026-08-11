@@ -12,6 +12,28 @@
   gap: 18px;
 }
 
+.phase-banner {
+  background: var(--color-panel-soft);
+  border: var(--border-width-thin) solid var(--color-border-soft);
+  border-radius: var(--radius-lg);
+  padding: var(--space-9) var(--space-10);
+}
+
+.phase-banner h2 {
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-size-md);
+}
+
+.phase-banner p {
+  margin: 0 0 var(--space-3);
+  font-weight: var(--font-weight-semibold);
+}
+
+.phase-banner span {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
 @media (max-width: 980px) {
   .cockpit-layout {
     grid-template-columns: 1fr;

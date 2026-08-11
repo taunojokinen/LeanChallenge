@@ -1,14 +1,14 @@
 .gauges-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  gap: var(--space-8);
 }
 
 .gauge-card {
-  padding: 14px;
-  border-radius: 14px;
-  border: 3px solid #133a5a;
-  background: #f8fafb;
+  padding: var(--space-8);
+  border-radius: var(--radius-xl);
+  border: var(--border-width-strong) solid var(--color-border);
+  background: var(--color-panel);
   text-align: center;
 }
 
@@ -16,19 +16,19 @@
   width: 160px;
   height: 160px;
   margin: 0 auto;
-  border-radius: 50%;
-  border: 16px solid #40c463;
-  border-left-color: #ff6b57;
-  border-bottom-color: #f2c94c;
+  border-radius: var(--radius-pill);
+  border: 16px solid var(--color-success);
+  border-left-color: var(--color-danger);
+  border-bottom-color: var(--color-warning);
   display: grid;
   place-items: center;
-  font-weight: 700;
-  font-size: 2rem;
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-3xl);
 }
 
 .gauge-card h3 {
-  margin: 12px 0 0;
-  font-size: 1.9rem;
+  margin: var(--space-7) 0 0;
+  font-size: var(--font-size-2xl);
 }
 
 @media (max-width: 980px) {

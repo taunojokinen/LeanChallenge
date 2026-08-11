@@ -1,6 +1,6 @@
 .ui-card {
-  border: 2px solid #133a5a;
-  border-radius: 12px;
-  background: #f8fafb;
-  padding: 0.75rem;
+  border: var(--border-width-regular) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-panel);
+  padding: var(--space-5);
 }

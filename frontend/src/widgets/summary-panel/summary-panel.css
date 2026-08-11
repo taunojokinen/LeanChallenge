@@ -1,25 +1,25 @@
 .summary-panel {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  border: 3px solid #133a5a;
-  border-radius: 26px;
-  background: #d8cfb0;
-  padding: 14px;
+  gap: var(--space-7);
+  border: var(--border-width-strong) solid var(--color-border);
+  border-radius: var(--radius-5xl);
+  background: var(--color-panel-alt);
+  padding: var(--space-8);
   align-items: center;
 }
 
 .summary-cards {
   display: flex;
-  gap: 10px;
+  gap: var(--space-6);
   flex-wrap: wrap;
 }
 
 .summary-card {
-  background: #f3f3f3;
-  border: 3px solid #133a5a;
-  border-radius: 16px;
-  padding: 8px 14px;
+  background: var(--color-surface);
+  border: var(--border-width-strong) solid var(--color-border);
+  border-radius: var(--radius-2xl);
+  padding: var(--space-4) var(--space-7);
   min-width: 150px;
 }
 
@@ -31,11 +31,11 @@
 }
 
 .ready-button {
-  border: 3px solid #133a5a;
-  border-radius: 18px;
-  background: #4edb5e;
-  color: #ffffff;
-  font-size: 2rem;
+  border: var(--border-width-strong) solid var(--color-border);
+  border-radius: var(--radius-3xl);
+  background: var(--color-success);
+  color: var(--color-text-on-accent);
+  font-size: var(--font-size-3xl);
   min-width: 170px;
   min-height: 90px;
 }

@@ -1,29 +1,29 @@
 .sidebar {
-  border: 3px solid #133a5a;
-  border-radius: 28px;
-  background: #d8cfb0;
-  padding: 16px;
+  border: var(--border-width-strong) solid var(--color-border);
+  border-radius: var(--radius-6xl);
+  background: var(--color-panel-alt);
+  padding: var(--space-9);
   display: grid;
-  gap: 14px;
+  gap: var(--space-8);
   align-content: start;
 }
 
 .sidebar h2 {
   margin: 0;
   text-align: center;
-  font-size: 2rem;
+  font-size: var(--font-size-3xl);
 }
 
 .sidebar-list {
   display: grid;
-  gap: 10px;
+  gap: var(--space-6);
 }
 
 .sidebar-item {
-  border: 3px solid #133a5a;
-  border-radius: 20px;
-  background: #f3f3f3;
-  color: #205f95;
-  font-size: 1.8rem;
+  border: var(--border-width-strong) solid var(--color-border);
+  border-radius: var(--radius-4xl);
+  background: var(--color-surface);
+  color: var(--color-primary-soft);
+  font-size: var(--font-size-xl);
   min-height: 72px;
 }

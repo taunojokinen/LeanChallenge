@@ -4,15 +4,15 @@
   align-items: center;
   justify-content: center;
   min-height: 100svh;
-  gap: 1rem;
+  gap: var(--space-7);
   text-align: center;
-  padding: 1.5rem;
+  padding: var(--space-10);
 }
 
 .app button {
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 0.65rem 1.1rem;
-  font-size: 1rem;
+  font-size: var(--font-size-sm);
   cursor: pointer;
 }

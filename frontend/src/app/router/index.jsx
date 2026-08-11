@@ -4,7 +4,11 @@ export const appRoutes = [
     pageKey: 'landing',
   },
   {
-    path: '/cockpit',
-    pageKey: 'cockpit',
+    path: '/login',
+    pageKey: 'login',
+  },
+  {
+    path: '/plan',
+    pageKey: 'plan',
   },
 ]

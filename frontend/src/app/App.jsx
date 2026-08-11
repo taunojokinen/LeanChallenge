@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import CockpitPage from '../pages/cockpit/CockpitPage.jsx'
 import LandingPage from '../pages/landing/LandingPage.jsx'
+import LoginPage from '../pages/login/LoginPage.jsx'
+import PlanPage from '../pages/plan/PlanPage.jsx'
 import { appRoutes } from './router/index.jsx'
 
 function App() {
@@ -33,11 +34,20 @@ function App() {
     setPathname(nextPath)
   }
 
-  if (pageKey === 'cockpit') {
-    return <CockpitPage />
+  if (pageKey === 'plan') {
+    return <PlanPage />
   }
 
-  return <LandingPage onLogin={() => navigateTo('/cockpit')} />
+  if (pageKey === 'login') {
+    return (
+      <LoginPage
+        onBackToLanding={() => navigateTo('/')}
+        onLoginSuccess={() => navigateTo('/plan')}
+      />
+    )
+  }
+
+  return <LandingPage onLogin={() => navigateTo('/login')} />
 }
 
 export default App

@@ -1,85 +1,43 @@
 .plan-page {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  width: 100%;
   max-width: 1360px;
-  margin: 0 auto;
-  padding: 20px;
+  min-width: 0;
+  margin: 0;
 }
 
 .plan-main {
   display: grid;
+  width: 100%;
+  min-width: 0;
   gap: var(--space-10);
 }
 
-.plan-header {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-8);
-  align-items: start;
+.plan-kpi-grid,
+.plan-section,
+.plan-two-column,
+.plan-goals-list,
+.plan-footer {
+  width: 100%;
+  min-width: 0;
+}
+
+.plan-loading {
   background: var(--color-panel-soft);
   border: var(--border-width-thin) solid var(--color-border-soft);
   border-radius: var(--radius-lg);
   padding: var(--space-9) var(--space-10);
 }
 
-.plan-header h1 {
+.plan-loading h1 {
   margin: 0 0 var(--space-4);
   font-size: var(--font-size-3xl);
 }
 
-.plan-header p {
-  margin: 0 0 var(--space-3);
-  font-weight: var(--font-weight-semibold);
-}
-
-.plan-header small {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-}
-
-.plan-pdca-track {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-}
-
-.plan-pdca-track span {
-  border: var(--border-width-thin) solid var(--color-border-soft);
-  border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-5);
-  background: var(--color-surface);
-  font-size: var(--font-size-sm);
-}
-
-.plan-pdca-track .is-active {
-  border-color: var(--color-border-accent);
-  color: var(--color-text-on-accent);
-  background: var(--color-primary-accent);
-}
-
-.plan-kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: var(--space-7);
-}
-
-.plan-kpi-card {
-  text-align: center;
-}
-
-.plan-kpi-card h2 {
+.plan-loading p {
   margin: 0;
-  font-size: var(--font-size-sm);
-}
-
-.plan-kpi-card p {
-  margin: var(--space-4) 0 var(--space-3);
-  font-size: var(--font-size-2xl);
-  font-weight: var(--font-weight-bold);
-}
-
-.plan-kpi-card small {
-  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-semibold);
 }
 
 .plan-section {
@@ -102,7 +60,7 @@
 }
 
 .plan-knl-section .gauge-card {
-  min-height: 18rem;
+  min-height: 0;
   padding: var(--space-10);
 }
 
@@ -239,24 +197,13 @@
 }
 
 @media (max-width: 980px) {
-  .plan-header {
-    flex-direction: column;
-  }
-
   .plan-goal-item {
     grid-template-columns: 1fr;
   }
 
-  .plan-kpi-grid,
   .plan-two-column,
   .plan-knl-section .gauges-grid {
     grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 1320px) {
-  .plan-kpi-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

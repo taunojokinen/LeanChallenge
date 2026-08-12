@@ -9,6 +9,34 @@ export const appRoutes = [
   },
   {
     path: '/plan',
-    pageKey: 'plan',
+    pageKey: 'plan-root',
+  },
+  {
+    path: '/plan/production',
+    pageKey: 'plan-production',
+  },
+  {
+    path: '/plan/income',
+    pageKey: 'plan-income',
+  },
+  {
+    path: '/plan/balance-sheet',
+    pageKey: 'plan-balance-sheet',
+  },
+  {
+    path: '/do',
+    pageKey: 'do',
+  },
+  {
+    path: '/check',
+    pageKey: 'check',
+  },
+  {
+    path: '/act',
+    pageKey: 'act',
+  },
+  {
+    path: '/investments',
+    pageKey: 'investments',
   },
 ]

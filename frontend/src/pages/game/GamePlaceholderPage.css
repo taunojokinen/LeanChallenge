@@ -1,0 +1,18 @@
+.game-placeholder-page {
+  display: grid;
+  gap: var(--space-4);
+  background: var(--color-panel-soft);
+  border: var(--border-width-thin) solid var(--color-border-soft);
+  border-radius: var(--radius-lg);
+  padding: var(--space-10);
+}
+
+.game-placeholder-page h1 {
+  margin: 0;
+  font-size: var(--font-size-xl);
+}
+
+.game-placeholder-page p {
+  margin: 0;
+  color: var(--color-text-secondary);
+}

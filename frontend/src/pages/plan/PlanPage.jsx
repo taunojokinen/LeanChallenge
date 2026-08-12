@@ -98,7 +98,7 @@ function PlanPage() {
     return (
       <div className="plan-page">
         <main className="plan-main">
-          <section className="plan-header">
+          <section className="plan-loading">
             <h1>PLAN</h1>
             <p>Ladataan PLAN-näkymää...</p>
           </section>
@@ -110,34 +110,6 @@ function PlanPage() {
   return (
     <div className="plan-page">
       <main className="plan-main">
-        <section className="plan-header" aria-label="Kierrostieto">
-          <div>
-            <h1>PLAN</h1>
-            <p>
-              Kierros {snapshot.round} / {snapshot.totalRounds}
-            </p>
-            <small>Aktiivinen PDCA-vaihe: {snapshot.activePhase}</small>
-          </div>
-          <div className="plan-pdca-track" aria-label="PDCA eteneminen">
-            <span className="is-active">PLAN</span>
-            <span>DO</span>
-            <span>CHECK</span>
-            <span>ACT</span>
-          </div>
-        </section>
-
-        <section className="plan-kpi-grid" aria-label="Yrityksen päätunnusluvut">
-          {snapshot.kpis.map((kpi) => (
-            <Card key={kpi.key}>
-              <article className="plan-kpi-card">
-                <h2>{kpi.label}</h2>
-                <p>{kpi.value}</p>
-                <small>Muutos: {kpi.delta}</small>
-              </article>
-            </Card>
-          ))}
-        </section>
-
         <section className="plan-section plan-knl-section" aria-label="KNL-mittarit">
           <header>
             <h2>KNL-mittarit</h2>

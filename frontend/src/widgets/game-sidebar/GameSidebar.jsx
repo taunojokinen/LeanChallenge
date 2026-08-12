@@ -1,13 +1,14 @@
 import './GameSidebar.css'
 
 const planSubPages = [
+  { key: 'plan-cockpit', label: 'Cockpit', path: '/plan/cockpit' },
+  { key: 'plan-production', label: 'Tuotanto', path: '/plan/production' },
   { key: 'plan-income', label: 'Tulos', path: '/plan/income' },
   { key: 'plan-balance-sheet', label: 'Tase', path: '/plan/balance-sheet' },
-  { key: 'plan-production', label: 'Tuotanto', path: '/plan/production' },
 ]
 
 const mainPages = [
-  { key: 'plan', label: 'PLAN', path: '/plan/production' },
+  { key: 'plan', label: 'PLAN', path: '/plan/cockpit' },
   { key: 'do', label: 'DO', path: '/do' },
   { key: 'check', label: 'CHECK', path: '/check' },
   { key: 'act', label: 'ACT', path: '/act' },

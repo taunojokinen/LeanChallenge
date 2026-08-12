@@ -66,15 +66,15 @@
 
 .game-header-kpis {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-4);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-3);
   min-width: 0;
 }
 
 .game-header-kpi {
   display: grid;
   gap: 2px;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2);
   border-radius: var(--radius-sm);
   border: var(--border-width-thin) solid color-mix(in srgb, var(--color-text-on-accent) 18%, transparent 82%);
   background: color-mix(in srgb, var(--color-primary-accent) 24%, var(--color-primary) 76%);
@@ -88,7 +88,7 @@
 
 .game-header-kpi p {
   margin: 0;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   white-space: nowrap;
   overflow: hidden;

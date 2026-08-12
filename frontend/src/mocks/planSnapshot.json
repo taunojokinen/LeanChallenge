@@ -7,6 +7,7 @@
     { "key": "revenue", "label": "Liikevaihto", "value": "1 218 000 €", "delta": "+2.7 %" },
     { "key": "result", "label": "Tulos", "value": "38 600 €", "delta": "-3.2 %" },
     { "key": "oee", "label": "KNL", "value": "71 %", "delta": "+1.4 %-yks." },
+    { "key": "inventoryTurnover", "label": "Varaston kiertonopeus", "value": 5.2, "delta": "+0.4" },
     { "key": "delivery", "label": "Toimitusvarmuus", "value": "92 %", "delta": "-1.0 %-yks." },
     { "key": "capacity", "label": "Valmistuskapasiteetti", "value": "850 kpl", "delta": "+3.0 %" }
   ],

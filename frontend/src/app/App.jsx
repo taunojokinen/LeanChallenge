@@ -4,10 +4,26 @@ import LandingPage from '../pages/landing/LandingPage.jsx'
 import LoginPage from '../pages/login/LoginPage.jsx'
 import GamePlaceholderPage from '../pages/game/GamePlaceholderPage.jsx'
 import planSnapshot from '../mocks/planSnapshot.json'
+import PlanCockpitPage from '../pages/plan/PlanCockpitPage.jsx'
 import PlanPage from '../pages/plan/PlanPage.jsx'
 import { appRoutes } from './router/index.jsx'
 
+function normalizePath(pathname, shouldReplace = false) {
+  const currentPath = pathname || '/'
+
+  if (currentPath === '/plan') {
+    if (shouldReplace) {
+      window.history.replaceState({}, '', '/plan/cockpit')
+    }
+
+    return '/plan/cockpit'
+  }
+
+  return currentPath
+}
+
 const gamePhaseByPageKey = {
+  'plan-cockpit': 'PLAN',
   'plan-production': 'PLAN',
   'plan-income': 'PLAN',
   'plan-balance-sheet': 'PLAN',
@@ -49,24 +65,31 @@ const headerKpiMap = {
   production: 'Tuotantomäärä',
   revenue: 'Liikevaihto',
   result: 'Tulos',
+  inventoryTurnover: 'Varaston kiertonopeus',
 }
 
-const gameHeaderKpis = ['oee', 'production', 'revenue', 'result']
+const gameHeaderKpis = ['oee', 'production', 'revenue', 'result', 'inventoryTurnover']
   .map((key) => planSnapshot.kpis.find((item) => item.key === key))
   .filter(Boolean)
   .map((item) => ({
     key: item.key,
     label: headerKpiMap[item.key] ?? item.label,
-    value: item.value,
+    value:
+      item.key === 'inventoryTurnover'
+        ? `${Number(item.value).toLocaleString('fi-FI', {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1,
+          })}x`
+        : item.value,
     delta: item.delta,
   }))
 
 function App() {
-  const [pathname, setPathname] = useState(() => window.location.pathname || '/')
+  const [pathname, setPathname] = useState(() => normalizePath(window.location.pathname, true))
 
   useEffect(() => {
     const handlePopState = () => {
-      setPathname(window.location.pathname || '/')
+      setPathname(normalizePath(window.location.pathname, true))
     }
 
     window.addEventListener('popstate', handlePopState)
@@ -82,31 +105,22 @@ function App() {
     return matchedRoute?.pageKey ?? 'landing'
   }, [pathname])
 
-  useEffect(() => {
-    if (pageKey === 'plan-root') {
-      window.history.replaceState({}, '', '/plan/production')
-      setPathname('/plan/production')
-    }
-  }, [pageKey])
-
-  if (pageKey === 'plan-root') {
-    return null
-  }
-
   const navigateTo = (nextPath) => {
-    if (nextPath === pathname) {
+    const normalizedPath = normalizePath(nextPath)
+
+    if (normalizedPath === pathname) {
       return
     }
 
-    window.history.pushState({}, '', nextPath)
-    setPathname(nextPath)
+    window.history.pushState({}, '', normalizedPath)
+    setPathname(normalizedPath)
   }
 
   if (pageKey === 'login') {
     return (
       <LoginPage
         onBackToLanding={() => navigateTo('/')}
-        onLoginSuccess={() => navigateTo('/plan/production')}
+        onLoginSuccess={() => navigateTo('/plan/cockpit')}
       />
     )
   }
@@ -126,7 +140,9 @@ function App() {
         onLogout={() => navigateTo('/login')}
         onNavigate={navigateTo}
       >
-        {pageKey === 'plan-production' ? (
+        {pageKey === 'plan-cockpit' ? (
+          <PlanCockpitPage onNavigate={navigateTo} />
+        ) : pageKey === 'plan-production' ? (
           <PlanPage />
         ) : (
           <GamePlaceholderPage title={placeholderContent.title} description={placeholderContent.description} />

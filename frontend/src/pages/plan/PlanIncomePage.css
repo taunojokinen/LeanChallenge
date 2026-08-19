@@ -1,0 +1,110 @@
+.plan-income-page {
+  width: 100%;
+  max-width: 920px;
+  display: grid;
+  gap: var(--space-9);
+}
+
+.plan-income-header h1 {
+  margin: 0;
+  font-size: var(--font-size-3xl);
+  letter-spacing: 0.04em;
+}
+
+.plan-income-header p {
+  margin: var(--space-3) 0 0;
+  color: var(--color-text-secondary);
+}
+
+.plan-income-table {
+  display: grid;
+  border: var(--border-width-thin) solid var(--color-border-soft);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--color-panel);
+}
+
+.plan-income-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  align-items: baseline;
+  gap: var(--space-8);
+  padding: var(--space-7) var(--space-9);
+}
+
+.plan-income-row + .plan-income-row {
+  border-top: var(--border-width-thin) solid var(--color-border-soft);
+}
+
+.plan-income-label {
+  font-size: var(--font-size-sm);
+}
+
+.plan-income-value {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  justify-self: end;
+}
+
+.plan-income-delta {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  justify-self: end;
+  min-width: 4.5rem;
+  text-align: right;
+}
+
+.plan-income-delta.is-positive {
+  color: var(--color-success);
+}
+
+.plan-income-delta.is-negative {
+  color: var(--color-danger);
+}
+
+.plan-income-delta.is-neutral {
+  color: var(--color-text-secondary);
+}
+
+.plan-income-row.is-subtotal {
+  border-top: var(--border-width-regular) solid var(--color-border);
+  border-bottom: var(--border-width-thin) solid var(--color-border);
+  background: var(--color-panel-soft);
+}
+
+.plan-income-row.is-subtotal .plan-income-label,
+.plan-income-row.is-subtotal .plan-income-value {
+  font-weight: var(--font-weight-bold);
+}
+
+.plan-income-row.is-total {
+  border-top: var(--border-width-strong) solid var(--color-border);
+  background: color-mix(in srgb, var(--color-panel-soft) 70%, white 30%);
+}
+
+.plan-income-row.is-total .plan-income-label,
+.plan-income-row.is-total .plan-income-value {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+}
+
+.plan-income-row.is-total.is-negative-total .plan-income-value {
+  color: var(--color-danger);
+}
+
+@media (max-width: 760px) {
+  .plan-income-page {
+    max-width: 100%;
+  }
+
+  .plan-income-row {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+
+  .plan-income-value,
+  .plan-income-delta {
+    justify-self: start;
+    text-align: left;
+  }
+}

@@ -32,6 +32,18 @@ export const appRoutes = [
     pageKey: 'do',
   },
   {
+    path: '/do/5s',
+    pageKey: 'do-5s',
+  },
+  {
+    path: '/do/projects',
+    pageKey: 'do-projects',
+  },
+  {
+    path: '/do/investments',
+    pageKey: 'do-investments',
+  },
+  {
     path: '/check',
     pageKey: 'check',
   },

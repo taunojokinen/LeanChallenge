@@ -4,8 +4,13 @@ import LandingPage from '../pages/landing/LandingPage.jsx'
 import LoginPage from '../pages/login/LoginPage.jsx'
 import GamePlaceholderPage from '../pages/game/GamePlaceholderPage.jsx'
 import planSnapshot from '../mocks/planSnapshot.json'
+import incomeSnapshot from '../mocks/incomeSnapshot.json'
+import { buildIncomeStatementRows } from '../entities/income/model.js'
 import PlanCockpitPage from '../pages/plan/PlanCockpitPage.jsx'
-import PlanPage from '../pages/plan/PlanPage.jsx'
+import PlanBalanceSheetPage from '../pages/plan/PlanBalanceSheetPage.jsx'
+import PlanIncomePage from '../pages/plan/PlanIncomePage.jsx'
+import PlanProductionPage from '../pages/plan/PlanProductionPage.jsx'
+import FiveSPage from '../pages/do/FiveSPage.jsx'
 import { appRoutes } from './router/index.jsx'
 
 function normalizePath(pathname, shouldReplace = false) {
@@ -19,6 +24,14 @@ function normalizePath(pathname, shouldReplace = false) {
     return '/plan/cockpit'
   }
 
+  if (currentPath === '/do' || currentPath === '/do/') {
+    if (shouldReplace) {
+      window.history.replaceState({}, '', '/do/5s')
+    }
+
+    return '/do/5s'
+  }
+
   return currentPath
 }
 
@@ -27,6 +40,9 @@ const gamePhaseByPageKey = {
   'plan-production': 'PLAN',
   'plan-income': 'PLAN',
   'plan-balance-sheet': 'PLAN',
+  'do-5s': 'DO',
+  'do-projects': 'DO',
+  'do-investments': 'DO',
   do: 'DO',
   check: 'CHECK',
   act: 'ACT',
@@ -34,10 +50,6 @@ const gamePhaseByPageKey = {
 }
 
 const placeholderContentByPageKey = {
-  'plan-income': {
-    title: 'PLAN - Tulos',
-    description: 'Tulossivu toteutetaan seuraavassa vaiheessa.',
-  },
   'plan-balance-sheet': {
     title: 'PLAN - Tase',
     description: 'Tasesivu toteutetaan seuraavassa vaiheessa.',
@@ -45,6 +57,14 @@ const placeholderContentByPageKey = {
   do: {
     title: 'DO',
     description: 'DO-vaiheen Lean-toimenpiteet toteutetaan seuraavassa vaiheessa.',
+  },
+  'do-projects': {
+    title: 'DO - Projektit',
+    description: 'Projektien näkymä toteutetaan seuraavassa vaiheessa.',
+  },
+  'do-investments': {
+    title: 'DO - Investoinnit',
+    description: 'DO-vaiheen investointinäkymä toteutetaan seuraavassa vaiheessa.',
   },
   check: {
     title: 'CHECK',
@@ -68,6 +88,9 @@ const headerKpiMap = {
   inventoryTurnover: 'Varaston kiertonopeus',
 }
 
+const incomeResultRow = buildIncomeStatementRows(incomeSnapshot).find((row) => row.key === 'result')
+const inventoryTurnoverKpi = planSnapshot.kpis.find((item) => item.key === 'inventoryTurnover')
+
 const gameHeaderKpis = ['oee', 'production', 'revenue', 'result', 'inventoryTurnover']
   .map((key) => planSnapshot.kpis.find((item) => item.key === key))
   .filter(Boolean)
@@ -75,13 +98,15 @@ const gameHeaderKpis = ['oee', 'production', 'revenue', 'result', 'inventoryTurn
     key: item.key,
     label: headerKpiMap[item.key] ?? item.label,
     value:
-      item.key === 'inventoryTurnover'
+      item.key === 'result' && incomeResultRow
+        ? incomeResultRow.amountText
+        : item.key === 'inventoryTurnover'
         ? `${Number(item.value).toLocaleString('fi-FI', {
             minimumFractionDigits: 1,
             maximumFractionDigits: 1,
           })}x`
         : item.value,
-    delta: item.delta,
+    delta: item.key === 'result' && incomeResultRow ? incomeResultRow.deltaText : item.delta,
   }))
 
 function App() {
@@ -142,8 +167,14 @@ function App() {
       >
         {pageKey === 'plan-cockpit' ? (
           <PlanCockpitPage onNavigate={navigateTo} />
+        ) : pageKey === 'plan-balance-sheet' ? (
+          <PlanBalanceSheetPage inventoryTurnover={inventoryTurnoverKpi?.value} />
+        ) : pageKey === 'plan-income' ? (
+          <PlanIncomePage />
         ) : pageKey === 'plan-production' ? (
-          <PlanPage />
+          <PlanProductionPage />
+        ) : pageKey === 'do-5s' ? (
+          <FiveSPage />
         ) : (
           <GamePlaceholderPage title={placeholderContent.title} description={placeholderContent.description} />
         )}

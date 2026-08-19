@@ -1,0 +1,13 @@
+{
+  "round": 4,
+  "rows": {
+    "sales": { "label": "Myynti", "unit": "kpl", "amount": 1500, "deltaPct": 5 },
+    "revenue": { "label": "Liikevaihto", "unit": "EUR", "amount": 2012343, "deltaPct": 4 },
+    "inventoryChange": { "label": "Varaston muutos", "unit": "EUR", "amount": 1500, "deltaPct": 2 },
+    "materials": { "label": "Raaka-aineet", "unit": "EUR", "amount": 1001111, "deltaPct": 5 },
+    "labor": { "label": "Työ", "unit": "EUR", "amount": 422111, "deltaPct": -2 },
+    "fixedCosts": { "label": "Kiinteät kustannukset", "unit": "EUR", "amount": 211000, "deltaPct": 3 },
+    "depreciation": { "label": "Poistot", "unit": "EUR", "amount": 101221, "deltaPct": 2 },
+    "financingCosts": { "label": "Rahoituskustannukset", "unit": "EUR", "amount": 333121, "deltaPct": 8 }
+  }
+}

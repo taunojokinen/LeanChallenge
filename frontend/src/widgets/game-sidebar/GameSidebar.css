@@ -59,6 +59,12 @@
   font-weight: var(--font-weight-semibold);
 }
 
+.game-sidebar-sub-link:focus-visible,
+.game-sidebar-main-link:focus-visible {
+  outline: 2px solid var(--color-border-accent);
+  outline-offset: 2px;
+}
+
 @media (max-width: 980px) {
   .game-sidebar {
     border-right: none;

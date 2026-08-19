@@ -1,0 +1,107 @@
+.plan-balance-sheet-page {
+  width: 100%;
+  display: grid;
+  gap: var(--space-9);
+}
+
+.plan-balance-sheet-header h1 {
+  margin: 0;
+  font-size: var(--font-size-3xl);
+  letter-spacing: 0.04em;
+}
+
+.plan-balance-sheet-header p {
+  margin: var(--space-3) 0 0;
+  color: var(--color-text-secondary);
+}
+
+.plan-balance-sheet-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-8);
+}
+
+.plan-balance-sheet-grid h2 {
+  margin: 0 0 var(--space-5);
+  font-size: var(--font-size-md);
+  letter-spacing: 0.03em;
+}
+
+.plan-balance-sheet-table {
+  border: var(--border-width-thin) solid var(--color-border-soft);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--color-panel);
+}
+
+.plan-balance-sheet-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) auto auto;
+  align-items: baseline;
+  gap: var(--space-6);
+  padding: var(--space-6) var(--space-7);
+}
+
+.plan-balance-sheet-row + .plan-balance-sheet-row {
+  border-top: var(--border-width-thin) solid var(--color-border-soft);
+}
+
+.plan-balance-sheet-row.is-header {
+  background: var(--color-panel-soft);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+}
+
+.plan-balance-sheet-value {
+  justify-self: end;
+  text-align: right;
+  font-weight: var(--font-weight-semibold);
+}
+
+.plan-balance-sheet-value.is-previous {
+  color: var(--color-text-secondary);
+}
+
+.plan-balance-sheet-row.is-total {
+  border-top: var(--border-width-regular) solid var(--color-border);
+  background: color-mix(in srgb, var(--color-panel-soft) 65%, white 35%);
+}
+
+.plan-balance-sheet-row.is-total span {
+  font-weight: var(--font-weight-bold);
+}
+
+.plan-balance-sheet-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-6);
+  border: var(--border-width-thin) solid var(--color-border-soft);
+  border-radius: var(--radius-lg);
+  background: var(--color-panel);
+  padding: var(--space-6) var(--space-7);
+}
+
+.plan-balance-sheet-summary p {
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+@media (max-width: 1080px) {
+  .plan-balance-sheet-grid,
+  .plan-balance-sheet-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .plan-balance-sheet-row {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+
+  .plan-balance-sheet-value {
+    justify-self: start;
+    text-align: left;
+  }
+}

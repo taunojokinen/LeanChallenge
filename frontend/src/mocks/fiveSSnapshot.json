@@ -1,0 +1,29 @@
+{
+  "round": 4,
+  "focusBudgetHours": 400,
+  "departments": [
+    {
+      "key": "machining",
+      "name": "Koneistus",
+      "fiveSEffectiveHours": 569,
+      "weight": 0.42
+    },
+    {
+      "key": "assembly",
+      "name": "Koonta",
+      "fiveSEffectiveHours": 747,
+      "weight": 0.35
+    },
+    {
+      "key": "shipping",
+      "name": "Lähettämö",
+      "fiveSEffectiveHours": 417,
+      "weight": 0.23
+    }
+  ],
+  "benefits": [
+    "Vähemmän hukkaa ja etsintää työpisteillä.",
+    "Parempi työympäristö ja selkeämpi tekeminen.",
+    "Jatkuvan parantamisen perusta näkyväksi osaksi arkea."
+  ]
+}

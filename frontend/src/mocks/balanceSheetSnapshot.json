@@ -1,0 +1,22 @@
+{
+  "round": 4,
+  "previousRound": 3,
+  "assets": {
+    "machinery": 500000,
+    "buildings": 1500000,
+    "cash": 184000,
+    "inventory": 643600
+  },
+  "previousAssets": {
+    "machinery": 550000,
+    "buildings": 1550000,
+    "cash": 220000,
+    "inventory": 602220
+  },
+  "liabilities": {
+    "bankLoans": 420000
+  },
+  "previousLiabilities": {
+    "bankLoans": 470000
+  }
+}

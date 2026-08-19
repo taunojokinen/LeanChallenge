@@ -1,0 +1,48 @@
+{
+  "round": 4,
+  "previousRound": 3,
+  "currentProduction": 812,
+  "previousProduction": 780,
+  "flow": ["Raaka-aineet", "Koneistus", "Koonta", "Lähettämö", "Asiakas"],
+  "phases": [
+    {
+      "key": "machining",
+      "name": "Koneistus",
+      "availabilityPct": 74,
+      "speedPct": 72,
+      "qualityPct": 96,
+      "maxCapacity": 1600,
+      "actualProduction": 812,
+      "largestLoss": {
+        "name": "Asetusajat",
+        "pct": 12
+      }
+    },
+    {
+      "key": "assembly",
+      "name": "Koonta",
+      "availabilityPct": 82,
+      "speedPct": 88,
+      "qualityPct": 97,
+      "maxCapacity": 1750,
+      "actualProduction": 812,
+      "largestLoss": {
+        "name": "Odotus",
+        "pct": 8
+      }
+    },
+    {
+      "key": "dispatch",
+      "name": "Lähettämö",
+      "availabilityPct": 90,
+      "speedPct": 94,
+      "qualityPct": 99,
+      "maxCapacity": 1900,
+      "actualProduction": 812,
+      "largestLoss": {
+        "name": "Turha liike",
+        "pct": 4
+      }
+    }
+  ]
+}

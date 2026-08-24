@@ -1,0 +1,109 @@
+{
+  "round": 4,
+  "focusBudgetHours": 400,
+  "projectHourRate": 100,
+  "costRoundingEuro": 1000,
+  "methodLevelThresholds": [
+    { "level": 0, "hours": 0 },
+    { "level": 1, "hours": 50 },
+    { "level": 2, "hours": 125 },
+    { "level": 3, "hours": 225 },
+    { "level": 4, "hours": 350 },
+    { "level": 5, "hours": 500 },
+    { "level": 6, "hours": 700 }
+  ],
+  "departments": [
+    {
+      "key": "machining",
+      "name": "Koneistus",
+      "methods": [
+        {
+          "key": "smed",
+          "name": "SMED",
+          "type": "progressive",
+          "effectiveHours": 175,
+          "targetLoss": "Asetusaika",
+          "impactDriver": "Asetusaikojen lyhentäminen"
+        },
+        {
+          "key": "tpm",
+          "name": "TPM",
+          "type": "progressive",
+          "effectiveHours": 145,
+          "targetLoss": "Konehäiriöt",
+          "impactDriver": "Suunnittelemattomien seisokkien vähentäminen"
+        },
+        {
+          "key": "spc",
+          "name": "SPC",
+          "type": "progressive",
+          "effectiveHours": 100,
+          "targetLoss": "Prosessin vaihtelu",
+          "impactDriver": "Laatuhävikin pienentäminen"
+        }
+      ]
+    },
+    {
+      "key": "assembly",
+      "name": "Koonta",
+      "methods": [
+        {
+          "key": "method-development",
+          "name": "Menetelmäkehitys",
+          "type": "fixed",
+          "fixedHours": 50,
+          "targetProblem": "Turha liikkuminen",
+          "targetLoss": "Työmenetelmän hukka",
+          "impactDriver": "Vakioitu tapa poistaa suurin menetelmäongelma"
+        },
+        {
+          "key": "tpm",
+          "name": "TPM",
+          "type": "progressive",
+          "effectiveHours": 210,
+          "targetLoss": "Laiteseisokit",
+          "impactDriver": "Käytettävyyden vakauttaminen"
+        },
+        {
+          "key": "poka-yoke",
+          "name": "Poka-Yoke",
+          "type": "progressive",
+          "effectiveHours": 120,
+          "targetLoss": "Kokoonpanovirheet",
+          "impactDriver": "Virheiden estäminen työpisteellä"
+        }
+      ]
+    },
+    {
+      "key": "shipping",
+      "name": "Lähettämö",
+      "methods": [
+        {
+          "key": "method-development",
+          "name": "Menetelmäkehitys",
+          "type": "fixed",
+          "fixedHours": 50,
+          "targetProblem": "Väärä pakkaus",
+          "targetLoss": "Toimitusvirhe",
+          "impactDriver": "Työvaiheiden selkeyttäminen"
+        },
+        {
+          "key": "tpm",
+          "name": "TPM",
+          "type": "progressive",
+          "effectiveHours": 160,
+          "targetLoss": "Laiteseisokit",
+          "impactDriver": "Lähetysprosessin häiriöiden vähentäminen"
+        },
+        {
+          "key": "poka-yoke",
+          "name": "Poka-Yoke",
+          "type": "progressive",
+          "effectiveHours": 90,
+          "targetLoss": "Toimitusvirheet",
+          "impactDriver": "Väärien toimitusten estäminen"
+        }
+      ]
+    }
+  ]
+}

@@ -11,6 +11,7 @@ import PlanBalanceSheetPage from '../pages/plan/PlanBalanceSheetPage.jsx'
 import PlanIncomePage from '../pages/plan/PlanIncomePage.jsx'
 import PlanProductionPage from '../pages/plan/PlanProductionPage.jsx'
 import FiveSPage from '../pages/do/FiveSPage.jsx'
+import ProjectsPage from '../pages/do/ProjectsPage.jsx'
 import { appRoutes } from './router/index.jsx'
 
 function normalizePath(pathname, shouldReplace = false) {
@@ -175,6 +176,8 @@ function App() {
           <PlanProductionPage />
         ) : pageKey === 'do-5s' ? (
           <FiveSPage />
+        ) : pageKey === 'do-projects' ? (
+          <ProjectsPage />
         ) : (
           <GamePlaceholderPage title={placeholderContent.title} description={placeholderContent.description} />
         )}

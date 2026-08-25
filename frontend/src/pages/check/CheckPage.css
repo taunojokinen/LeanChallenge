@@ -1,0 +1,80 @@
+.check-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.25rem;
+}
+
+.check-header h1 {
+  margin: 0;
+}
+
+.check-header p {
+  margin: 0.25rem 0 0;
+  color: #525252;
+}
+
+.check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.check-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.check-section h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.check-section p {
+  margin: 0;
+}
+
+.check-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.check-table th,
+.check-table td {
+  text-align: left;
+  padding: 0.35rem 0.4rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.check-table .is-bottleneck td {
+  background: #fef3c7;
+}
+
+.check-staffing-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.check-staffing-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.check-list {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.check-status {
+  color: #166534;
+  margin-top: 0.25rem;
+}
+
+.check-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}

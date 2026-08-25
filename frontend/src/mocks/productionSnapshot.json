@@ -1,6 +1,9 @@
 {
   "round": 4,
   "previousRound": 3,
+  "market": {
+    "activeVariations": 20
+  },
   "currentProduction": 812,
   "previousProduction": 780,
   "flow": ["Raaka-aineet", "Koneistus", "Koonta", "Lähettämö", "Asiakas"],

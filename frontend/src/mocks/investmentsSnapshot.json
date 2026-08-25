@@ -1,0 +1,57 @@
+{
+  "round": 4,
+  "factory": {
+    "totalAreaM2": 4000,
+    "officeAndSocialM2": 200,
+    "machiningMachineCount": 2,
+    "assemblyWorkers": 25,
+    "shippingWorkers": 5,
+    "dispatchM2": 250,
+    "finishedGoodsContainers": 18
+  },
+  "investments": {
+    "newMachine": {
+      "type": "new-machine",
+      "name": "Uusi tuotantokone",
+      "unitCost": 500000,
+      "spaceM2PerUnit": 250,
+      "capacityHoursPerRound": 1040,
+      "personnelPerUnit": 5,
+      "depreciationRatePerRound": 0.05
+    },
+    "factoryExpansion": {
+      "type": "factory-expansion",
+      "name": "Tehdaslaajennus",
+      "unitCost": 1000000,
+      "addedAreaM2": 1000,
+      "depreciationRatePerRound": 0.025
+    },
+    "moldChangeAutomation": {
+      "type": "mold-change-automation",
+      "name": "Muotinvaihtoautomaatti",
+      "unitCost": 250000,
+      "requiredSmedLevel": 4,
+      "effect": "-10 min / vaihto konekohtaisesti",
+      "depreciationRatePerRound": 0.05,
+      "installedMachineIds": [2]
+    },
+    "automaticProcessMeasurement": {
+      "type": "automatic-process-measurement",
+      "name": "Automaattinen prosessimittaus",
+      "unitCost": 250000,
+      "requiredSpcLevel": 4,
+      "effect": "Laatu +2 %-yks. (myöhemmässä simulaatiossa)",
+      "depreciationRatePerRound": 0.05,
+      "installed": false
+    },
+    "conditionMonitoring": {
+      "type": "condition-monitoring",
+      "name": "Kunnonvalvontajärjestelmä",
+      "unitCost": 200000,
+      "requiredTpmLevel": 4,
+      "effect": "Käytettävyys +2 %-yks. (myöhemmässä simulaatiossa)",
+      "depreciationRatePerRound": 0.05,
+      "installed": false
+    }
+  }
+}

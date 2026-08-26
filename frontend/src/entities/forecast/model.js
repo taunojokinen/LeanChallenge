@@ -30,6 +30,8 @@ const DEFAULT_MARKET_DECISION = {
   price: PRICE_REFERENCE,
   runsPerVariation: 2,
   newVariations: 0,
+  addedVariations: 0,
+  productionQuantity: null,
   activeVariationCount: 1,
 }
 
@@ -372,7 +374,9 @@ function calculateScenario({
     3
 
   const allowedNewVariations = calculateAllowedNewVariations(projectedQualityAverage)
-  const selectedNewVariations = clamp(toNonNegativeInt(market.newVariations), 0, allowedNewVariations)
+  const requestedNewVariations =
+    market.addedVariations != null ? market.addedVariations : market.newVariations
+  const selectedNewVariations = clamp(toNonNegativeInt(requestedNewVariations), 0, allowedNewVariations)
   const activeVariationCount = Math.max(1, toNonNegativeInt(market.activeVariationCount, 1))
   const totalVariations = activeVariationCount + selectedNewVariations
   const runsPerVariation = Math.max(1, toNonNegativeInt(market.runsPerVariation, 2))
@@ -430,11 +434,17 @@ function calculateScenario({
 
   const demandPerVariation = calculateDemandPerVariation(market.price)
   const demand = Math.max(0, Math.round(demandPerVariation * totalVariations))
-  const deliveries = Math.max(0, Math.min(demand, plantCapacity))
-  const lostSalesUnits = Math.max(0, demand - deliveries)
+  const hasPlannedProduction = market.productionQuantity != null
+  const plannedProductionQuantity = hasPlannedProduction
+    ? clamp(toNonNegativeInt(market.productionQuantity), 0, plantCapacity)
+    : plantCapacity
+  const actualProduction = Math.max(0, Math.min(plannedProductionQuantity, demand, plantCapacity))
+  const deliveries = actualProduction
+  const lostSalesUnits = Math.max(0, demand - actualProduction)
+  const unusedCapacity = Math.max(0, plantCapacity - actualProduction)
 
   const batches = Math.max(1, productionRuns)
-  const batchSize = deliveries / batches
+  const batchSize = actualProduction / batches
   const averageFinishedGoodsInventory = (totalVariations * batchSize) / 2
   const finishedGoodsValue = averageFinishedGoodsInventory * FINISHED_GOODS_VALUE_PER_CONTAINER
   const finishedGoodsArea = averageFinishedGoodsInventory * FINISHED_GOODS_AREA_PER_CONTAINER
@@ -446,8 +456,8 @@ function calculateScenario({
   const usedArea = machineArea + assemblyArea + dispatchArea + officeArea + finishedGoodsArea
   const freeFactorySpace = totalArea - usedArea
 
-  const revenue = deliveries * toNumber(market.price, PRICE_REFERENCE)
-  const materials = deliveries * MATERIAL_COST_PER_SOLD_CONTAINER
+  const revenue = actualProduction * toNumber(market.price, PRICE_REFERENCE)
+  const materials = actualProduction * MATERIAL_COST_PER_SOLD_CONTAINER
   const totalPersonnel = staffing.machining + staffing.assembly + staffing.shipping
   const labor = totalPersonnel * STAFF_COST_PER_ROUND
   const fixedCosts = FIXED_COST_PER_ROUND
@@ -495,9 +505,11 @@ function calculateScenario({
       demandPerVariation,
       selectedNewVariations,
       allowedNewVariations,
+      addedVariations: selectedNewVariations,
       activeVariationCount,
       totalVariations,
       runsPerVariation,
+      productionQuantity: plannedProductionQuantity,
     },
     knl: {
       machining: machiningMetrics,
@@ -510,8 +522,11 @@ function calculateScenario({
     bottleneckKey,
     plantCapacity,
     demand,
+    plannedProductionQuantity,
+    actualProduction,
     deliveries,
     lostSalesUnits,
+    unusedCapacity,
     productionRuns,
     switches,
     batchSize,
@@ -655,6 +670,17 @@ export function calculateRoundForecast(gameState, decisions = {}) {
     },
   }
 
+  if (resolvedDecisions.market.newVariations == null && resolvedDecisions.market.addedVariations != null) {
+    resolvedDecisions.market.newVariations = resolvedDecisions.market.addedVariations
+  }
+
+  if (
+    resolvedDecisions.market.addedVariations == null &&
+    resolvedDecisions.market.newVariations != null
+  ) {
+    resolvedDecisions.market.addedVariations = resolvedDecisions.market.newVariations
+  }
+
   const currentScenario = calculateScenario({
     investmentsSnapshot: gameState.investmentsSnapshot,
     projectsSnapshot: gameState.projectsSnapshot,
@@ -697,8 +723,10 @@ export function calculateRoundForecast(gameState, decisions = {}) {
       market: {
         price: resolvedDecisions.market.price,
         runsPerVariation: resolvedDecisions.market.runsPerVariation,
+        productionQuantity: forecastScenario.market.productionQuantity,
         activeVariationCount: forecastScenario.market.activeVariationCount,
         totalVariations: forecastScenario.market.totalVariations,
+        addedVariations: forecastScenario.market.addedVariations,
         selectedNewVariations: forecastScenario.market.selectedNewVariations,
         allowedNewVariations: forecastScenario.market.allowedNewVariations,
       },
@@ -709,6 +737,9 @@ export function calculateRoundForecast(gameState, decisions = {}) {
       bottleneckKey: forecastScenario.bottleneckKey,
       bottleneckLabel: departmentLabels[forecastScenario.bottleneckKey],
       demand: forecastScenario.demand,
+      productionQuantity: forecastScenario.plannedProductionQuantity,
+      actualProduction: forecastScenario.actualProduction,
+      unusedCapacity: forecastScenario.unusedCapacity,
       deliveries: forecastScenario.deliveries,
       lostSalesUnits: forecastScenario.lostSalesUnits,
       plantCapacity: forecastScenario.plantCapacity,

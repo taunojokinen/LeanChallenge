@@ -173,6 +173,19 @@ test('price elasticity formula lowers demand when price increases', () => {
   assert.equal(demandAtReference > demandAtHigherPrice, true)
 })
 
+test('reference price 25000 yields 10 containers per variation', () => {
+  assert.equal(calculateDemandPerVariation(25000), 10)
+})
+
+test('ACT price change follows exponential elasticity', () => {
+  const referenceDemand = calculateDemandPerVariation(25000)
+  const lowerPriceDemand = calculateDemandPerVariation(20000)
+  const expectedLower = Math.round(10 * (20000 / 25000) ** -4)
+
+  assert.equal(referenceDemand, 10)
+  assert.equal(lowerPriceDemand, expectedLower)
+})
+
 test('demand is rounded to nearest whole container', () => {
   const demand = calculateDemandPerVariation(24750)
   assert.equal(Number.isInteger(demand), true)
@@ -293,6 +306,169 @@ test('switch count uses active variations multiplied by runs per variation', () 
   assert.equal(forecast.forecast.market.totalVariations, 20)
   assert.equal(forecast.forecast.productionRuns, 40)
   assert.equal(forecast.forecast.switches, 40)
+})
+
+test('new variation increases demand at reference price', () => {
+  const withoutNewVariation = calculateRoundForecast(
+    createGameState({
+      marketDecision: {
+        price: 25000,
+      },
+    }),
+    {
+      market: {
+        addedVariations: 0,
+      },
+    },
+  )
+
+  const withNewVariation = calculateRoundForecast(
+    createGameState({
+      marketDecision: {
+        price: 25000,
+      },
+    }),
+    {
+      market: {
+        addedVariations: 1,
+      },
+    },
+  )
+
+  assert.equal(withNewVariation.forecast.demand > withoutNewVariation.forecast.demand, true)
+})
+
+test('new variation increases switch count', () => {
+  const withoutNewVariation = calculateRoundForecast(
+    createGameState({
+      marketDecision: {
+        price: 25000,
+        runsPerVariation: 2,
+      },
+    }),
+    {
+      market: {
+        addedVariations: 0,
+      },
+    },
+  )
+
+  const withNewVariation = calculateRoundForecast(
+    createGameState({
+      marketDecision: {
+        price: 25000,
+        runsPerVariation: 2,
+      },
+    }),
+    {
+      market: {
+        addedVariations: 1,
+      },
+    },
+  )
+
+  assert.equal(withNewVariation.forecast.switches > withoutNewVariation.forecast.switches, true)
+})
+
+test('production quantity is clamped to capacity maximum', () => {
+  const forecast = calculateRoundForecast(
+    createGameState(),
+    {
+      market: {
+        productionQuantity: 999999,
+      },
+    },
+  )
+
+  assert.equal(forecast.summary.productionQuantity, forecast.summary.plantCapacity)
+})
+
+test('overproduction is not performed above demand', () => {
+  const baseline = calculateRoundForecast(createGameState({
+    fiveSDecision: null,
+    projectsDecision: null,
+    investmentsDecision: null,
+  }))
+
+  const forecast = calculateRoundForecast(
+    createGameState({
+      fiveSDecision: null,
+      projectsDecision: null,
+      investmentsDecision: null,
+    }),
+    {
+      market: {
+        productionQuantity: baseline.summary.plantCapacity,
+      },
+    },
+  )
+
+  assert.equal(forecast.summary.actualProduction <= forecast.summary.demand, true)
+})
+
+test('production quantity below demand creates lost sales', () => {
+  const forecast = calculateRoundForecast(
+    createGameState({
+      fiveSDecision: null,
+      projectsDecision: null,
+      investmentsDecision: null,
+    }),
+    {
+      market: {
+        productionQuantity: 50,
+      },
+    },
+  )
+
+  assert.equal(forecast.summary.lostSalesUnits, forecast.summary.demand - forecast.summary.actualProduction)
+  assert.equal(forecast.summary.lostSalesUnits > 0, true)
+})
+
+test('ACT forecast uses saved CHECK staffing decision by default', () => {
+  const forecast = calculateRoundForecast(
+    createGameState({
+      checkStaffingDecision: {
+        round: 4,
+        staffing: {
+          assembly: 31,
+          shipping: 7,
+        },
+        savedAt: new Date().toISOString(),
+      },
+    }),
+  )
+
+  assert.equal(forecast.forecast.staffing.assembly, 31)
+  assert.equal(forecast.forecast.staffing.shipping, 7)
+})
+
+test('same forecast function provides deterministic ACT preview values', () => {
+  const gameState = createGameState({
+    checkStaffingDecision: {
+      round: 4,
+      staffing: {
+        assembly: 28,
+        shipping: 6,
+      },
+      savedAt: new Date().toISOString(),
+    },
+  })
+  const actMarketDecision = {
+    price: 26000,
+    addedVariations: 1,
+    productionQuantity: 140,
+  }
+
+  const previewOne = calculateRoundForecast(gameState, {
+    market: actMarketDecision,
+  })
+  const previewTwo = calculateRoundForecast(gameState, {
+    market: actMarketDecision,
+  })
+
+  assert.equal(previewOne.summary.result, previewTwo.summary.result)
+  assert.equal(previewOne.summary.deliveries, previewTwo.summary.deliveries)
+  assert.equal(previewOne.summary.productionQuantity, previewTwo.summary.productionQuantity)
 })
 
 test('baseline capacities are in expected scale with 6h/90h/10h norm times', () => {

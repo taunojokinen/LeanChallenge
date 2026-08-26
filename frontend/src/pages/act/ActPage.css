@@ -1,0 +1,62 @@
+.act-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.25rem;
+}
+
+.act-header h1 {
+  margin: 0;
+}
+
+.act-header p {
+  margin: 0.25rem 0 0;
+  color: #525252;
+}
+
+.act-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.act-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.act-section h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.act-section p {
+  margin: 0;
+}
+
+.act-input-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.act-input-row input {
+  width: 100%;
+}
+
+.act-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.act-highlight {
+  color: #991b1b;
+  font-weight: 600;
+}
+
+.act-status {
+  color: #166534;
+  margin: 0;
+}

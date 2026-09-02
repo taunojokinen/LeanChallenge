@@ -3,9 +3,6 @@ import GameLayout from './layouts/GameLayout.jsx'
 import LandingPage from '../pages/landing/LandingPage.jsx'
 import LoginPage from '../pages/login/LoginPage.jsx'
 import GamePlaceholderPage from '../pages/game/GamePlaceholderPage.jsx'
-import planSnapshot from '../mocks/planSnapshot.json'
-import incomeSnapshot from '../mocks/incomeSnapshot.json'
-import { buildIncomeStatementRows } from '../entities/income/model.js'
 import PlanCockpitPage from '../pages/plan/PlanCockpitPage.jsx'
 import PlanBalanceSheetPage from '../pages/plan/PlanBalanceSheetPage.jsx'
 import PlanIncomePage from '../pages/plan/PlanIncomePage.jsx'
@@ -16,6 +13,9 @@ import InvestmentsPage from '../pages/do/InvestmentsPage.jsx'
 import CheckPage from '../pages/check/CheckPage.jsx'
 import ActPage from '../pages/act/ActPage.jsx'
 import { appRoutes } from './router/index.jsx'
+import { DEFAULT_FACTORY_SETTINGS } from '../entities/factory-settings/defaultFactorySettings.js'
+import { createInitialGameState } from '../entities/factory-settings/initialGameState.js'
+import { calculateRoundForecast } from '../entities/forecast/model.js'
 
 function normalizePath(pathname, shouldReplace = false) {
   const currentPath = pathname || '/'
@@ -92,29 +92,85 @@ const headerKpiMap = {
   inventoryTurnover: 'Varaston kiertonopeus',
 }
 
-const incomeResultRow = buildIncomeStatementRows(incomeSnapshot).find((row) => row.key === 'result')
-const inventoryTurnoverKpi = planSnapshot.kpis.find((item) => item.key === 'inventoryTurnover')
+function formatSignedPercent(delta) {
+  const value = Number(delta) || 0
+  const sign = value > 0 ? '+' : ''
 
-const gameHeaderKpis = ['oee', 'production', 'revenue', 'result', 'inventoryTurnover']
-  .map((key) => planSnapshot.kpis.find((item) => item.key === key))
-  .filter(Boolean)
-  .map((item) => ({
-    key: item.key,
-    label: headerKpiMap[item.key] ?? item.label,
-    value:
-      item.key === 'result' && incomeResultRow
-        ? incomeResultRow.amountText
-        : item.key === 'inventoryTurnover'
-        ? `${Number(item.value).toLocaleString('fi-FI', {
-            minimumFractionDigits: 1,
-            maximumFractionDigits: 1,
-          })}x`
-        : item.value,
-    delta: item.key === 'result' && incomeResultRow ? incomeResultRow.deltaText : item.delta,
-  }))
+  return `${sign}${value.toLocaleString('fi-FI', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })} %`
+}
+
+function formatCurrency(value) {
+  return `${Math.round(Number(value) || 0).toLocaleString('fi-FI')} €`
+}
+
+function formatContainers(value) {
+  return `${Math.round(Number(value) || 0).toLocaleString('fi-FI')} kpl`
+}
+
+function formatKnl(value) {
+  return `${Math.round((Number(value) || 0) * 100).toLocaleString('fi-FI')} %`
+}
 
 function App() {
   const [pathname, setPathname] = useState(() => normalizePath(window.location.pathname, true))
+  const [gameState] = useState(() => createInitialGameState(DEFAULT_FACTORY_SETTINGS))
+
+  const baseForecast = useMemo(
+    () => calculateRoundForecast(gameState, {}, DEFAULT_FACTORY_SETTINGS),
+    [gameState],
+  )
+
+  const inventoryTurnover = useMemo(() => {
+    const deliveries = Number(baseForecast.summary.deliveries) || 0
+    const averageInventory = Number(baseForecast.summary.finishedGoodsInventory) || 0
+    if (averageInventory <= 0) {
+      return 0
+    }
+
+    return deliveries / averageInventory
+  }, [baseForecast])
+
+  const gameHeaderKpis = useMemo(
+    () => [
+      {
+        key: 'oee',
+        label: headerKpiMap.oee,
+        value: formatKnl(baseForecast.forecast.knl.machining.knl),
+        delta: formatSignedPercent(0),
+      },
+      {
+        key: 'production',
+        label: headerKpiMap.production,
+        value: formatContainers(baseForecast.summary.actualProduction),
+        delta: formatSignedPercent(0),
+      },
+      {
+        key: 'revenue',
+        label: headerKpiMap.revenue,
+        value: formatCurrency(baseForecast.summary.revenue),
+        delta: formatSignedPercent(0),
+      },
+      {
+        key: 'result',
+        label: headerKpiMap.result,
+        value: formatCurrency(baseForecast.summary.result),
+        delta: formatSignedPercent(0),
+      },
+      {
+        key: 'inventoryTurnover',
+        label: headerKpiMap.inventoryTurnover,
+        value: `${inventoryTurnover.toLocaleString('fi-FI', {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        })}x`,
+        delta: '+0.0',
+      },
+    ],
+    [baseForecast, inventoryTurnover],
+  )
 
   useEffect(() => {
     const handlePopState = () => {
@@ -160,8 +216,8 @@ function App() {
 
     return (
       <GameLayout
-        round={planSnapshot.round}
-        totalRounds={planSnapshot.totalRounds}
+        round={gameState.round}
+        totalRounds={DEFAULT_FACTORY_SETTINGS.game.totalRounds}
         phase={phase}
         kpis={gameHeaderKpis}
         pageKey={pageKey}
@@ -170,23 +226,35 @@ function App() {
         onNavigate={navigateTo}
       >
         {pageKey === 'plan-cockpit' ? (
-          <PlanCockpitPage onNavigate={navigateTo} />
+          <PlanCockpitPage
+            onNavigate={navigateTo}
+            round={gameState.round}
+            totalRounds={DEFAULT_FACTORY_SETTINGS.game.totalRounds}
+          />
         ) : pageKey === 'plan-balance-sheet' ? (
-          <PlanBalanceSheetPage inventoryTurnover={inventoryTurnoverKpi?.value} />
+          <PlanBalanceSheetPage inventoryTurnover={inventoryTurnover} gameState={gameState} />
         ) : pageKey === 'plan-income' ? (
-          <PlanIncomePage />
+          <PlanIncomePage gameState={gameState} />
         ) : pageKey === 'plan-production' ? (
           <PlanProductionPage />
         ) : pageKey === 'do-5s' ? (
-          <FiveSPage />
+          <FiveSPage round={gameState.round} />
         ) : pageKey === 'do-projects' ? (
-          <ProjectsPage />
+          <ProjectsPage round={gameState.round} />
         ) : pageKey === 'do-investments' ? (
-          <InvestmentsPage />
+          <InvestmentsPage round={gameState.round} />
         ) : pageKey === 'check' ? (
-          <CheckPage onNavigate={navigateTo} />
+          <CheckPage
+            onNavigate={navigateTo}
+            gameState={gameState}
+            factorySettings={DEFAULT_FACTORY_SETTINGS}
+          />
         ) : pageKey === 'act' ? (
-          <ActPage onNavigate={navigateTo} />
+          <ActPage
+            onNavigate={navigateTo}
+            gameState={gameState}
+            factorySettings={DEFAULT_FACTORY_SETTINGS}
+          />
         ) : (
           <GamePlaceholderPage title={placeholderContent.title} description={placeholderContent.description} />
         )}

@@ -2,11 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import Button from '../../shared/ui/Button/Button.jsx'
 import Card from '../../shared/ui/Card/Card.jsx'
 import { calculateRoundForecast } from '../../entities/forecast/model.js'
-import { getFiveSSnapshot } from '../../shared/api/fiveSApi.js'
-import { getProjectsSnapshot } from '../../shared/api/projectsApi.js'
-import { getInvestmentsSnapshot } from '../../shared/api/investmentsApi.js'
-import { getBalanceSheetSnapshot } from '../../shared/api/balanceSheetApi.js'
-import { getProductionSnapshot } from '../../shared/api/productionApi.js'
 import { loadFiveSDecision } from '../../features/five-s/decisionStore.js'
 import { loadProjectsDecision } from '../../features/projects/decisionStore.js'
 import { loadInvestmentsDecision } from '../../features/investments/decisionStore.js'
@@ -51,93 +46,68 @@ function toNonNegativeInteger(value, fallback = 0) {
   return Math.round(numericValue)
 }
 
-function ActPage({ onNavigate }) {
-  const [gameState, setGameState] = useState(null)
+function ActPage({ onNavigate, gameState, factorySettings }) {
+  const [decisionGameState, setDecisionGameState] = useState(null)
   const [price, setPrice] = useState(25000)
   const [productionQuantity, setProductionQuantity] = useState(0)
   const [addedVariations, setAddedVariations] = useState(0)
   const [statusMessage, setStatusMessage] = useState('')
 
   useEffect(() => {
-    let isMounted = true
+    if (!gameState) {
+      return
+    }
 
-    const loadData = async () => {
-      const [
-        fiveSSnapshot,
-        projectsSnapshot,
-        investmentsSnapshot,
-        balanceSheetSnapshot,
-        productionSnapshot,
-      ] = await Promise.all([
-        getFiveSSnapshot(),
-        getProjectsSnapshot(),
-        getInvestmentsSnapshot(),
-        getBalanceSheetSnapshot(),
-        getProductionSnapshot(),
-      ])
+    const round = gameState.round
+    const fiveSDecision = loadFiveSDecision(round)
+    const projectsDecision = loadProjectsDecision(round)
+    const investmentsDecision = loadInvestmentsDecision(round)
+    const checkStaffingDecision = loadCheckStaffingDecision(round)
+    const actDecision = loadActDecision(round)
 
-      if (!isMounted) {
-        return
-      }
+    const nextGameState = {
+      ...gameState,
+      fiveSDecision,
+      projectsDecision,
+      investmentsDecision,
+      checkStaffingDecision,
+    }
 
-      const round = investmentsSnapshot.round
-      const fiveSDecision = loadFiveSDecision(round)
-      const projectsDecision = loadProjectsDecision(round)
-      const investmentsDecision = loadInvestmentsDecision(round)
-      const checkStaffingDecision = loadCheckStaffingDecision(round)
-      const actDecision = loadActDecision(round)
-
-      const nextGameState = {
-        round,
-        fiveSSnapshot,
-        projectsSnapshot,
-        investmentsSnapshot,
-        balanceSheetSnapshot,
-        productionSnapshot,
-        fiveSDecision,
-        projectsDecision,
-        investmentsDecision,
-        checkStaffingDecision,
-      }
-
-      const initialPrice = actDecision?.price ?? 25000
-      const initialAddedVariations = actDecision?.addedVariations ?? 0
-      const baseForecast = calculateRoundForecast(nextGameState, {
+    const initialPrice = actDecision?.price ?? gameState.market?.price ?? 25000
+    const initialAddedVariations = actDecision?.addedVariations ?? 0
+    const baseForecast = calculateRoundForecast(
+      nextGameState,
+      {
         market: {
           price: initialPrice,
           addedVariations: initialAddedVariations,
         },
-      })
+      },
+      factorySettings,
+    )
 
-      const initialProductionQuantity =
-        actDecision?.productionQuantity ?? Math.min(baseForecast.summary.demand, baseForecast.summary.plantCapacity)
+    const initialProductionQuantity =
+      actDecision?.productionQuantity ?? Math.min(baseForecast.summary.demand, baseForecast.summary.plantCapacity)
 
-      setPrice(initialPrice)
-      setAddedVariations(initialAddedVariations)
-      setProductionQuantity(initialProductionQuantity)
-      setGameState(nextGameState)
-    }
-
-    loadData()
-
-    return () => {
-      isMounted = false
-    }
-  }, [])
+    setPrice(initialPrice)
+    setAddedVariations(initialAddedVariations)
+    setProductionQuantity(initialProductionQuantity)
+    setDecisionGameState(nextGameState)
+  }, [factorySettings, gameState])
 
   const forecast = useMemo(() => {
-    if (!gameState) {
+    if (!decisionGameState) {
       return null
     }
 
-    return calculateRoundForecast(gameState, {
+    return calculateRoundForecast(decisionGameState, {
       market: {
         price,
         addedVariations,
         productionQuantity,
       },
-    })
-  }, [addedVariations, gameState, price, productionQuantity])
+    }, factorySettings)
+  }, [addedVariations, decisionGameState, factorySettings, price, productionQuantity])
 
   useEffect(() => {
     if (!forecast) {
@@ -148,9 +118,9 @@ function ActPage({ onNavigate }) {
       const clampedQuantity = forecast.summary.plantCapacity
       setProductionQuantity(clampedQuantity)
 
-      if (gameState) {
+      if (decisionGameState) {
         saveActDecision({
-          round: gameState.round,
+          round: decisionGameState.round,
           price,
           productionQuantity: clampedQuantity,
           addedVariations,
@@ -158,15 +128,15 @@ function ActPage({ onNavigate }) {
         })
       }
     }
-  }, [addedVariations, forecast, gameState, price, productionQuantity])
+  }, [addedVariations, decisionGameState, forecast, price, productionQuantity])
 
   const updateAndPersist = (nextValues) => {
-    if (!gameState) {
+    if (!decisionGameState) {
       return
     }
 
     saveActDecision({
-      round: gameState.round,
+      round: decisionGameState.round,
       price: nextValues.price,
       productionQuantity: nextValues.productionQuantity,
       addedVariations: nextValues.addedVariations,
@@ -210,20 +180,24 @@ function ActPage({ onNavigate }) {
   }
 
   const handleApprove = () => {
-    if (!gameState || !forecast) {
+    if (!decisionGameState || !forecast) {
       return
     }
 
-    const approvedForecast = calculateRoundForecast(gameState, {
-      market: {
-        price,
-        addedVariations,
-        productionQuantity,
+    const approvedForecast = calculateRoundForecast(
+      decisionGameState,
+      {
+        market: {
+          price,
+          addedVariations,
+          productionQuantity,
+        },
       },
-    })
+      factorySettings,
+    )
 
     saveActDecision({
-      round: gameState.round,
+      round: decisionGameState.round,
       price,
       productionQuantity: approvedForecast.summary.productionQuantity,
       addedVariations: approvedForecast.decisions.market.addedVariations,

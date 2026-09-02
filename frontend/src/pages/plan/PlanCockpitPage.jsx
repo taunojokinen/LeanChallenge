@@ -8,7 +8,7 @@ import './PlanCockpitPage.css'
 
 const MAX_GOALS = 3
 
-function PlanCockpitPage({ onNavigate }) {
+function PlanCockpitPage({ onNavigate, round, totalRounds }) {
   const [snapshot, setSnapshot] = useState(null)
   const [goalsCount, setGoalsCount] = useState(0)
 
@@ -75,7 +75,7 @@ function PlanCockpitPage({ onNavigate }) {
               <div>
                 <small>Kierros</small>
                 <p>
-                  {snapshot.round} / {snapshot.totalRounds}
+                  {round} / {totalRounds}
                 </p>
               </div>
               <div>

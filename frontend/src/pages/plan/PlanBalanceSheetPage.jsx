@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { buildBalanceSheetViewModel } from '../../entities/balance-sheet/model.js'
-import { getBalanceSheetSnapshot } from '../../shared/api/balanceSheetApi.js'
+import { getInitialBalanceSheetHistory } from '../../shared/api/balanceSheetApi.js'
+import { DEFAULT_FACTORY_SETTINGS } from '../../entities/factory-settings/defaultFactorySettings.js'
 import './PlanBalanceSheetPage.css'
 
 function renderRows(rows, round, previousRound) {
@@ -31,14 +32,14 @@ function renderRows(rows, round, previousRound) {
   )
 }
 
-function PlanBalanceSheetPage({ inventoryTurnover }) {
+function PlanBalanceSheetPage({ inventoryTurnover, gameState }) {
   const [snapshot, setSnapshot] = useState(null)
 
   useEffect(() => {
     let isMounted = true
 
     const loadSnapshot = async () => {
-      const data = await getBalanceSheetSnapshot()
+      const data = await getInitialBalanceSheetHistory(gameState, DEFAULT_FACTORY_SETTINGS)
 
       if (isMounted) {
         setSnapshot(data)
@@ -50,7 +51,7 @@ function PlanBalanceSheetPage({ inventoryTurnover }) {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [gameState])
 
   const viewModel = useMemo(() => {
     if (!snapshot || inventoryTurnover == null) {
@@ -73,7 +74,9 @@ function PlanBalanceSheetPage({ inventoryTurnover }) {
     <section className="plan-balance-sheet-page" aria-label="Tase">
       <header className="plan-balance-sheet-header">
         <h1>TASE</h1>
-        <p>Kierroksen {viewModel.round} tase</p>
+        <p>
+          Lähtövertailu: Kierros {viewModel.previousRound} | Kierros {viewModel.round}
+        </p>
       </header>
 
       <div className="plan-balance-sheet-grid">

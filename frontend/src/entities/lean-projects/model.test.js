@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import snapshot from '../../mocks/projectsSnapshot.json' with { type: 'json' }
+import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
 import {
   METHOD_DEVELOPMENT_FIXED_HOURS,
   buildProjectsViewModel,
@@ -10,6 +11,13 @@ import {
   getDepartmentMethodKeys,
   isCombinedFocusWithinBudget,
 } from './model.js'
+
+function cloneSettings(overrides = {}) {
+  return {
+    ...structuredClone(DEFAULT_FACTORY_SETTINGS),
+    ...overrides,
+  }
+}
 
 test('project method level thresholds map to expected levels', () => {
   assert.equal(getMethodLevel(0), 0)
@@ -102,4 +110,42 @@ test('selected method development consumes 50h and 5000 euros', () => {
 test('method development cannot be selected when remaining focus is below 50h', () => {
   assert.equal(canSelectMethodDevelopment(49), false)
   assert.equal(canSelectMethodDevelopment(50), true)
+})
+
+test('method threshold override changes method level progression', () => {
+  const customSettings = cloneSettings({
+    lean: {
+      ...DEFAULT_FACTORY_SETTINGS.lean,
+      methods: {
+        ...DEFAULT_FACTORY_SETTINGS.lean.methods,
+        levelThresholds: [
+          { level: 0, hours: 0 },
+          { level: 1, hours: 100 },
+          { level: 2, hours: 200 },
+          { level: 3, hours: 300 },
+          { level: 4, hours: 400 },
+          { level: 5, hours: 500 },
+          { level: 6, hours: 600 },
+        ],
+      },
+    },
+  })
+
+  assert.equal(getMethodLevel(50, customSettings), 0.5)
+  assert.equal(getMethodLevel(50), 1)
+})
+
+test('fixed hours override changes method development gating', () => {
+  const customSettings = cloneSettings({
+    lean: {
+      ...DEFAULT_FACTORY_SETTINGS.lean,
+      methods: {
+        ...DEFAULT_FACTORY_SETTINGS.lean.methods,
+        fixedHours: 60,
+      },
+    },
+  })
+
+  assert.equal(canSelectMethodDevelopment(50, customSettings), false)
+  assert.equal(canSelectMethodDevelopment(60, customSettings), true)
 })

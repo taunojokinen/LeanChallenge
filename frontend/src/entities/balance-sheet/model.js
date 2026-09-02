@@ -15,19 +15,60 @@ function formatTurnover(value) {
   return `${DECIMAL_FORMATTER.format(value)}x`
 }
 
+function resolveDebt(liabilities = {}) {
+  if (liabilities.bankLoans != null) {
+    return Number(liabilities.bankLoans) || 0
+  }
+
+  return Number(liabilities.interestBearingDebt) || 0
+}
+
 function calculateAssetTotal(assets) {
-  return assets.machinery + assets.buildings + assets.cash + assets.inventory
+  const inventory =
+    Number(assets.inventory) ||
+    (Number(assets.finishedGoodsInventory) || 0) + (Number(assets.rawMaterialInventory) || 0)
+
+  return (
+    (Number(assets.machinery) || 0) +
+    (Number(assets.buildings) || 0) +
+    (Number(assets.cash) || 0) +
+    inventory
+  )
 }
 
 export function buildBalanceSheetViewModel(snapshot, inventoryTurnover) {
   const assetsTotal = calculateAssetTotal(snapshot.assets)
   const previousAssetsTotal = calculateAssetTotal(snapshot.previousAssets)
 
-  const equity = assetsTotal - snapshot.liabilities.bankLoans
-  const previousEquity = previousAssetsTotal - snapshot.previousLiabilities.bankLoans
+  const currentInventory =
+    Number(snapshot.assets.inventory) ||
+    (Number(snapshot.assets.finishedGoodsInventory) || 0) +
+      (Number(snapshot.assets.rawMaterialInventory) || 0)
+  const previousInventory =
+    Number(snapshot.previousAssets.inventory) ||
+    (Number(snapshot.previousAssets.finishedGoodsInventory) || 0) +
+      (Number(snapshot.previousAssets.rawMaterialInventory) || 0)
 
-  const liabilitiesTotal = equity + snapshot.liabilities.bankLoans
-  const previousLiabilitiesTotal = previousEquity + snapshot.previousLiabilities.bankLoans
+  const currentDebt = resolveDebt(snapshot.liabilities)
+  const previousDebt = resolveDebt(snapshot.previousLiabilities)
+
+  const equity =
+    snapshot.liabilities.equity == null
+      ? assetsTotal - currentDebt
+      : Number(snapshot.liabilities.equity)
+  const previousEquity =
+    snapshot.previousLiabilities.equity == null
+      ? previousAssetsTotal - previousDebt
+      : Number(snapshot.previousLiabilities.equity)
+
+  const currentOtherLiabilities = Number(snapshot.liabilities.otherLiabilities) || 0
+  const previousOtherLiabilities = Number(snapshot.previousLiabilities.otherLiabilities) || 0
+  const currentOverdraft = Number(snapshot.liabilities.overdraft) || 0
+  const previousOverdraft = Number(snapshot.previousLiabilities.overdraft) || 0
+
+  const liabilitiesTotal = equity + currentDebt + currentOtherLiabilities + currentOverdraft
+  const previousLiabilitiesTotal =
+    previousEquity + previousDebt + previousOtherLiabilities + previousOverdraft
 
   const solvencyRatio = (equity / assetsTotal) * 100
 
@@ -38,26 +79,38 @@ export function buildBalanceSheetViewModel(snapshot, inventoryTurnover) {
       {
         key: 'machinery',
         label: 'Koneet ja kalusto',
-        currentValue: formatCurrency(snapshot.assets.machinery),
-        previousValue: formatCurrency(snapshot.previousAssets.machinery),
+        currentValue: formatCurrency(Number(snapshot.assets.machinery) || 0),
+        previousValue: formatCurrency(Number(snapshot.previousAssets.machinery) || 0),
       },
       {
         key: 'buildings',
         label: 'Rakennukset',
-        currentValue: formatCurrency(snapshot.assets.buildings),
-        previousValue: formatCurrency(snapshot.previousAssets.buildings),
+        currentValue: formatCurrency(Number(snapshot.assets.buildings) || 0),
+        previousValue: formatCurrency(Number(snapshot.previousAssets.buildings) || 0),
+      },
+      {
+        key: 'finishedGoodsInventory',
+        label: 'Valmistuotevarasto',
+        currentValue: formatCurrency(Number(snapshot.assets.finishedGoodsInventory) || 0),
+        previousValue: formatCurrency(Number(snapshot.previousAssets.finishedGoodsInventory) || 0),
+      },
+      {
+        key: 'rawMaterialInventory',
+        label: 'Raaka-ainevarasto',
+        currentValue: formatCurrency(Number(snapshot.assets.rawMaterialInventory) || 0),
+        previousValue: formatCurrency(Number(snapshot.previousAssets.rawMaterialInventory) || 0),
       },
       {
         key: 'cash',
-        label: 'Rahat',
-        currentValue: formatCurrency(snapshot.assets.cash),
-        previousValue: formatCurrency(snapshot.previousAssets.cash),
+        label: 'Rahat ja pankkisaamiset',
+        currentValue: formatCurrency(Number(snapshot.assets.cash) || 0),
+        previousValue: formatCurrency(Number(snapshot.previousAssets.cash) || 0),
       },
       {
         key: 'inventory',
         label: 'Vaihto-omaisuus',
-        currentValue: formatCurrency(snapshot.assets.inventory),
-        previousValue: formatCurrency(snapshot.previousAssets.inventory),
+        currentValue: formatCurrency(currentInventory),
+        previousValue: formatCurrency(previousInventory),
       },
       {
         key: 'assetsTotal',
@@ -76,9 +129,15 @@ export function buildBalanceSheetViewModel(snapshot, inventoryTurnover) {
       },
       {
         key: 'bankLoans',
-        label: 'Pankkilainat',
-        currentValue: formatCurrency(snapshot.liabilities.bankLoans),
-        previousValue: formatCurrency(snapshot.previousLiabilities.bankLoans),
+        label: 'Korollinen velka',
+        currentValue: formatCurrency(currentDebt),
+        previousValue: formatCurrency(previousDebt),
+      },
+      {
+        key: 'otherLiabilities',
+        label: 'Muu vieras pääoma / ostovelat',
+        currentValue: formatCurrency(currentOtherLiabilities),
+        previousValue: formatCurrency(previousOtherLiabilities),
       },
       {
         key: 'liabilitiesTotal',
@@ -89,7 +148,7 @@ export function buildBalanceSheetViewModel(snapshot, inventoryTurnover) {
       },
     ],
     summary: {
-      inventoryValue: formatCurrency(snapshot.assets.inventory),
+      inventoryValue: formatCurrency(currentInventory),
       inventoryTurnover: formatTurnover(inventoryTurnover),
       solvencyRatio: `${DECIMAL_FORMATTER.format(solvencyRatio)} %`,
       assetsTotal,

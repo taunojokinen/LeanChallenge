@@ -2,11 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import Button from '../../shared/ui/Button/Button.jsx'
 import Card from '../../shared/ui/Card/Card.jsx'
 import { calculateRoundForecast } from '../../entities/forecast/model.js'
-import { getFiveSSnapshot } from '../../shared/api/fiveSApi.js'
-import { getProjectsSnapshot } from '../../shared/api/projectsApi.js'
-import { getInvestmentsSnapshot } from '../../shared/api/investmentsApi.js'
-import { getBalanceSheetSnapshot } from '../../shared/api/balanceSheetApi.js'
-import { getProductionSnapshot } from '../../shared/api/productionApi.js'
 import { loadFiveSDecision } from '../../features/five-s/decisionStore.js'
 import { loadProjectsDecision } from '../../features/projects/decisionStore.js'
 import { loadInvestmentsDecision } from '../../features/investments/decisionStore.js'
@@ -61,75 +56,46 @@ function DecisionList({ items, emptyLabel }) {
   )
 }
 
-function CheckPage({ onNavigate }) {
-  const [gameState, setGameState] = useState(null)
+function CheckPage({ onNavigate, gameState, factorySettings }) {
+  const [decisionGameState, setDecisionGameState] = useState(null)
   const [staffing, setStaffing] = useState({ assembly: 0, shipping: 0 })
   const [statusMessage, setStatusMessage] = useState('')
 
   useEffect(() => {
-    let isMounted = true
-
-    const loadData = async () => {
-      const [
-        fiveSSnapshot,
-        projectsSnapshot,
-        investmentsSnapshot,
-        balanceSheetSnapshot,
-        productionSnapshot,
-      ] = await Promise.all([
-        getFiveSSnapshot(),
-        getProjectsSnapshot(),
-        getInvestmentsSnapshot(),
-        getBalanceSheetSnapshot(),
-        getProductionSnapshot(),
-      ])
-
-      if (!isMounted) {
-        return
-      }
-
-      const round = investmentsSnapshot.round
-      const fiveSDecision = loadFiveSDecision(round)
-      const projectsDecision = loadProjectsDecision(round)
-      const investmentsDecision = loadInvestmentsDecision(round)
-      const checkStaffingDecision = loadCheckStaffingDecision(round)
-
-      const defaultStaffing = {
-        assembly: investmentsSnapshot.factory.assemblyWorkers,
-        shipping: investmentsSnapshot.factory.shippingWorkers,
-      }
-
-      setStaffing(checkStaffingDecision?.staffing || defaultStaffing)
-      setGameState({
-        round,
-        fiveSSnapshot,
-        projectsSnapshot,
-        investmentsSnapshot,
-        balanceSheetSnapshot,
-        productionSnapshot,
-        fiveSDecision,
-        projectsDecision,
-        investmentsDecision,
-        checkStaffingDecision,
-      })
+    if (!gameState) {
+      return
     }
 
-    loadData()
+    const round = gameState.round
+    const fiveSDecision = loadFiveSDecision(round)
+    const projectsDecision = loadProjectsDecision(round)
+    const investmentsDecision = loadInvestmentsDecision(round)
+    const checkStaffingDecision = loadCheckStaffingDecision(round)
 
-    return () => {
-      isMounted = false
+    const defaultStaffing = {
+      assembly: gameState.staffing?.assembly ?? 0,
+      shipping: gameState.staffing?.shipping ?? 0,
     }
-  }, [])
+
+    setStaffing(checkStaffingDecision?.staffing || defaultStaffing)
+    setDecisionGameState({
+      ...gameState,
+      fiveSDecision,
+      projectsDecision,
+      investmentsDecision,
+      checkStaffingDecision,
+    })
+  }, [gameState])
 
   const forecast = useMemo(() => {
-    if (!gameState) {
+    if (!decisionGameState) {
       return null
     }
 
-    return calculateRoundForecast(gameState, {
+    return calculateRoundForecast(decisionGameState, {
       staffing,
-    })
-  }, [gameState, staffing])
+    }, factorySettings)
+  }, [decisionGameState, factorySettings, staffing])
 
   const updateStaffing = (key, delta) => {
     setStaffing((previousValue) => ({
@@ -139,12 +105,12 @@ function CheckPage({ onNavigate }) {
   }
 
   const handleSaveStaffing = () => {
-    if (!forecast || !gameState) {
+    if (!forecast || !decisionGameState) {
       return
     }
 
     const decision = {
-      round: gameState.round,
+      round: decisionGameState.round,
       staffing,
       savedAt: new Date().toISOString(),
     }

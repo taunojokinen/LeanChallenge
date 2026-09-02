@@ -16,7 +16,7 @@ import {
 } from '../../features/investments/decisionStore.js'
 import './InvestmentsPage.css'
 
-function InvestmentsPage() {
+function InvestmentsPage({ round }) {
   const [snapshot, setSnapshot] = useState(null)
   const [balanceSheetSnapshot, setBalanceSheetSnapshot] = useState(null)
   const [projectsViewModel, setProjectsViewModel] = useState(null)
@@ -44,11 +44,11 @@ function InvestmentsPage() {
         return
       }
 
-      const projectsDecision = loadProjectsDecision(investmentsData.round)
+      const projectsDecision = loadProjectsDecision(round)
       const selectionMap = projectsDecision ? buildSelectionMapFromDecision(projectsDecision) : {}
       const projectsModel = buildProjectsViewModel(projectsData, { selectionMap })
 
-      const investmentsDecision = loadInvestmentsDecision(investmentsData.round)
+      const investmentsDecision = loadInvestmentsDecision(round)
 
       setSnapshot(investmentsData)
       setBalanceSheetSnapshot(balanceData)
@@ -65,7 +65,7 @@ function InvestmentsPage() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [round])
 
   const viewModel = useMemo(() => {
     if (!snapshot || !balanceSheetSnapshot || !projectsViewModel) {
@@ -145,7 +145,7 @@ function InvestmentsPage() {
     }
 
     const decision = {
-      round: snapshot.round,
+      round,
       investments: viewModel.investmentRows,
       totalCost: viewModel.totals.totalCost,
       financingNeed: viewModel.financing.financingNeed,

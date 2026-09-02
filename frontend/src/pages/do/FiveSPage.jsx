@@ -35,7 +35,7 @@ function formatLevelShort(level) {
   })
 }
 
-function FiveSPage() {
+function FiveSPage({ round }) {
   const [snapshot, setSnapshot] = useState(null)
   const [investedHours, setInvestedHours] = useState(EMPTY_HOURS)
   const [savedDecision, setSavedDecision] = useState(null)
@@ -53,7 +53,7 @@ function FiveSPage() {
 
       setSnapshot(data)
 
-      const storedDecision = loadFiveSDecision(data.round)
+      const storedDecision = loadFiveSDecision(round)
 
       if (storedDecision) {
         setSavedDecision(storedDecision)
@@ -66,7 +66,7 @@ function FiveSPage() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [round])
 
   const viewModel = useMemo(() => {
     if (!snapshot) {
@@ -90,7 +90,7 @@ function FiveSPage() {
     }
 
     const nextDecision = {
-      round: snapshot.round,
+      round,
       investedHours,
       usedFocusHours: viewModel.focus.usedHours,
       savedAt: new Date().toISOString(),
@@ -99,7 +99,7 @@ function FiveSPage() {
     saveFiveSDecision(nextDecision)
     setSavedDecision(nextDecision)
     setStatusMessage(
-      `5S-panostus ${viewModel.focus.usedHoursText} tallennettu kierrokselle ${snapshot.round}.`,
+      `5S-panostus ${viewModel.focus.usedHoursText} tallennettu kierrokselle ${round}.`,
     )
   }
 

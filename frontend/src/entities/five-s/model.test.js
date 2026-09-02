@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
 import {
   getFiveSLevel,
   applyFiveSInvestment,
@@ -41,4 +42,22 @@ test('effective hours are capped to 1600h upper bound', () => {
 test('focus budget validation rejects sums over 400h', () => {
   assert.equal(isFocusBudgetValid({ machining: 200, assembly: 150, shipping: 60 }, 400), false)
   assert.equal(isFocusBudgetValid({ machining: 200, assembly: 150, shipping: 50 }, 400), true)
+})
+
+test('five-s max hours override changes the cap', () => {
+  const customSettings = {
+    ...structuredClone(DEFAULT_FACTORY_SETTINGS),
+    lean: {
+      ...structuredClone(DEFAULT_FACTORY_SETTINGS.lean),
+      fiveS: {
+        ...structuredClone(DEFAULT_FACTORY_SETTINGS.lean.fiveS),
+        maxHours: 1000,
+      },
+    },
+  }
+
+  const state = calculateNextFiveSState(990, 50, customSettings)
+
+  assert.equal(state.nextEffectiveHours, 1000)
+  assert.equal(state.nextLevel < 5, true)
 })

@@ -5,6 +5,7 @@ import projectsSnapshot from '../../mocks/projectsSnapshot.json' with { type: 'j
 import investmentsSnapshot from '../../mocks/investmentsSnapshot.json' with { type: 'json' }
 import balanceSheetSnapshot from '../../mocks/balanceSheetSnapshot.json' with { type: 'json' }
 import productionSnapshot from '../../mocks/productionSnapshot.json' with { type: 'json' }
+import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
 import {
   calculateAllowedNewVariations,
   calculateDemandPerVariation,
@@ -38,6 +39,13 @@ function createGameState(overrides = {}) {
         { type: 'factory-expansion', quantity: 1, cost: 1000000 },
       ],
     },
+    ...overrides,
+  }
+}
+
+function cloneSettings(overrides = {}) {
+  return {
+    ...structuredClone(DEFAULT_FACTORY_SETTINGS),
     ...overrides,
   }
 }
@@ -252,6 +260,360 @@ test('baseline demand uses 20 active variations at reference price', () => {
   assert.equal(forecast.forecast.market.activeVariationCount, 20)
   assert.equal(forecast.forecast.market.demandPerVariation, 10)
   assert.equal(forecast.forecast.demand, 200)
+})
+
+test('default factory settings keep the baseline forecast unchanged', () => {
+  const gameState = createGameState()
+  const forecastWithoutSettings = calculateRoundForecast(gameState)
+  const forecastWithSettings = calculateRoundForecast(gameState, {}, DEFAULT_FACTORY_SETTINGS)
+
+  assert.equal(forecastWithSettings.forecast.demand, forecastWithoutSettings.forecast.demand)
+  assert.equal(forecastWithSettings.forecast.capacityByDepartment.machining, forecastWithoutSettings.forecast.capacityByDepartment.machining)
+  assert.equal(forecastWithSettings.forecast.capacityByDepartment.assembly, forecastWithoutSettings.forecast.capacityByDepartment.assembly)
+  assert.equal(forecastWithSettings.forecast.capacityByDepartment.shipping, forecastWithoutSettings.forecast.capacityByDepartment.shipping)
+  assert.equal(forecastWithSettings.forecast.plantCapacity, forecastWithoutSettings.forecast.plantCapacity)
+  assert.equal(forecastWithSettings.forecast.bottleneckKey, forecastWithoutSettings.forecast.bottleneckKey)
+  assert.equal(forecastWithSettings.forecast.actualProduction, forecastWithoutSettings.forecast.actualProduction)
+  assert.equal(forecastWithSettings.forecast.inventory.averageFinishedGoodsInventory, forecastWithoutSettings.forecast.inventory.averageFinishedGoodsInventory)
+  assert.equal(forecastWithSettings.forecast.inventory.finishedGoodsValue, forecastWithoutSettings.forecast.inventory.finishedGoodsValue)
+  assert.equal(forecastWithSettings.forecast.inventory.finishedGoodsArea, forecastWithoutSettings.forecast.inventory.finishedGoodsArea)
+  assert.equal(forecastWithSettings.forecast.space.freeFactorySpace, forecastWithoutSettings.forecast.space.freeFactorySpace)
+  assert.equal(forecastWithSettings.forecast.finance.labor, forecastWithoutSettings.forecast.finance.labor)
+  assert.equal(forecastWithSettings.forecast.finance.fixedCosts, forecastWithoutSettings.forecast.finance.fixedCosts)
+  assert.equal(forecastWithSettings.forecast.finance.depreciation, forecastWithoutSettings.forecast.finance.depreciation)
+  assert.equal(forecastWithSettings.forecast.finance.interest, forecastWithoutSettings.forecast.finance.interest)
+  assert.equal(forecastWithSettings.summary.result, forecastWithoutSettings.summary.result)
+})
+
+test('5S divisor override changes forecast KNL without changing demand inputs directly', () => {
+  const gameState = createGameState()
+  const customSettings = cloneSettings({
+    lean: {
+      ...DEFAULT_FACTORY_SETTINGS.lean,
+      fiveS: {
+        ...DEFAULT_FACTORY_SETTINGS.lean.fiveS,
+        contributionDivisor: 2,
+      },
+    },
+  })
+
+  const forecast = calculateRoundForecast(gameState, {}, customSettings)
+  const defaultForecast = calculateRoundForecast(gameState)
+
+  assert.notEqual(forecast.forecast.knl.machining.knl, defaultForecast.forecast.knl.machining.knl)
+  assert.notEqual(forecast.forecast.knl.totalQualityAverage, defaultForecast.forecast.knl.totalQualityAverage)
+  assert.equal(forecast.forecast.demand, defaultForecast.forecast.demand)
+})
+
+test('SMED minimum setup override changes changeover time but not changeover count', () => {
+  const gameState = createGameState()
+  const customSettings = cloneSettings({
+    lean: {
+      ...DEFAULT_FACTORY_SETTINGS.lean,
+      smed: {
+        ...DEFAULT_FACTORY_SETTINGS.lean.smed,
+        minimumSetupTimeHours: 1,
+      },
+    },
+  })
+
+  const forecast = calculateRoundForecast(gameState, {}, customSettings)
+  const defaultForecast = calculateRoundForecast(gameState)
+
+  assert.notEqual(forecast.forecast.knl.machining.changeoverHours, defaultForecast.forecast.knl.machining.changeoverHours)
+  assert.equal(forecast.forecast.switches, defaultForecast.forecast.switches)
+  assert.equal(forecast.forecast.demand, defaultForecast.forecast.demand)
+})
+
+test('TPM initial downtime override changes K while leaving N and L intact', () => {
+  const gameState = createGameState()
+  const customSettings = cloneSettings({
+    lean: {
+      ...DEFAULT_FACTORY_SETTINGS.lean,
+      tpm: {
+        ...DEFAULT_FACTORY_SETTINGS.lean.tpm,
+        initialDowntimeRate: 0.2,
+      },
+    },
+  })
+
+  const forecast = calculateRoundForecast(gameState, {}, customSettings)
+  const defaultForecast = calculateRoundForecast(gameState)
+
+  assert.notEqual(forecast.forecast.knl.machining.kPct, defaultForecast.forecast.knl.machining.kPct)
+  assert.equal(forecast.forecast.knl.machining.nPct, defaultForecast.forecast.knl.machining.nPct)
+  assert.equal(forecast.forecast.knl.machining.lPct, defaultForecast.forecast.knl.machining.lPct)
+})
+
+test('variation threshold override changes allowed new variations', () => {
+  const gameState = createGameState({
+    fiveSDecision: null,
+    projectsDecision: null,
+    investmentsDecision: null,
+    marketDecision: {
+      price: 25000,
+    },
+  })
+  const customSettings = cloneSettings({
+    variationRules: {
+      ...DEFAULT_FACTORY_SETTINGS.variationRules,
+      minimumQualityForZeroAdditionalVariations: 0.99,
+      oneVariationMinQuality: 1,
+      twoVariationMinQuality: 1,
+    },
+  })
+
+  const forecast = calculateRoundForecast(gameState, {}, customSettings)
+  const defaultForecast = calculateRoundForecast(gameState)
+
+  assert.notEqual(forecast.decisions.market.allowedNewVariations, defaultForecast.decisions.market.allowedNewVariations)
+  assert.equal(forecast.decisions.market.allowedNewVariations, 0)
+})
+
+test('machining norm hours override changes machining capacity only', () => {
+  const gameState = createGameState()
+  const customSettings = cloneSettings({
+    production: {
+      ...DEFAULT_FACTORY_SETTINGS.production,
+      departments: {
+        ...DEFAULT_FACTORY_SETTINGS.production.departments,
+        machining: {
+          ...DEFAULT_FACTORY_SETTINGS.production.departments.machining,
+          normHoursPerContainer: 5,
+        },
+      },
+    },
+  })
+
+  const forecast = calculateRoundForecast(gameState, {}, customSettings)
+  const defaultForecast = calculateRoundForecast(gameState)
+
+  assert.notEqual(forecast.forecast.capacityByDepartment.machining, defaultForecast.forecast.capacityByDepartment.machining)
+  assert.equal(forecast.forecast.capacityByDepartment.assembly, defaultForecast.forecast.capacityByDepartment.assembly)
+  assert.equal(forecast.forecast.capacityByDepartment.shipping, defaultForecast.forecast.capacityByDepartment.shipping)
+})
+
+test('assembly norm hours override changes assembly capacity', () => {
+  const gameState = createGameState()
+  const customSettings = cloneSettings({
+    production: {
+      ...DEFAULT_FACTORY_SETTINGS.production,
+      departments: {
+        ...DEFAULT_FACTORY_SETTINGS.production.departments,
+        assembly: {
+          ...DEFAULT_FACTORY_SETTINGS.production.departments.assembly,
+          normHoursPerContainer: 100,
+        },
+      },
+    },
+  })
+
+  const forecast = calculateRoundForecast(gameState, {}, customSettings)
+  const defaultForecast = calculateRoundForecast(gameState)
+
+  assert.notEqual(forecast.forecast.capacityByDepartment.assembly, defaultForecast.forecast.capacityByDepartment.assembly)
+  assert.equal(forecast.forecast.capacityByDepartment.machining, defaultForecast.forecast.capacityByDepartment.machining)
+  assert.equal(forecast.forecast.capacityByDepartment.shipping, defaultForecast.forecast.capacityByDepartment.shipping)
+})
+
+test('shipping norm hours override changes shipping capacity', () => {
+  const gameState = createGameState()
+  const customSettings = cloneSettings({
+    production: {
+      ...DEFAULT_FACTORY_SETTINGS.production,
+      departments: {
+        ...DEFAULT_FACTORY_SETTINGS.production.departments,
+        shipping: {
+          ...DEFAULT_FACTORY_SETTINGS.production.departments.shipping,
+          normHoursPerContainer: 8,
+        },
+      },
+    },
+  })
+
+  const forecast = calculateRoundForecast(gameState, {}, customSettings)
+  const defaultForecast = calculateRoundForecast(gameState)
+
+  assert.notEqual(forecast.forecast.capacityByDepartment.shipping, defaultForecast.forecast.capacityByDepartment.shipping)
+  assert.equal(forecast.forecast.capacityByDepartment.machining, defaultForecast.forecast.capacityByDepartment.machining)
+  assert.equal(forecast.forecast.capacityByDepartment.assembly, defaultForecast.forecast.capacityByDepartment.assembly)
+})
+
+test('available hours override changes capacity scale', () => {
+  const gameState = createGameState()
+  const customSettings = cloneSettings({
+    production: {
+      ...DEFAULT_FACTORY_SETTINGS.production,
+      hoursPerMachinePerRound: 960,
+      hoursPerWorkerPerRound: 960,
+    },
+  })
+
+  const forecast = calculateRoundForecast(gameState, {}, customSettings)
+  const defaultForecast = calculateRoundForecast(gameState)
+
+  assert.notEqual(forecast.forecast.capacityByDepartment.machining, defaultForecast.forecast.capacityByDepartment.machining)
+})
+
+test('inventory value override changes inventory value only', () => {
+  const gameState = createGameState()
+  const customSettings = cloneSettings({
+    inventory: {
+      ...DEFAULT_FACTORY_SETTINGS.inventory,
+      finishedGoodsValuePerContainer: 25000,
+    },
+  })
+
+  const forecast = calculateRoundForecast(gameState, {}, customSettings)
+  const defaultForecast = calculateRoundForecast(gameState)
+
+  assert.equal(forecast.forecast.inventory.averageFinishedGoodsInventory, defaultForecast.forecast.inventory.averageFinishedGoodsInventory)
+  assert.notEqual(forecast.forecast.inventory.finishedGoodsValue, defaultForecast.forecast.inventory.finishedGoodsValue)
+  assert.equal(forecast.forecast.inventory.finishedGoodsArea, defaultForecast.forecast.inventory.finishedGoodsArea)
+})
+
+test('inventory space override changes inventory space only', () => {
+  const gameState = createGameState()
+  const customSettings = cloneSettings({
+    inventory: {
+      ...DEFAULT_FACTORY_SETTINGS.inventory,
+      finishedGoodsSpacePerContainerM2: 20,
+    },
+  })
+
+  const forecast = calculateRoundForecast(gameState, {}, customSettings)
+  const defaultForecast = calculateRoundForecast(gameState)
+
+  assert.equal(forecast.forecast.inventory.averageFinishedGoodsInventory, defaultForecast.forecast.inventory.averageFinishedGoodsInventory)
+  assert.equal(forecast.forecast.inventory.finishedGoodsValue, defaultForecast.forecast.inventory.finishedGoodsValue)
+  assert.notEqual(forecast.forecast.inventory.finishedGoodsArea, defaultForecast.forecast.inventory.finishedGoodsArea)
+})
+
+test('machine space override changes free factory space without changing capacity', () => {
+  const gameState = createGameState()
+  const customSettings = cloneSettings({
+    factory: {
+      ...DEFAULT_FACTORY_SETTINGS.factory,
+      machineSpaceM2: 300,
+    },
+  })
+
+  const forecast = calculateRoundForecast(gameState, {}, customSettings)
+  const defaultForecast = calculateRoundForecast(gameState)
+
+  assert.equal(forecast.forecast.capacityByDepartment.machining, defaultForecast.forecast.capacityByDepartment.machining)
+  assert.notEqual(forecast.forecast.space.machineArea, defaultForecast.forecast.space.machineArea)
+  assert.notEqual(forecast.forecast.space.freeFactorySpace, defaultForecast.forecast.space.freeFactorySpace)
+})
+
+test('worker space override changes free factory space without changing capacity', () => {
+  const gameState = createGameState()
+  const customSettings = cloneSettings({
+    factory: {
+      ...DEFAULT_FACTORY_SETTINGS.factory,
+      workerSpaceM2: 30,
+    },
+  })
+
+  const forecast = calculateRoundForecast(gameState, {}, customSettings)
+  const defaultForecast = calculateRoundForecast(gameState)
+
+  assert.equal(forecast.forecast.capacityByDepartment.assembly, defaultForecast.forecast.capacityByDepartment.assembly)
+  assert.equal(forecast.forecast.capacityByDepartment.shipping, defaultForecast.forecast.capacityByDepartment.shipping)
+  assert.notEqual(forecast.forecast.space.assemblyArea, defaultForecast.forecast.space.assemblyArea)
+  assert.notEqual(forecast.forecast.space.freeFactorySpace, defaultForecast.forecast.space.freeFactorySpace)
+})
+
+test('market settings override demand while keeping capacity unchanged', () => {
+  const gameState = createGameState()
+  const customSettings = cloneSettings({
+    market: {
+      ...DEFAULT_FACTORY_SETTINGS.market,
+      referencePrice: 20000,
+      baseDemandPerVariation: 12,
+      priceElasticity: -2,
+    },
+  })
+  const customGameState = createGameState({
+    marketDecision: {
+      price: 20000,
+    },
+  })
+
+  const forecast = calculateRoundForecast(customGameState, {}, customSettings)
+  const defaultForecast = calculateRoundForecast(customGameState)
+
+    assert.equal(forecast.forecast.capacityByDepartment.machining, defaultForecast.forecast.capacityByDepartment.machining)
+    assert.equal(forecast.forecast.market.demandPerVariation, 12)
+  assert.equal(forecast.forecast.demand, 240)
+})
+
+test('annual employee cost override changes labor but not capacity', () => {
+  const gameState = createGameState()
+  const customSettings = cloneSettings({
+    costs: {
+      ...DEFAULT_FACTORY_SETTINGS.costs,
+      annualEmployeeCost: 60000,
+    },
+  })
+
+  const forecast = calculateRoundForecast(gameState, {}, customSettings)
+  const defaultForecast = calculateRoundForecast(gameState)
+
+    assert.equal(forecast.forecast.capacityByDepartment.assembly, defaultForecast.forecast.capacityByDepartment.assembly)
+    assert.equal(forecast.forecast.capacityByDepartment.shipping, defaultForecast.forecast.capacityByDepartment.shipping)
+    assert.equal(forecast.forecast.finance.labor, 675000)
+  assert.equal(forecast.forecast.finance.labor > defaultForecast.forecast.finance.labor, true)
+})
+
+test('annual fixed cost override changes result by the round fraction amount', () => {
+  const gameState = createGameState()
+  const customSettings = cloneSettings({
+    costs: {
+      ...DEFAULT_FACTORY_SETTINGS.costs,
+      annualFixedCosts: 3600000,
+    },
+  })
+
+  const forecast = calculateRoundForecast(gameState, {}, customSettings)
+  const defaultForecast = calculateRoundForecast(gameState)
+
+  assert.equal(forecast.forecast.finance.fixedCosts, 900000)
+  assert.equal(forecast.summary.result, defaultForecast.summary.result - 150000)
+})
+
+test('annual interest rate override changes interest without changing debt logic', () => {
+  const gameState = createGameState()
+  const customSettings = cloneSettings({
+    finance: {
+      ...DEFAULT_FACTORY_SETTINGS.finance,
+      annualInterestRate: 0.08,
+    },
+  })
+
+  const forecast = calculateRoundForecast(gameState, {}, customSettings)
+  const defaultForecast = calculateRoundForecast(gameState)
+
+    assert.equal(forecast.forecast.finance.interest, 34720)
+    assert.equal(forecast.forecast.finance.interest > defaultForecast.forecast.finance.interest, true)
+})
+
+test('depreciation override changes depreciation while leaving asset base intact', () => {
+  const gameState = createGameState()
+  const customSettings = cloneSettings({
+    finance: {
+      ...DEFAULT_FACTORY_SETTINGS.finance,
+      machineryDepreciationPerRound: 0.1,
+      buildingDepreciationPerRound: 0.05,
+    },
+  })
+
+  const forecast = calculateRoundForecast(gameState, {}, customSettings)
+  const defaultForecast = calculateRoundForecast(gameState)
+
+  assert.equal(forecast.forecast.finance.depreciation > defaultForecast.forecast.finance.depreciation, true)
+  assert.equal(forecast.forecast.finance.depreciation, 225000)
+  assert.equal(forecast.forecast.space.totalArea, defaultForecast.forecast.space.totalArea)
 })
 
 test('without saved check staffing decision, defaults are assembly 25 and shipping 5', () => {

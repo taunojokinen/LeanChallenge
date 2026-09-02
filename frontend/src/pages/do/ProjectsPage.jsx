@@ -13,7 +13,7 @@ import {
 } from '../../entities/lean-projects/model.js'
 import './ProjectsPage.css'
 
-function ProjectsPage() {
+function ProjectsPage({ round }) {
   const [snapshot, setSnapshot] = useState(null)
   const [fiveSDecision, setFiveSDecision] = useState(null)
   const [savedProjectsDecision, setSavedProjectsDecision] = useState(null)
@@ -38,8 +38,8 @@ function ProjectsPage() {
       setSnapshot(projectsSnapshot)
       setCashAmount(balanceSheetSnapshot.assets?.cash ?? null)
 
-      const loadedFiveSDecision = loadFiveSDecision(projectsSnapshot.round)
-      const loadedProjectsDecision = loadProjectsDecision(projectsSnapshot.round)
+      const loadedFiveSDecision = loadFiveSDecision(round)
+      const loadedProjectsDecision = loadProjectsDecision(round)
 
       setFiveSDecision(loadedFiveSDecision)
       setSavedProjectsDecision(loadedProjectsDecision)
@@ -54,7 +54,7 @@ function ProjectsPage() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [round])
 
   const viewModel = useMemo(() => {
     if (!snapshot) {
@@ -163,7 +163,7 @@ function ProjectsPage() {
     }))
 
     const nextDecision = {
-      round: snapshot.round,
+      round,
       selections,
       usedFocusHours: viewModel.focus.projectsSelectedHours,
       totalCost: viewModel.costs.total,

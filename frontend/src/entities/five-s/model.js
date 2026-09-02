@@ -1,3 +1,5 @@
+import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
+
 const INTEGER_FORMATTER = new Intl.NumberFormat('fi-FI', {
   maximumFractionDigits: 0,
 })
@@ -7,16 +9,9 @@ const DECIMAL_FORMATTER = new Intl.NumberFormat('fi-FI', {
   maximumFractionDigits: 1,
 })
 
-export const FIVE_S_MAX_EFFECTIVE_HOURS = 1600
+export const FIVE_S_MAX_EFFECTIVE_HOURS = DEFAULT_FACTORY_SETTINGS.lean.fiveS.maxHours
 
-export const FIVE_S_LEVEL_THRESHOLDS = [
-  { level: 0, hours: 0 },
-  { level: 1, hours: 189 },
-  { level: 2, hours: 474 },
-  { level: 3, hours: 711 },
-  { level: 4, hours: 1066 },
-  { level: 5, hours: 1600 },
-]
+export const FIVE_S_LEVEL_THRESHOLDS = DEFAULT_FACTORY_SETTINGS.lean.fiveS.levelThresholds
 
 const DEFAULT_INVESTED_HOURS = {
   machining: 0,
@@ -44,6 +39,11 @@ function sanitizeHours(value) {
   }
 
   return roundToInteger(numericValue)
+}
+
+function toNumber(value, fallback = 0) {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue : fallback
 }
 
 function formatLevel(value) {
@@ -80,16 +80,22 @@ function calculateUsedFocusHours(investedHours) {
   return investedHours.machining + investedHours.assembly + investedHours.shipping
 }
 
-export function getFiveSLevel(effectiveHours) {
-  const safeHours = clamp(Number(effectiveHours) || 0, 0, FIVE_S_MAX_EFFECTIVE_HOURS)
+function resolveFiveSSettings(factorySettings = DEFAULT_FACTORY_SETTINGS) {
+  return factorySettings?.lean?.fiveS ?? DEFAULT_FACTORY_SETTINGS.lean.fiveS
+}
 
-  if (safeHours <= FIVE_S_LEVEL_THRESHOLDS[0].hours) {
+export function getFiveSLevel(effectiveHours, factorySettings = DEFAULT_FACTORY_SETTINGS) {
+  const settings = resolveFiveSSettings(factorySettings)
+  const levelThresholds = settings.levelThresholds ?? FIVE_S_LEVEL_THRESHOLDS
+  const safeHours = clamp(Number(effectiveHours) || 0, 0, settings.maxHours ?? FIVE_S_MAX_EFFECTIVE_HOURS)
+
+  if (safeHours <= levelThresholds[0].hours) {
     return 0
   }
 
-  for (let index = 1; index < FIVE_S_LEVEL_THRESHOLDS.length; index += 1) {
-    const previous = FIVE_S_LEVEL_THRESHOLDS[index - 1]
-    const current = FIVE_S_LEVEL_THRESHOLDS[index]
+  for (let index = 1; index < levelThresholds.length; index += 1) {
+    const previous = levelThresholds[index - 1]
+    const current = levelThresholds[index]
 
     if (safeHours <= current.hours) {
       const progress = (safeHours - previous.hours) / (current.hours - previous.hours)
@@ -101,32 +107,40 @@ export function getFiveSLevel(effectiveHours) {
   return 5
 }
 
-export function applyFiveSInvestment(currentEffectiveHours, investedHours) {
-  const safeCurrent = clamp(Number(currentEffectiveHours) || 0, 0, FIVE_S_MAX_EFFECTIVE_HOURS)
+export function applyFiveSInvestment(currentEffectiveHours, investedHours, factorySettings = DEFAULT_FACTORY_SETTINGS) {
+  const settings = resolveFiveSSettings(factorySettings)
+  const maxHours = settings.maxHours ?? FIVE_S_MAX_EFFECTIVE_HOURS
+  const safeCurrent = clamp(Number(currentEffectiveHours) || 0, 0, maxHours)
   const safeInvestment = sanitizeHours(investedHours)
 
-  return clamp(safeCurrent + safeInvestment, 0, FIVE_S_MAX_EFFECTIVE_HOURS)
+  return clamp(safeCurrent + safeInvestment, 0, maxHours)
 }
 
-export function applyFiveSDecay(currentEffectiveHours) {
-  const safeCurrent = clamp(Number(currentEffectiveHours) || 0, 0, FIVE_S_MAX_EFFECTIVE_HOURS)
+export function applyFiveSDecay(currentEffectiveHours, factorySettings = DEFAULT_FACTORY_SETTINGS) {
+  const settings = resolveFiveSSettings(factorySettings)
+  const maxHours = settings.maxHours ?? FIVE_S_MAX_EFFECTIVE_HOURS
+  const safeCurrent = clamp(Number(currentEffectiveHours) || 0, 0, maxHours)
 
-  return clamp(safeCurrent * 0.95, 0, FIVE_S_MAX_EFFECTIVE_HOURS)
+  return clamp(safeCurrent * 0.95, 0, maxHours)
 }
 
-export function calculateNextFiveSState(currentEffectiveHours, investedHours) {
+export function calculateNextFiveSState(currentEffectiveHours, investedHours, factorySettings = DEFAULT_FACTORY_SETTINGS) {
   const safeInvestment = sanitizeHours(investedHours)
   const nextEffectiveHours =
     safeInvestment === 0
-      ? applyFiveSDecay(currentEffectiveHours)
-      : applyFiveSInvestment(currentEffectiveHours, safeInvestment)
+      ? applyFiveSDecay(currentEffectiveHours, factorySettings)
+      : applyFiveSInvestment(currentEffectiveHours, safeInvestment, factorySettings)
 
   return {
-    currentEffectiveHours: clamp(Number(currentEffectiveHours) || 0, 0, FIVE_S_MAX_EFFECTIVE_HOURS),
+    currentEffectiveHours: clamp(
+      Number(currentEffectiveHours) || 0,
+      0,
+      resolveFiveSSettings(factorySettings).maxHours ?? FIVE_S_MAX_EFFECTIVE_HOURS,
+    ),
     investedHours: safeInvestment,
     nextEffectiveHours,
-    currentLevel: getFiveSLevel(currentEffectiveHours),
-    nextLevel: getFiveSLevel(nextEffectiveHours),
+    currentLevel: getFiveSLevel(currentEffectiveHours, factorySettings),
+    nextLevel: getFiveSLevel(nextEffectiveHours, factorySettings),
   }
 }
 
@@ -152,7 +166,8 @@ export function isFocusBudgetValid(investedHours, focusBudgetHours) {
   return calculateUsedFocusHours(investedHours) <= focusBudgetHours
 }
 
-export function buildFiveSViewModel(snapshot, decision, selectedInvestedHours) {
+export function buildFiveSViewModel(snapshot, decision, selectedInvestedHours, factorySettings = DEFAULT_FACTORY_SETTINGS) {
+  const settings = resolveFiveSSettings(factorySettings)
   const investedHours = normalizeInvestedHours(selectedInvestedHours ?? decision?.investedHours)
   const usedFocusHours = calculateUsedFocusHours(investedHours)
   const focusBudgetHours = sanitizeHours(snapshot.focusBudgetHours)
@@ -163,9 +178,9 @@ export function buildFiveSViewModel(snapshot, decision, selectedInvestedHours) {
     const currentEffectiveHours = clamp(
       Number(department.fiveSEffectiveHours) || 0,
       0,
-      FIVE_S_MAX_EFFECTIVE_HOURS,
+      settings.maxHours ?? FIVE_S_MAX_EFFECTIVE_HOURS,
     )
-    const state = calculateNextFiveSState(currentEffectiveHours, investedHours[department.key] ?? 0)
+    const state = calculateNextFiveSState(currentEffectiveHours, investedHours[department.key] ?? 0, factorySettings)
     const levelDelta = roundToOneDecimal(state.nextLevel - state.currentLevel)
 
     return {

@@ -1,5 +1,6 @@
 import { calculateNextFiveSState } from '../five-s/model.js'
 import { canFinanceInvestment } from '../investments/model.js'
+import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
 
 const HOURS_PER_MACHINE_PER_ROUND = 1040
 const HOURS_PER_WORKER_PER_ROUND = 1040
@@ -54,50 +55,80 @@ function toNonNegativeInt(value, fallback = 0) {
   return Math.max(0, Math.round(toNumber(value, fallback)))
 }
 
+function normalizePercentValue(value, fallback = 95) {
+  const numeric = toNumber(value, fallback)
+
+  if (numeric <= 1) {
+    return numeric * 100
+  }
+
+  return numeric
+}
+
 export function calculateKNL(kPct, nPct, lPct) {
   return (toNumber(kPct) / 100) * (toNumber(nPct) / 100) * (toNumber(lPct) / 100)
 }
 
-export function calculateDemandPerVariation(price) {
-  const safePrice = Math.max(1, toNumber(price, PRICE_REFERENCE))
-  const demand = DEMAND_REFERENCE_PER_VARIATION * (safePrice / PRICE_REFERENCE) ** PRICE_ELASTICITY
+export function calculateDemandPerVariation(price, factorySettings = DEFAULT_FACTORY_SETTINGS) {
+  const settings = factorySettings ?? DEFAULT_FACTORY_SETTINGS
+  const referencePrice = toNumber(settings.market.referencePrice, PRICE_REFERENCE)
+  const demandPerVariation = toNumber(
+    settings.market.baseDemandPerVariation,
+    DEMAND_REFERENCE_PER_VARIATION,
+  )
+  const priceElasticity = toNumber(settings.market.priceElasticity, PRICE_ELASTICITY)
+  const safePrice = Math.max(1, toNumber(price, referencePrice))
+  const demand = demandPerVariation * (safePrice / referencePrice) ** priceElasticity
   return Math.max(0, Math.round(demand))
 }
 
-export function calculateAllowedNewVariations(qualityPct) {
+export function calculateAllowedNewVariations(qualityPct, factorySettings = DEFAULT_FACTORY_SETTINGS) {
+  const settings = factorySettings ?? DEFAULT_FACTORY_SETTINGS
+  const variationRules = settings.variationRules ?? DEFAULT_FACTORY_SETTINGS.variationRules
   const quality = toNumber(qualityPct)
+  const zeroThreshold = toNumber(variationRules.minimumQualityForZeroAdditionalVariations, 0.75) * 100
+  const oneVariationThreshold = toNumber(variationRules.oneVariationMinQuality, 0.75) * 100
 
-  if (quality < 75) {
+  if (quality < zeroThreshold) {
     return 0
   }
 
-  if (quality < 80) {
+  if (quality < oneVariationThreshold) {
     return 1
   }
 
   return 2
 }
 
-function calculateLearningComponent(basePct, effectiveHours, maxPct = 95) {
+function calculateLearningComponent(basePct, effectiveHours, maxPct = 95, curveHours = 1200) {
   const safeBase = toNumber(basePct)
-  const safeMax = Math.max(safeBase, toNumber(maxPct, 95))
+  const safeMax = Math.max(safeBase, normalizePercentValue(maxPct, 95))
   const safeHours = Math.max(0, toNumber(effectiveHours))
+  const safeCurveHours = Math.max(1, toNumber(curveHours, 1200))
 
   // Shared curve: approaches maxPct asymptotically, near 90% around 2000h when base is 70%.
-  const curveRatio = 1 - Math.exp(-safeHours / 1200)
+  const curveRatio = 1 - Math.exp(-safeHours / safeCurveHours)
   return clamp(safeBase + (safeMax - safeBase) * curveRatio, MIN_COMPONENT_PCT, MAX_COMPONENT_PCT)
 }
 
-function calculateSmedChangeoverHours(smedHours, automationReductionMinutes = 0) {
+function calculateSmedChangeoverHours(smedHours, automationReductionMinutes = 0, smedSettings = null) {
+  const settings = smedSettings ?? DEFAULT_FACTORY_SETTINGS.lean.smed
   const safeHours = Math.max(0, toNumber(smedHours))
-  const baselineHours = 0.5 + 7.5 * Math.exp(-safeHours / 450)
+  const initialSetupHours = toNumber(settings.initialSetupTimeHours, 8)
+  const minimumSetupHours = toNumber(settings.minimumSetupTimeHours, 0.5)
+  const decayHours = Math.max(1, toNumber(settings.decayHours, 450))
+  const baselineHours = minimumSetupHours + (initialSetupHours - minimumSetupHours) * Math.exp(-safeHours / decayHours)
   const automatedHours = baselineHours - toNumber(automationReductionMinutes) / 60
-  return Math.max(0.5, automatedHours)
+  return Math.max(minimumSetupHours, automatedHours)
 }
 
-function calculateTpmDowntimeLoss(tpmHours) {
+function calculateTpmDowntimeLoss(tpmHours, tpmSettings = null) {
+  const settings = tpmSettings ?? DEFAULT_FACTORY_SETTINGS.lean.tpm
   const safeHours = Math.max(0, toNumber(tpmHours))
-  return 0.01 + 0.09 * Math.exp(-safeHours / 450)
+  const initialDowntimeRate = toNumber(settings.initialDowntimeRate, 0.1)
+  const minimumDowntimeRate = toNumber(settings.minimumDowntimeRate, 0.01)
+  const decayHours = Math.max(1, toNumber(settings.decayHours, 450))
+  return minimumDowntimeRate + (initialDowntimeRate - minimumDowntimeRate) * Math.exp(-safeHours / decayHours)
 }
 
 function summarizeProjectsDecision(projectsDecision, projectsSnapshot) {
@@ -182,7 +213,7 @@ function summarizeInvestmentsDecision(investmentsDecision, investmentsSnapshot) 
   return result
 }
 
-function resolveStaffing(investmentsSnapshot, staffingDecision, machineCount) {
+function resolveStaffing(investmentsSnapshot, staffingDecision, machineCount, workersPerMachine = 5) {
   const baselineAssembly = toNonNegativeInt(
     investmentsSnapshot.factory.assemblyWorkers,
     25,
@@ -202,13 +233,206 @@ function resolveStaffing(investmentsSnapshot, staffingDecision, machineCount) {
       : baselineShipping
 
   return {
-    machining: toNonNegativeInt(machineCount) * 5,
+    machining: toNonNegativeInt(machineCount) * toNonNegativeInt(workersPerMachine, 5),
     assembly,
     shipping,
     baseline: {
       assembly: baselineAssembly,
       shipping: baselineShipping,
     },
+  }
+}
+
+function buildProjectsSnapshotFromGameState(gameState, factorySettings) {
+  const settings = factorySettings ?? DEFAULT_FACTORY_SETTINGS
+  const methodSettings = settings.lean?.methods ?? DEFAULT_FACTORY_SETTINGS.lean.methods
+  const methodFallbackHours = {
+    machining: {
+      smed: 0,
+      tpm: 0,
+      spc: 0,
+    },
+    assembly: {
+      'method-development': toNonNegativeInt(methodSettings.fixedHours, 50),
+      tpm: 0,
+      'poka-yoke': 0,
+    },
+    shipping: {
+      'method-development': toNonNegativeInt(methodSettings.fixedHours, 50),
+      tpm: 0,
+      'poka-yoke': 0,
+    },
+  }
+
+  const stateMethods = gameState.lean?.methods ?? {}
+  const withFallback = (departmentKey, methodKey) => {
+    const methodValue = stateMethods?.[departmentKey]?.[methodKey]
+    return toNumber(methodValue, methodFallbackHours[departmentKey][methodKey])
+  }
+
+  return {
+    round: toNonNegativeInt(gameState.round, 1),
+    departments: [
+      {
+        key: 'machining',
+        methods: [
+          { key: 'smed', effectiveHours: withFallback('machining', 'smed') },
+          { key: 'tpm', effectiveHours: withFallback('machining', 'tpm') },
+          { key: 'spc', effectiveHours: withFallback('machining', 'spc') },
+        ],
+      },
+      {
+        key: 'assembly',
+        methods: [
+          {
+            key: 'method-development',
+            effectiveHours: withFallback('assembly', 'method-development'),
+          },
+          { key: 'tpm', effectiveHours: withFallback('assembly', 'tpm') },
+          { key: 'poka-yoke', effectiveHours: withFallback('assembly', 'poka-yoke') },
+        ],
+      },
+      {
+        key: 'shipping',
+        methods: [
+          {
+            key: 'method-development',
+            effectiveHours: withFallback('shipping', 'method-development'),
+          },
+          { key: 'tpm', effectiveHours: withFallback('shipping', 'tpm') },
+          { key: 'poka-yoke', effectiveHours: withFallback('shipping', 'poka-yoke') },
+        ],
+      },
+    ],
+  }
+}
+
+function buildFiveSSnapshotFromGameState(gameState, factorySettings) {
+  const settings = factorySettings ?? DEFAULT_FACTORY_SETTINGS
+  const fiveSSettings = settings.lean?.fiveS ?? DEFAULT_FACTORY_SETTINGS.lean.fiveS
+  const stateFiveS = gameState.lean?.fiveS ?? {}
+  const stateDepartments = stateFiveS.departments ?? {}
+  const weights = fiveSSettings.currentDepartmentWeights ?? DEFAULT_FACTORY_SETTINGS.lean.fiveS.currentDepartmentWeights
+
+  const buildDepartment = (key, label) => ({
+    key,
+    name: label,
+    fiveSEffectiveHours: toNumber(stateDepartments?.[key]?.effectiveHours),
+    weight: toNumber(stateDepartments?.[key]?.weight, toNumber(weights?.[key])),
+  })
+
+  return {
+    round: toNonNegativeInt(gameState.round, 1),
+    focusBudgetHours: toNumber(stateFiveS.focusBudgetHours, toNumber(fiveSSettings.maxHours, 1600) / 4),
+    departments: [
+      buildDepartment('machining', 'Koneistus'),
+      buildDepartment('assembly', 'Koonta'),
+      buildDepartment('shipping', 'Lähettämö'),
+    ],
+    benefits: [],
+  }
+}
+
+function buildInvestmentsSnapshotFromGameState(gameState, factorySettings) {
+  const settings = factorySettings ?? DEFAULT_FACTORY_SETTINGS
+  const configuredInvestments = settings.investments ?? DEFAULT_FACTORY_SETTINGS.investments
+  const stateInvestments = gameState.investments ?? {}
+  const setupAutomationState = stateInvestments.setupAutomation ?? {}
+  const processMeasurementState = stateInvestments.automaticProcessMeasurement ?? {}
+  const conditionMonitoringState = stateInvestments.conditionMonitoring ?? {}
+
+  return {
+    round: toNonNegativeInt(gameState.round, 1),
+    factory: {
+      totalAreaM2: toNonNegativeInt(gameState.factory?.totalAreaM2, 0),
+      officeAndSocialM2: toNonNegativeInt(gameState.factory?.officeAndSocialM2, 0),
+      machiningMachineCount: toNonNegativeInt(gameState.production?.machiningMachines, 0),
+      assemblyWorkers: toNonNegativeInt(gameState.staffing?.assembly, 0),
+      shippingWorkers: toNonNegativeInt(gameState.staffing?.shipping, 0),
+      dispatchM2: toNonNegativeInt(gameState.factory?.dispatchM2, 0),
+      finishedGoodsContainers: toNonNegativeInt(gameState.inventory?.finishedGoodsContainers, 0),
+    },
+    investments: {
+      newMachine: {
+        type: configuredInvestments.newMachine?.type || 'new-machine',
+        unitCost: toNumber(configuredInvestments.newMachine?.price, 500000),
+      },
+      factoryExpansion: {
+        type: configuredInvestments.factoryExpansion?.type || 'factory-expansion',
+        unitCost: toNumber(configuredInvestments.factoryExpansion?.price, 1000000),
+      },
+      moldChangeAutomation: {
+        type: configuredInvestments.setupAutomation?.type || 'mold-change-automation',
+        unitCost: toNumber(configuredInvestments.setupAutomation?.price, 250000),
+        installedMachineIds: Array.isArray(setupAutomationState.installedMachineIds)
+          ? [...setupAutomationState.installedMachineIds]
+          : [],
+      },
+      automaticProcessMeasurement: {
+        type:
+          configuredInvestments.automaticProcessMeasurement?.type ||
+          'automatic-process-measurement',
+        unitCost: toNumber(configuredInvestments.automaticProcessMeasurement?.price, 250000),
+        installed: Boolean(processMeasurementState.installed),
+      },
+      conditionMonitoring: {
+        type: configuredInvestments.conditionMonitoring?.type || 'condition-monitoring',
+        unitCost: toNumber(configuredInvestments.conditionMonitoring?.price, 200000),
+        installed: Boolean(conditionMonitoringState.installed),
+      },
+    },
+  }
+}
+
+function buildBalanceSheetSnapshotFromGameState(gameState) {
+  const legacyFinancials = gameState.financials?.balanceSheet
+  const finance = gameState.finance ?? {}
+  const legacyAssets = legacyFinancials?.assets ?? {}
+  const legacyEquityAndLiabilities = legacyFinancials?.equityAndLiabilities ?? {}
+
+  const machinery = toNumber(
+    finance.machineryBookValue,
+    toNumber(legacyAssets.machineryAndEquipment, toNumber(legacyAssets.machinery)),
+  )
+  const buildings = toNumber(finance.buildingsBookValue, toNumber(legacyAssets.buildings))
+  const cash = toNumber(finance.cash, toNumber(legacyAssets.cash))
+  const inventory = toNumber(
+    finance.inventoryBookValue,
+    toNumber(legacyAssets.finishedGoodsInventory, toNumber(legacyAssets.inventory)),
+  )
+  const bankLoans = toNumber(finance.bankLoans, toNumber(legacyEquityAndLiabilities.bankLoans))
+  const overdraft = toNumber(finance.overdraft, toNumber(legacyEquityAndLiabilities.overdraft))
+  const equity = toNumber(
+    finance.equity,
+    machinery + buildings + cash + inventory - bankLoans - overdraft,
+  )
+
+  return {
+    round: toNonNegativeInt(gameState.round, 1),
+    assets: {
+      machinery,
+      buildings,
+      cash,
+      inventory,
+    },
+    liabilities: {
+      bankLoans,
+      overdraft,
+      equity,
+    },
+  }
+}
+
+function resolveForecastSnapshotInputs(gameState, factorySettings) {
+  return {
+    investmentsSnapshot:
+      gameState.investmentsSnapshot || buildInvestmentsSnapshotFromGameState(gameState, factorySettings),
+    projectsSnapshot:
+      gameState.projectsSnapshot || buildProjectsSnapshotFromGameState(gameState, factorySettings),
+    fiveSSnapshot: gameState.fiveSSnapshot || buildFiveSSnapshotFromGameState(gameState, factorySettings),
+    balanceSheetSnapshot:
+      gameState.balanceSheetSnapshot || buildBalanceSheetSnapshotFromGameState(gameState),
+    productionSnapshot: gameState.productionSnapshot || null,
   }
 }
 
@@ -222,8 +446,43 @@ function calculateDepartmentMetrics({
   automationMachineCount,
   conditionMonitoring,
   automaticProcessMeasurement,
+  settings,
 }) {
-  const fiveSContribution = fiveSEffectiveHours / 3
+  const productionSettings = settings.production ?? DEFAULT_FACTORY_SETTINGS.production
+  const leanSettings = settings.lean ?? DEFAULT_FACTORY_SETTINGS.lean
+  const fiveSSettings = leanSettings.fiveS ?? DEFAULT_FACTORY_SETTINGS.lean.fiveS
+  const smedSettings = leanSettings.smed ?? DEFAULT_FACTORY_SETTINGS.lean.smed
+  const tpmSettings = leanSettings.tpm ?? DEFAULT_FACTORY_SETTINGS.lean.tpm
+  const qualitySettings = leanSettings.quality ?? DEFAULT_FACTORY_SETTINGS.lean.quality
+  const performanceSettings = leanSettings.performance ?? DEFAULT_FACTORY_SETTINGS.lean.performance
+  const machiningNormHoursPerContainer = toNumber(
+    productionSettings.departments?.machining?.normHoursPerContainer,
+    MACHINING_NORM_HOURS_PER_CONTAINER,
+  )
+  const assemblyNormHoursPerContainer = toNumber(
+    productionSettings.departments?.assembly?.normHoursPerContainer,
+    ASSEMBLY_NORM_HOURS_PER_CONTAINER,
+  )
+  const shippingNormHoursPerContainer = toNumber(
+    productionSettings.departments?.shipping?.normHoursPerContainer,
+    SHIPPING_NORM_HOURS_PER_CONTAINER,
+  )
+  const hoursPerMachinePerRound = toNumber(
+    productionSettings.hoursPerMachinePerRound,
+    HOURS_PER_MACHINE_PER_ROUND,
+  )
+  const hoursPerWorkerPerRound = toNumber(
+    productionSettings.hoursPerWorkerPerRound,
+    HOURS_PER_WORKER_PER_ROUND,
+  )
+  const fiveSContributionDivisor = Math.max(1, toNumber(fiveSSettings.contributionDivisor, 3))
+  const qualityMaxPct = normalizePercentValue(qualitySettings.maxPct, MAX_COMPONENT_PCT)
+  const performanceMaxPct = normalizePercentValue(performanceSettings.maxPerformance, MAX_COMPONENT_PCT)
+  const defaultLearningBasePct = toNumber(performanceSettings.defaultBasePct, 70)
+  const machiningBasePct = normalizePercentValue(performanceSettings.machiningBasePct, 90)
+  const learningCurveHours = toNumber(qualitySettings.curveHours, 1200)
+
+  const fiveSContribution = fiveSEffectiveHours / fiveSContributionDivisor
   const smedHours = toNumber(methodHours.smed) + fiveSContribution
   const tpmHours = toNumber(methodHours.tpm) + fiveSContribution
   const methodDevHours = toNumber(methodHours['method-development']) + fiveSContribution
@@ -231,27 +490,27 @@ function calculateDepartmentMetrics({
 
   if (key === 'machining') {
     const automationShare = machineCount > 0 ? automationMachineCount / machineCount : 0
-    const averageAutomationReductionMinutes = 10 * clamp(automationShare, 0, 1)
-    const changeoverHours = calculateSmedChangeoverHours(smedHours, averageAutomationReductionMinutes)
-    const downtimeLoss = calculateTpmDowntimeLoss(tpmHours)
-    const switchLoss = machineCount > 0 ? (switches * changeoverHours) / (machineCount * HOURS_PER_MACHINE_PER_ROUND) : 0
+    const averageAutomationReductionMinutes = toNumber(smedSettings.automationReductionMinutesPerMachine, 10) * clamp(automationShare, 0, 1)
+    const changeoverHours = calculateSmedChangeoverHours(smedHours, averageAutomationReductionMinutes, smedSettings)
+    const downtimeLoss = calculateTpmDowntimeLoss(tpmHours, tpmSettings)
+    const switchLoss = machineCount > 0 ? (switches * changeoverHours) / (machineCount * hoursPerMachinePerRound) : 0
 
     const availabilityPct = clamp(
       (1 - downtimeLoss - Math.max(0, switchLoss)) * 100 + (conditionMonitoring ? 2 : 0),
       50,
       MAX_COMPONENT_PCT,
     )
-    const speedPct = calculateLearningComponent(90, methodDevHours, 95)
+    const speedPct = calculateLearningComponent(machiningBasePct, methodDevHours, performanceMaxPct, learningCurveHours)
     const qualityPct = clamp(
-      calculateLearningComponent(70, qualityHours, 95) + (automaticProcessMeasurement ? 2 : 0),
+      calculateLearningComponent(defaultLearningBasePct, qualityHours, qualityMaxPct, learningCurveHours) + (automaticProcessMeasurement ? 2 : 0),
       MIN_COMPONENT_PCT,
       MAX_COMPONENT_PCT,
     )
 
     const knl = calculateKNL(availabilityPct, speedPct, qualityPct)
-    const theoreticalCapacityHours = machineCount * HOURS_PER_MACHINE_PER_ROUND
+    const theoreticalCapacityHours = machineCount * hoursPerMachinePerRound
     const effectiveCapacityHours = theoreticalCapacityHours * knl
-    const capacityContainers = Math.floor(effectiveCapacityHours / MACHINING_NORM_HOURS_PER_CONTAINER)
+    const capacityContainers = Math.floor(effectiveCapacityHours / machiningNormHoursPerContainer)
 
     return {
       kPct: availabilityPct,
@@ -265,19 +524,19 @@ function calculateDepartmentMetrics({
 
   if (key === 'assembly') {
     const availabilityPct = clamp(
-      calculateLearningComponent(70, smedHours + tpmHours, 95) + (conditionMonitoring ? 2 : 0),
+      calculateLearningComponent(defaultLearningBasePct, smedHours + tpmHours, performanceMaxPct, learningCurveHours) + (conditionMonitoring ? 2 : 0),
       MIN_COMPONENT_PCT,
       MAX_COMPONENT_PCT,
     )
-    const speedPct = calculateLearningComponent(70, methodDevHours, 95)
+    const speedPct = calculateLearningComponent(defaultLearningBasePct, methodDevHours, performanceMaxPct, learningCurveHours)
     const qualityPct = clamp(
-      calculateLearningComponent(70, qualityHours, 95) + (automaticProcessMeasurement ? 2 : 0),
+      calculateLearningComponent(defaultLearningBasePct, qualityHours, qualityMaxPct, learningCurveHours) + (automaticProcessMeasurement ? 2 : 0),
       MIN_COMPONENT_PCT,
       MAX_COMPONENT_PCT,
     )
     const knl = calculateKNL(availabilityPct, speedPct, qualityPct)
-    const effectiveHours = staffing.assembly * HOURS_PER_WORKER_PER_ROUND * knl
-    const capacityContainers = Math.floor(effectiveHours / ASSEMBLY_NORM_HOURS_PER_CONTAINER)
+    const effectiveHours = staffing.assembly * hoursPerWorkerPerRound * knl
+    const capacityContainers = Math.floor(effectiveHours / assemblyNormHoursPerContainer)
 
     return {
       kPct: availabilityPct,
@@ -290,19 +549,19 @@ function calculateDepartmentMetrics({
   }
 
   const availabilityPct = clamp(
-    calculateLearningComponent(70, smedHours + tpmHours, 95) + (conditionMonitoring ? 2 : 0),
+    calculateLearningComponent(defaultLearningBasePct, smedHours + tpmHours, performanceMaxPct, learningCurveHours) + (conditionMonitoring ? 2 : 0),
     MIN_COMPONENT_PCT,
     MAX_COMPONENT_PCT,
   )
-  const speedPct = calculateLearningComponent(70, methodDevHours, 95)
+  const speedPct = calculateLearningComponent(defaultLearningBasePct, methodDevHours, performanceMaxPct, learningCurveHours)
   const qualityPct = clamp(
-    calculateLearningComponent(70, qualityHours, 95) + (automaticProcessMeasurement ? 2 : 0),
+    calculateLearningComponent(defaultLearningBasePct, qualityHours, qualityMaxPct, learningCurveHours) + (automaticProcessMeasurement ? 2 : 0),
     MIN_COMPONENT_PCT,
     MAX_COMPONENT_PCT,
   )
   const knl = calculateKNL(availabilityPct, speedPct, qualityPct)
-  const effectiveHours = staffing.shipping * HOURS_PER_WORKER_PER_ROUND * knl
-  const capacityContainers = Math.floor(effectiveHours / SHIPPING_NORM_HOURS_PER_CONTAINER)
+  const effectiveHours = staffing.shipping * hoursPerWorkerPerRound * knl
+  const capacityContainers = Math.floor(effectiveHours / shippingNormHoursPerContainer)
 
   return {
     kPct: availabilityPct,
@@ -322,7 +581,18 @@ function calculateScenario({
   decisions,
   staffingDecision,
   applyDoDecisions,
+  factorySettings,
 }) {
+  const settings = factorySettings ?? DEFAULT_FACTORY_SETTINGS
+  const leanSettings = settings.lean ?? DEFAULT_FACTORY_SETTINGS.lean
+  const fiveSSettings = leanSettings.fiveS ?? DEFAULT_FACTORY_SETTINGS.lean.fiveS
+  const smedSettings = leanSettings.smed ?? DEFAULT_FACTORY_SETTINGS.lean.smed
+  const tpmSettings = leanSettings.tpm ?? DEFAULT_FACTORY_SETTINGS.lean.tpm
+  const qualitySettings = leanSettings.quality ?? DEFAULT_FACTORY_SETTINGS.lean.quality
+  const performanceSettings = leanSettings.performance ?? DEFAULT_FACTORY_SETTINGS.lean.performance
+  const inventorySettings = settings.inventory ?? DEFAULT_FACTORY_SETTINGS.inventory
+  const factorySettingsSection = settings.factory ?? DEFAULT_FACTORY_SETTINGS.factory
+  const productionSettings = settings.production ?? DEFAULT_FACTORY_SETTINGS.production
   const market = {
     ...DEFAULT_MARKET_DECISION,
     ...(decisions.market || {}),
@@ -340,9 +610,21 @@ function calculateScenario({
   const machineCountBase = toNonNegativeInt(investmentsSnapshot.factory.machiningMachineCount)
   const machineCount = machineCountBase + investments.newMachines
   const totalArea =
-    toNonNegativeInt(investmentsSnapshot.factory.totalAreaM2) + investments.expansions * 1000
+    toNonNegativeInt(investmentsSnapshot.factory.totalAreaM2) +
+    investments.expansions * toNumber(factorySettingsSection.factoryExpansionM2, 1000)
 
-  const staffing = resolveStaffing(investmentsSnapshot, staffingDecision, machineCount)
+  const staffing = resolveStaffing(
+    investmentsSnapshot,
+    staffingDecision,
+    machineCount,
+    productionSettings.workersPerMachine,
+  )
+  const fiveSContributionDivisor = Math.max(1, toNumber(fiveSSettings.contributionDivisor, 3))
+  const qualityMaxPct = normalizePercentValue(qualitySettings.maxPct, MAX_COMPONENT_PCT)
+  const performanceMaxPct = normalizePercentValue(performanceSettings.maxPerformance, MAX_COMPONENT_PCT)
+  const defaultLearningBasePct = toNumber(performanceSettings.defaultBasePct, 70)
+  const machiningBasePct = normalizePercentValue(performanceSettings.machiningBasePct, 90)
+  const learningCurveHours = toNumber(qualitySettings.curveHours, 1200)
 
   const fiveSHoursByDepartment = {
     machining: toNumber(fiveSSnapshot.departments.find((item) => item.key === 'machining')?.fiveSEffectiveHours),
@@ -356,30 +638,36 @@ function calculateScenario({
     fiveSHoursByDepartment.machining = calculateNextFiveSState(
       fiveSHoursByDepartment.machining,
       invested.machining,
+      settings,
     ).nextEffectiveHours
     fiveSHoursByDepartment.assembly = calculateNextFiveSState(
       fiveSHoursByDepartment.assembly,
       invested.assembly,
+      settings,
     ).nextEffectiveHours
     fiveSHoursByDepartment.shipping = calculateNextFiveSState(
       fiveSHoursByDepartment.shipping,
       invested.shipping,
+      settings,
     ).nextEffectiveHours
   }
 
   const projectedQualityAverage =
-    (calculateLearningComponent(70, (projects.mergedLevels.machining?.spc || 0) + fiveSHoursByDepartment.machining / 3, 95) +
-      calculateLearningComponent(70, (projects.mergedLevels.assembly?.['poka-yoke'] || 0) + fiveSHoursByDepartment.assembly / 3, 95) +
-      calculateLearningComponent(70, (projects.mergedLevels.shipping?.['poka-yoke'] || 0) + fiveSHoursByDepartment.shipping / 3, 95)) /
+    (calculateLearningComponent(defaultLearningBasePct, (projects.mergedLevels.machining?.spc || 0) + fiveSHoursByDepartment.machining / fiveSContributionDivisor, qualityMaxPct, learningCurveHours) +
+      calculateLearningComponent(defaultLearningBasePct, (projects.mergedLevels.assembly?.['poka-yoke'] || 0) + fiveSHoursByDepartment.assembly / fiveSContributionDivisor, qualityMaxPct, learningCurveHours) +
+      calculateLearningComponent(defaultLearningBasePct, (projects.mergedLevels.shipping?.['poka-yoke'] || 0) + fiveSHoursByDepartment.shipping / fiveSContributionDivisor, qualityMaxPct, learningCurveHours)) /
     3
 
-  const allowedNewVariations = calculateAllowedNewVariations(projectedQualityAverage)
+  const allowedNewVariations = calculateAllowedNewVariations(projectedQualityAverage, settings)
   const requestedNewVariations =
     market.addedVariations != null ? market.addedVariations : market.newVariations
   const selectedNewVariations = clamp(toNonNegativeInt(requestedNewVariations), 0, allowedNewVariations)
   const activeVariationCount = Math.max(1, toNonNegativeInt(market.activeVariationCount, 1))
   const totalVariations = activeVariationCount + selectedNewVariations
-  const runsPerVariation = Math.max(1, toNonNegativeInt(market.runsPerVariation, 2))
+  const runsPerVariation = Math.max(
+    1,
+    toNonNegativeInt(market.runsPerVariation, inventorySettings.productionRunsPerVariationDefault ?? 2),
+  )
   const productionRuns = totalVariations * runsPerVariation
   const switches = productionRuns
 
@@ -393,6 +681,7 @@ function calculateScenario({
     automationMachineCount: investments.automationMachineCount,
     conditionMonitoring: investments.conditionMonitoring,
     automaticProcessMeasurement: investments.automaticProcessMeasurement,
+    settings,
   })
 
   const assemblyMetrics = calculateDepartmentMetrics({
@@ -405,6 +694,7 @@ function calculateScenario({
     automationMachineCount: investments.automationMachineCount,
     conditionMonitoring: investments.conditionMonitoring,
     automaticProcessMeasurement: investments.automaticProcessMeasurement,
+    settings,
   })
 
   const shippingMetrics = calculateDepartmentMetrics({
@@ -417,6 +707,7 @@ function calculateScenario({
     automationMachineCount: investments.automationMachineCount,
     conditionMonitoring: investments.conditionMonitoring,
     automaticProcessMeasurement: investments.automaticProcessMeasurement,
+    settings,
   })
 
   const capacityByDepartment = {
@@ -432,7 +723,7 @@ function calculateScenario({
 
   const plantCapacity = capacityByDepartment[bottleneckKey]
 
-  const demandPerVariation = calculateDemandPerVariation(market.price)
+  const demandPerVariation = calculateDemandPerVariation(market.price, settings)
   const demand = Math.max(0, Math.round(demandPerVariation * totalVariations))
   const hasPlannedProduction = market.productionQuantity != null
   const plannedProductionQuantity = hasPlannedProduction
@@ -446,25 +737,34 @@ function calculateScenario({
   const batches = Math.max(1, productionRuns)
   const batchSize = actualProduction / batches
   const averageFinishedGoodsInventory = (totalVariations * batchSize) / 2
-  const finishedGoodsValue = averageFinishedGoodsInventory * FINISHED_GOODS_VALUE_PER_CONTAINER
-  const finishedGoodsArea = averageFinishedGoodsInventory * FINISHED_GOODS_AREA_PER_CONTAINER
+  const finishedGoodsValue =
+    averageFinishedGoodsInventory *
+    toNumber(inventorySettings.finishedGoodsValuePerContainer, FINISHED_GOODS_VALUE_PER_CONTAINER)
+  const finishedGoodsArea =
+    averageFinishedGoodsInventory *
+    toNumber(inventorySettings.finishedGoodsSpacePerContainerM2, FINISHED_GOODS_AREA_PER_CONTAINER)
 
-  const machineArea = machineCount * 250
-  const assemblyArea = staffing.assembly * ASSEMBLY_AREA_PER_WORKER
+  const machineArea = machineCount * toNumber(factorySettingsSection.machineSpaceM2, 250)
+  const assemblyArea = staffing.assembly * toNumber(factorySettingsSection.workerSpaceM2, 25)
   const dispatchArea = toNonNegativeInt(investmentsSnapshot.factory.dispatchM2)
   const officeArea = toNonNegativeInt(investmentsSnapshot.factory.officeAndSocialM2)
   const usedArea = machineArea + assemblyArea + dispatchArea + officeArea + finishedGoodsArea
   const freeFactorySpace = totalArea - usedArea
 
   const revenue = actualProduction * toNumber(market.price, PRICE_REFERENCE)
-  const materials = actualProduction * MATERIAL_COST_PER_SOLD_CONTAINER
+  const materials = actualProduction * toNumber(
+    settings.costs.materialCostPerContainer,
+    MATERIAL_COST_PER_SOLD_CONTAINER,
+  )
   const totalPersonnel = staffing.machining + staffing.assembly + staffing.shipping
-  const labor = totalPersonnel * STAFF_COST_PER_ROUND
-  const fixedCosts = FIXED_COST_PER_ROUND
+  const roundFraction = toNumber(settings.game.monthsPerRound, 3) / 12
+  const labor = totalPersonnel * toNumber(settings.costs.annualEmployeeCost, 50000) * roundFraction
+  const fixedCosts = toNumber(settings.costs.annualFixedCosts, 3000000) * roundFraction
 
   const baseFinishedGoodsContainers = toNumber(investmentsSnapshot.factory.finishedGoodsContainers)
   const inventoryChange =
-    (averageFinishedGoodsInventory - baseFinishedGoodsContainers) * FINISHED_GOODS_VALUE_PER_CONTAINER
+    (averageFinishedGoodsInventory - baseFinishedGoodsContainers) *
+    toNumber(inventorySettings.finishedGoodsValuePerContainer, FINISHED_GOODS_VALUE_PER_CONTAINER)
 
   const machineryBase = toNumber(balanceSheetSnapshot.assets.machinery)
   const buildingsBase = toNumber(balanceSheetSnapshot.assets.buildings)
@@ -481,10 +781,14 @@ function calculateScenario({
     investments.expansions * toNumber(investmentsSnapshot.investments.factoryExpansion.unitCost)
 
   const depreciation =
-    (machineryBase + machineryInvestments) * MACHINERY_DEPRECIATION_PER_ROUND +
-    (buildingsBase + buildingInvestments) * BUILDING_DEPRECIATION_PER_ROUND
+    (machineryBase + machineryInvestments) *
+      toNumber(settings.finance.machineryDepreciationPerRound, MACHINERY_DEPRECIATION_PER_ROUND) +
+    (buildingsBase + buildingInvestments) *
+      toNumber(settings.finance.buildingDepreciationPerRound, BUILDING_DEPRECIATION_PER_ROUND)
 
-  const financing = canFinanceInvestment(investments.totalCost, {
+  const financing = canFinanceInvestment(
+    investments.totalCost,
+    {
     cashBalance: toNumber(balanceSheetSnapshot.assets.cash),
     bankLoanDebt: toNumber(balanceSheetSnapshot.liabilities.bankLoans),
     equity:
@@ -493,9 +797,11 @@ function calculateScenario({
       toNumber(balanceSheetSnapshot.assets.cash) +
       toNumber(balanceSheetSnapshot.assets.inventory) -
       toNumber(balanceSheetSnapshot.liabilities.bankLoans),
-  })
+    },
+    toNumber(settings.finance.maxDebtToEquity, 2),
+  )
 
-  const interest = financing.debtAfter * INTEREST_RATE_PER_ROUND
+  const interest = financing.debtAfter * (toNumber(settings.finance.annualInterestRate, 0.05) * roundFraction)
 
   const result = revenue - materials - labor - fixedCosts + inventoryChange - depreciation - interest
 
@@ -652,11 +958,33 @@ function buildInsights(currentScenario, forecastScenario) {
   return insights.slice(0, 4)
 }
 
-export function calculateRoundForecast(gameState, decisions = {}) {
+export function calculateRoundForecast(gameState, decisions = {}, factorySettings = DEFAULT_FACTORY_SETTINGS) {
+  const settings = factorySettings ?? DEFAULT_FACTORY_SETTINGS
+  const normalizedInputs = resolveForecastSnapshotInputs(gameState, settings)
   const baseActiveVariationCount = toNonNegativeInt(
-    gameState.productionSnapshot?.market?.activeVariations,
-    1,
+    gameState.market?.activeVariations,
+    toNonNegativeInt(normalizedInputs.productionSnapshot?.market?.activeVariations, 1),
   )
+  const baseRunsPerVariation = toNonNegativeInt(
+    gameState.market?.productionRunsPerVariation,
+    toNonNegativeInt(gameState.production?.productionRunsPerVariation, 2),
+  )
+  const basePrice = toNumber(
+    gameState.market?.price,
+    toNumber(settings.market.referencePrice, PRICE_REFERENCE),
+  )
+
+  const initialMarketFromState = {
+    price: basePrice,
+    runsPerVariation: Math.max(
+      1,
+      toNonNegativeInt(
+        baseRunsPerVariation,
+        toNumber(settings.inventory?.productionRunsPerVariationDefault, 2),
+      ),
+    ),
+    activeVariationCount: Math.max(1, baseActiveVariationCount),
+  }
 
   const resolvedDecisions = {
     fiveSDecision: gameState.fiveSDecision || null,
@@ -664,7 +992,7 @@ export function calculateRoundForecast(gameState, decisions = {}) {
     investmentsDecision: gameState.investmentsDecision || null,
     market: {
       ...DEFAULT_MARKET_DECISION,
-      activeVariationCount: baseActiveVariationCount,
+      ...initialMarketFromState,
       ...(gameState.marketDecision || {}),
       ...(decisions.market || {}),
     },
@@ -682,23 +1010,25 @@ export function calculateRoundForecast(gameState, decisions = {}) {
   }
 
   const currentScenario = calculateScenario({
-    investmentsSnapshot: gameState.investmentsSnapshot,
-    projectsSnapshot: gameState.projectsSnapshot,
-    fiveSSnapshot: gameState.fiveSSnapshot,
-    balanceSheetSnapshot: gameState.balanceSheetSnapshot,
+    investmentsSnapshot: normalizedInputs.investmentsSnapshot,
+    projectsSnapshot: normalizedInputs.projectsSnapshot,
+    fiveSSnapshot: normalizedInputs.fiveSSnapshot,
+    balanceSheetSnapshot: normalizedInputs.balanceSheetSnapshot,
     decisions: resolvedDecisions,
     staffingDecision: null,
     applyDoDecisions: false,
+    factorySettings: settings,
   })
 
   const forecastScenario = calculateScenario({
-    investmentsSnapshot: gameState.investmentsSnapshot,
-    projectsSnapshot: gameState.projectsSnapshot,
-    fiveSSnapshot: gameState.fiveSSnapshot,
-    balanceSheetSnapshot: gameState.balanceSheetSnapshot,
+    investmentsSnapshot: normalizedInputs.investmentsSnapshot,
+    projectsSnapshot: normalizedInputs.projectsSnapshot,
+    fiveSSnapshot: normalizedInputs.fiveSSnapshot,
+    balanceSheetSnapshot: normalizedInputs.balanceSheetSnapshot,
     decisions: resolvedDecisions,
     staffingDecision: decisions.staffing || gameState.checkStaffingDecision?.staffing || null,
     applyDoDecisions: true,
+    factorySettings: settings,
   })
 
   const departmentLabels = {
@@ -707,7 +1037,7 @@ export function calculateRoundForecast(gameState, decisions = {}) {
     shipping: 'Lähettämö',
   }
 
-  const currentFromSnapshot = buildCurrentStateFromProductionSnapshot(gameState.productionSnapshot)
+  const currentFromSnapshot = buildCurrentStateFromProductionSnapshot(normalizedInputs.productionSnapshot)
   const currentState = currentFromSnapshot || currentScenario
 
   return {

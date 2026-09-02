@@ -1,3 +1,5 @@
+import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
+
 const INTEGER_FORMATTER = new Intl.NumberFormat('fi-FI', {
   maximumFractionDigits: 0,
 })
@@ -7,20 +9,12 @@ const DECIMAL_FORMATTER = new Intl.NumberFormat('fi-FI', {
   maximumFractionDigits: 1,
 })
 
-export const METHOD_LEVEL_THRESHOLDS = [
-  { level: 0, hours: 0 },
-  { level: 1, hours: 50 },
-  { level: 2, hours: 125 },
-  { level: 3, hours: 225 },
-  { level: 4, hours: 350 },
-  { level: 5, hours: 500 },
-  { level: 6, hours: 700 },
-]
+export const METHOD_LEVEL_THRESHOLDS = DEFAULT_FACTORY_SETTINGS.lean.methods.levelThresholds
 
-export const METHOD_DEVELOPMENT_FIXED_HOURS = 50
-export const PROJECT_EURO_PER_HOUR = 100
-export const PROJECT_COST_ROUNDING = 1000
-export const MAX_METHOD_EFFECTIVE_HOURS = 700
+export const METHOD_DEVELOPMENT_FIXED_HOURS = DEFAULT_FACTORY_SETTINGS.lean.methods.fixedHours
+export const PROJECT_EURO_PER_HOUR = DEFAULT_FACTORY_SETTINGS.lean.methods.costPerHour
+export const PROJECT_COST_ROUNDING = DEFAULT_FACTORY_SETTINGS.lean.methods.costRounding
+export const MAX_METHOD_EFFECTIVE_HOURS = DEFAULT_FACTORY_SETTINGS.lean.methods.maxEffectiveHours
 
 const PHASE_LABELS = {
   smed: [
@@ -85,6 +79,15 @@ function getSelectionKey(departmentKey, methodKey) {
   return `${departmentKey}:${methodKey}`
 }
 
+function toNumber(value, fallback = 0) {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue : fallback
+}
+
+function resolveMethodsSettings(factorySettings = DEFAULT_FACTORY_SETTINGS) {
+  return factorySettings?.lean?.methods ?? DEFAULT_FACTORY_SETTINGS.lean.methods
+}
+
 export function normalizeSelectionHours(value, step = 10) {
   const numericValue = Number(value)
 
@@ -95,16 +98,18 @@ export function normalizeSelectionHours(value, step = 10) {
   return Math.round(numericValue / step) * step
 }
 
-export function getMethodLevel(effectiveHours) {
-  const safeHours = clamp(Number(effectiveHours) || 0, 0, MAX_METHOD_EFFECTIVE_HOURS)
+export function getMethodLevel(effectiveHours, factorySettings = DEFAULT_FACTORY_SETTINGS) {
+  const settings = resolveMethodsSettings(factorySettings)
+  const levelThresholds = settings.levelThresholds ?? METHOD_LEVEL_THRESHOLDS
+  const safeHours = clamp(Number(effectiveHours) || 0, 0, settings.maxEffectiveHours ?? MAX_METHOD_EFFECTIVE_HOURS)
 
-  if (safeHours <= METHOD_LEVEL_THRESHOLDS[0].hours) {
+  if (safeHours <= levelThresholds[0].hours) {
     return 0
   }
 
-  for (let index = 1; index < METHOD_LEVEL_THRESHOLDS.length; index += 1) {
-    const previous = METHOD_LEVEL_THRESHOLDS[index - 1]
-    const current = METHOD_LEVEL_THRESHOLDS[index]
+  for (let index = 1; index < levelThresholds.length; index += 1) {
+    const previous = levelThresholds[index - 1]
+    const current = levelThresholds[index]
 
     if (safeHours <= current.hours) {
       const progress = (safeHours - previous.hours) / (current.hours - previous.hours)
@@ -116,11 +121,15 @@ export function getMethodLevel(effectiveHours) {
   return 6
 }
 
-export function calculateProjectCost(investedHours) {
+export function calculateProjectCost(investedHours, factorySettings = DEFAULT_FACTORY_SETTINGS) {
+  const settings = resolveMethodsSettings(factorySettings)
   const safeHours = Math.max(0, Math.round(Number(investedHours) || 0))
-  const rawCost = safeHours * PROJECT_EURO_PER_HOUR
+  const rawCost = safeHours * toNumber(settings.costPerHour, PROJECT_EURO_PER_HOUR)
 
-  return Math.round(rawCost / PROJECT_COST_ROUNDING) * PROJECT_COST_ROUNDING
+  return Math.round(rawCost / toNumber(settings.costRounding, PROJECT_COST_ROUNDING)) * toNumber(
+    settings.costRounding,
+    PROJECT_COST_ROUNDING,
+  )
 }
 
 function getProgressiveImpactCategory(currentLevel, nextLevel) {
@@ -149,8 +158,9 @@ function getMethodDevelopmentImpactCategory() {
   return 'Pieni'
 }
 
-export function canSelectMethodDevelopment(remainingFocusHours) {
-  return Number(remainingFocusHours) >= METHOD_DEVELOPMENT_FIXED_HOURS
+export function canSelectMethodDevelopment(remainingFocusHours, factorySettings = DEFAULT_FACTORY_SETTINGS) {
+  const settings = resolveMethodsSettings(factorySettings)
+  return Number(remainingFocusHours) >= toNumber(settings.fixedHours, METHOD_DEVELOPMENT_FIXED_HOURS)
 }
 
 function getPhaseDescription(methodKey, currentLevel) {
@@ -179,10 +189,11 @@ function normalizeSelectionMap(rawSelectionMap = {}) {
   }, {})
 }
 
-function createMethodViewModel(department, method, selectedHours) {
+function createMethodViewModel(department, method, selectedHours, factorySettings = DEFAULT_FACTORY_SETTINGS) {
+  const settings = resolveMethodsSettings(factorySettings)
   if (method.type === 'fixed') {
-    const fixedHours = METHOD_DEVELOPMENT_FIXED_HOURS
-    const fixedCost = calculateProjectCost(fixedHours)
+    const fixedHours = toNumber(settings.fixedHours, METHOD_DEVELOPMENT_FIXED_HOURS)
+    const fixedCost = calculateProjectCost(fixedHours, factorySettings)
     const isSelected = selectedHours > 0
     const hours = isSelected ? fixedHours : 0
     const cost = isSelected ? fixedCost : 0
@@ -214,13 +225,21 @@ function createMethodViewModel(department, method, selectedHours) {
     }
   }
 
-  const currentEffectiveHours = clamp(Number(method.effectiveHours) || 0, 0, MAX_METHOD_EFFECTIVE_HOURS)
+  const currentEffectiveHours = clamp(
+    Number(method.effectiveHours) || 0,
+    0,
+    settings.maxEffectiveHours ?? MAX_METHOD_EFFECTIVE_HOURS,
+  )
   const investedHours = normalizeSelectionHours(selectedHours)
-  const nextEffectiveHours = clamp(currentEffectiveHours + investedHours, 0, MAX_METHOD_EFFECTIVE_HOURS)
-  const currentLevel = getMethodLevel(currentEffectiveHours)
-  const nextLevel = getMethodLevel(nextEffectiveHours)
+  const nextEffectiveHours = clamp(
+    currentEffectiveHours + investedHours,
+    0,
+    settings.maxEffectiveHours ?? MAX_METHOD_EFFECTIVE_HOURS,
+  )
+  const currentLevel = getMethodLevel(currentEffectiveHours, factorySettings)
+  const nextLevel = getMethodLevel(nextEffectiveHours, factorySettings)
   const levelDelta = roundToOneDecimal(nextLevel - currentLevel)
-  const cost = calculateProjectCost(investedHours)
+  const cost = calculateProjectCost(investedHours, factorySettings)
   const impactCategory = investedHours === 0 ? 'Ei vaikutusta' : getProgressiveImpactCategory(currentLevel, nextLevel)
 
   return {
@@ -244,7 +263,7 @@ function createMethodViewModel(department, method, selectedHours) {
   }
 }
 
-export function buildProjectsViewModel(snapshot, options = {}) {
+export function buildProjectsViewModel(snapshot, options = {}, factorySettings = DEFAULT_FACTORY_SETTINGS) {
   const focusBudgetHours = Math.max(0, Math.round(Number(snapshot.focusBudgetHours) || 0))
   const fiveSUsedHours = Math.max(0, Math.round(Number(options.fiveSDecision?.usedFocusHours) || 0))
   const selectionMap = normalizeSelectionMap(options.selectionMap)
@@ -253,7 +272,7 @@ export function buildProjectsViewModel(snapshot, options = {}) {
     const methods = department.methods.map((method) => {
       const selectionKey = getSelectionKey(department.key, method.key)
       const selectedHours = selectionMap[selectionKey] ?? 0
-      return createMethodViewModel(department, method, selectedHours)
+      return createMethodViewModel(department, method, selectedHours, factorySettings)
     })
 
     return {

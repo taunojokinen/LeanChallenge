@@ -35,8 +35,8 @@ function parseSelectionKey(key) {
   }
 }
 
-export function calculateDebtLimit(equity) {
-  return Math.max(0, Number(equity) || 0) * 2
+export function calculateDebtLimit(equity, maxDebtToEquity = 2) {
+  return Math.max(0, Number(equity) || 0) * Math.max(0, Number(maxDebtToEquity) || 0)
 }
 
 export function calculateRoundDepreciation(value, rate) {
@@ -85,14 +85,14 @@ export function normalizeMachineAutomationSelection(installedMachineIds, selecte
     .sort((left, right) => left - right)
 }
 
-export function canFinanceInvestment(totalCost, financialState) {
+export function canFinanceInvestment(totalCost, financialState, maxDebtToEquity = 2) {
   const cashBalance = Number(financialState.cashBalance) || 0
   const bankLoanDebt = Number(financialState.bankLoanDebt) || 0
   const equity = Math.max(0, Number(financialState.equity) || 0)
 
   const availableCash = Math.max(0, cashBalance)
   const existingDebt = bankLoanDebt + Math.max(0, -cashBalance)
-  const debtLimit = calculateDebtLimit(equity)
+  const debtLimit = calculateDebtLimit(equity, maxDebtToEquity)
 
   const cashUsed = Math.min(availableCash, totalCost)
   const financingNeed = Math.max(0, totalCost - cashUsed)

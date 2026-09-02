@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { buildIncomeStatementRows } from '../../entities/income/model.js'
-import { getIncomeSnapshot } from '../../shared/api/incomeApi.js'
+import { getInitialIncomeHistory } from '../../shared/api/incomeApi.js'
+import { DEFAULT_FACTORY_SETTINGS } from '../../entities/factory-settings/defaultFactorySettings.js'
 import './PlanIncomePage.css'
 
-function PlanIncomePage() {
+function PlanIncomePage({ gameState }) {
   const [snapshot, setSnapshot] = useState(null)
 
   useEffect(() => {
     let isMounted = true
 
     const loadSnapshot = async () => {
-      const data = await getIncomeSnapshot()
+      const data = await getInitialIncomeHistory(gameState, DEFAULT_FACTORY_SETTINGS)
 
       if (isMounted) {
         setSnapshot(data)
@@ -22,7 +23,7 @@ function PlanIncomePage() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [gameState])
 
   const rows = useMemo(() => {
     if (!snapshot) {
@@ -45,7 +46,9 @@ function PlanIncomePage() {
     <section className="plan-income-page" aria-label="Tuloslaskelma">
       <header className="plan-income-header">
         <h1>TULOS</h1>
-        <p>Kierroksen {snapshot.round} tuloslaskelma</p>
+        <p>
+          Lähtövertailu: Kierros {snapshot.previousRound} | Kierros {snapshot.round}
+        </p>
       </header>
 
       <div className="plan-income-table" role="table" aria-label="Kierroksen tuloslaskelma">

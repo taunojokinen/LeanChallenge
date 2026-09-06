@@ -117,6 +117,8 @@ export const DEFAULT_FACTORY_SETTINGS = {
     maxDebtToEquity: 2,
     machineryDepreciationPerRound: 0.05,
     buildingDepreciationPerRound: 0.025,
+    targetCash: 50000,
+    otherLiabilitiesRawMaterialShare: 0.5,
   },
 
   inventory: {
@@ -273,12 +275,12 @@ export const DEFAULT_FACTORY_SETTINGS = {
 
     finance: {
       cash: 50000,
-      bankLoans: 420000,
+      bankLoans: 2957900,
       overdraft: 0,
-      equity: 2407600,
-      otherLiabilities: 2867400,
-      machineryBookValue: 500000,
-      buildingsBookValue: 3000000,
+      equity: 2073975,
+      otherLiabilities: 660000,
+      machineryBookValue: 498750,
+      buildingsBookValue: 2998125,
       finishedGoodsInventoryBookValue: 1645000,
       rawMaterialInventoryBookValue: 500000,
       inventoryBookValue: 2145000,
@@ -289,7 +291,7 @@ export const DEFAULT_FACTORY_SETTINGS = {
         materials: 1320000,
         labor: 1500000,
         fixedCosts: 750000,
-        depreciation: 112500,
+        depreciation: 103125,
         financingCosts: 17500,
       },
       history: {
@@ -311,12 +313,12 @@ export const DEFAULT_FACTORY_SETTINGS = {
             machineryAndEquipment: 525000,
             finishedGoodsInventory: 1620000,
             rawMaterialInventory: 510000,
-            cash: 60000,
+            cash: 50000,
           },
           equityAndLiabilities: {
             equity: 2414600,
-            bankLoans: 470000,
-            otherLiabilities: 2905400,
+            bankLoans: 2706400,
+            otherLiabilities: 659000,
             overdraft: 0,
           },
         },

@@ -29,11 +29,15 @@ test('createInitialGameState clones the default initial state', () => {
   assert.equal(initialGameState.staffing.shipping, 5)
   assert.equal(initialGameState.factory.totalAreaM2, 4000)
   assert.equal(initialGameState.finance.cash, 50000)
-  assert.equal(initialGameState.finance.bankLoans, 420000)
-  assert.equal(initialGameState.finance.equity, 2407600)
+  assert.equal(initialGameState.finance.bankLoans, 2957900)
+  assert.equal(initialGameState.finance.equity, 2073975)
+  assert.equal(initialGameState.finance.otherLiabilities, 660000)
+  assert.equal(initialGameState.finance.machineryBookValue, 498750)
+  assert.equal(initialGameState.finance.buildingsBookValue, 2998125)
   assert.equal(initialGameState.finance.finishedGoodsInventoryBookValue, 1645000)
   assert.equal(initialGameState.finance.rawMaterialInventoryBookValue, 500000)
   assert.equal(initialGameState.finance.inventoryBookValue, 2145000)
+  assert.equal(initialGameState.finance.incomeStatement.depreciation, 103125)
 })
 
 test('createInitialGameState respects settings overrides', () => {

@@ -71,6 +71,35 @@ function getImpactClass(kind, deltaPct) {
   return direction === 'down' ? 'positive' : 'negative'
 }
 
+function buildComparisonRow({
+  key,
+  label,
+  unit,
+  currentAmount,
+  previousAmount,
+  deltaPct,
+  impactKind,
+  kind = 'normal',
+  isNegative = false,
+}) {
+  const previousAmountText = formatAmount(previousAmount, unit)
+  const currentAmountText = formatAmount(currentAmount, unit)
+
+  return {
+    key,
+    label,
+    previousAmount,
+    previousAmountText,
+    currentAmount,
+    currentAmountText,
+    amountText: currentAmountText,
+    deltaText: formatDelta(deltaPct),
+    impact: getImpactClass(impactKind, deltaPct),
+    kind,
+    isNegative,
+  }
+}
+
 export function buildIncomeStatementRows(snapshot) {
   const rows = snapshot.rows
   const previousRows = snapshot.previousRows || null
@@ -141,86 +170,100 @@ export function buildIncomeStatementRows(snapshot) {
     : rows.financingCosts.deltaPct
 
   return [
-    {
+    buildComparisonRow({
       key: 'sales',
       label: rows.sales.label,
-      amountText: formatAmount(rows.sales.amount, rows.sales.unit),
-      deltaText: formatDelta(salesDeltaPct),
-      impact: getImpactClass('revenue', salesDeltaPct),
-      kind: 'normal',
-    },
-    {
+      unit: rows.sales.unit,
+      currentAmount: rows.sales.amount,
+      previousAmount: previousRows
+        ? Number(previousRows.sales?.amount) || 0
+        : derivePreviousAmount(rows.sales.amount, rows.sales.deltaPct),
+      deltaPct: salesDeltaPct,
+      impactKind: 'revenue',
+    }),
+    buildComparisonRow({
       key: 'revenue',
       label: rows.revenue.label,
-      amountText: formatAmount(rows.revenue.amount, rows.revenue.unit),
-      deltaText: formatDelta(revenueDeltaPct),
-      impact: getImpactClass('revenue', revenueDeltaPct),
-      kind: 'normal',
-    },
-    {
+      unit: rows.revenue.unit,
+      currentAmount: rows.revenue.amount,
+      previousAmount: previousRevenue,
+      deltaPct: revenueDeltaPct,
+      impactKind: 'revenue',
+    }),
+    buildComparisonRow({
       key: 'inventoryChange',
       label: rows.inventoryChange.label,
-      amountText: formatAmount(rows.inventoryChange.amount, rows.inventoryChange.unit),
-      deltaText: formatDelta(inventoryChangeDeltaPct),
-      impact: getImpactClass('revenue', inventoryChangeDeltaPct),
-      kind: 'normal',
-    },
-    {
+      unit: rows.inventoryChange.unit,
+      currentAmount: rows.inventoryChange.amount,
+      previousAmount: previousInventoryChange,
+      deltaPct: inventoryChangeDeltaPct,
+      impactKind: 'revenue',
+    }),
+    buildComparisonRow({
       key: 'materials',
       label: rows.materials.label,
-      amountText: formatAmount(-rows.materials.amount, rows.materials.unit),
-      deltaText: formatDelta(materialsDeltaPct),
-      impact: getImpactClass('cost', materialsDeltaPct),
-      kind: 'normal',
-    },
-    {
+      unit: rows.materials.unit,
+      currentAmount: -rows.materials.amount,
+      previousAmount: -previousMaterials,
+      deltaPct: materialsDeltaPct,
+      impactKind: 'cost',
+    }),
+    buildComparisonRow({
       key: 'labor',
       label: rows.labor.label,
-      amountText: formatAmount(-rows.labor.amount, rows.labor.unit),
-      deltaText: formatDelta(laborDeltaPct),
-      impact: getImpactClass('cost', laborDeltaPct),
-      kind: 'normal',
-    },
-    {
+      unit: rows.labor.unit,
+      currentAmount: -rows.labor.amount,
+      previousAmount: -previousLabor,
+      deltaPct: laborDeltaPct,
+      impactKind: 'cost',
+    }),
+    buildComparisonRow({
       key: 'grossMargin',
       label: 'MYYNTIKATE',
-      amountText: formatAmount(grossMarginAmount, 'EUR'),
-      deltaText: formatDelta(grossMarginDeltaPct),
-      impact: getImpactClass('revenue', grossMarginDeltaPct),
+      unit: 'EUR',
+      currentAmount: grossMarginAmount,
+      previousAmount: previousGrossMargin,
+      deltaPct: grossMarginDeltaPct,
+      impactKind: 'revenue',
       kind: 'subtotal',
-    },
-    {
+    }),
+    buildComparisonRow({
       key: 'fixedCosts',
       label: rows.fixedCosts.label,
-      amountText: formatAmount(-rows.fixedCosts.amount, rows.fixedCosts.unit),
-      deltaText: formatDelta(fixedCostsDeltaPct),
-      impact: getImpactClass('cost', fixedCostsDeltaPct),
-      kind: 'normal',
-    },
-    {
+      unit: rows.fixedCosts.unit,
+      currentAmount: -rows.fixedCosts.amount,
+      previousAmount: -previousFixedCosts,
+      deltaPct: fixedCostsDeltaPct,
+      impactKind: 'cost',
+    }),
+    buildComparisonRow({
       key: 'depreciation',
       label: rows.depreciation.label,
-      amountText: formatAmount(-rows.depreciation.amount, rows.depreciation.unit),
-      deltaText: formatDelta(depreciationDeltaPct),
-      impact: getImpactClass('cost', depreciationDeltaPct),
-      kind: 'normal',
-    },
-    {
+      unit: rows.depreciation.unit,
+      currentAmount: -rows.depreciation.amount,
+      previousAmount: -previousDepreciation,
+      deltaPct: depreciationDeltaPct,
+      impactKind: 'cost',
+    }),
+    buildComparisonRow({
       key: 'financingCosts',
       label: rows.financingCosts.label,
-      amountText: formatAmount(-rows.financingCosts.amount, rows.financingCosts.unit),
-      deltaText: formatDelta(financingCostsDeltaPct),
-      impact: getImpactClass('cost', financingCostsDeltaPct),
-      kind: 'normal',
-    },
-    {
+      unit: rows.financingCosts.unit,
+      currentAmount: -rows.financingCosts.amount,
+      previousAmount: -previousFinancingCosts,
+      deltaPct: financingCostsDeltaPct,
+      impactKind: 'cost',
+    }),
+    buildComparisonRow({
       key: 'result',
       label: 'TULOS',
-      amountText: formatAmount(resultAmount, 'EUR'),
-      deltaText: formatDelta(resultDeltaPct),
-      impact: getImpactClass('revenue', resultDeltaPct),
+      unit: 'EUR',
+      currentAmount: resultAmount,
+      previousAmount: previousResult,
+      deltaPct: resultDeltaPct,
+      impactKind: 'revenue',
       kind: 'total',
       isNegative: resultAmount < 0,
-    },
+    }),
   ]
 }

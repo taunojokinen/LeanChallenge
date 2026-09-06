@@ -26,10 +26,29 @@
 
 .plan-income-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto auto;
+  grid-template-columns: minmax(220px, 1fr) minmax(120px, auto) minmax(120px, auto) minmax(84px, auto);
   align-items: baseline;
   gap: var(--space-8);
   padding: var(--space-7) var(--space-9);
+}
+
+.plan-income-row-header {
+  padding-top: var(--space-5);
+  padding-bottom: var(--space-5);
+  background: var(--color-panel-soft);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.plan-income-header-cell {
+  justify-self: end;
+}
+
+.plan-income-header-cell:first-child {
+  justify-self: start;
 }
 
 .plan-income-row + .plan-income-row {
@@ -88,7 +107,11 @@
   font-weight: var(--font-weight-bold);
 }
 
-.plan-income-row.is-total.is-negative-total .plan-income-value {
+.plan-income-row.is-total.is-negative-total .plan-income-current-value {
+  color: var(--color-danger);
+}
+
+.plan-income-value.is-negative-result {
   color: var(--color-danger);
 }
 
@@ -102,9 +125,17 @@
     gap: var(--space-2);
   }
 
+  .plan-income-row-header {
+    display: none;
+  }
+
   .plan-income-value,
   .plan-income-delta {
     justify-self: start;
     text-align: left;
+  }
+
+  .plan-income-header-cell {
+    justify-self: start;
   }
 }

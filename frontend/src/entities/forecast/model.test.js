@@ -6,6 +6,7 @@ import investmentsSnapshot from '../../mocks/investmentsSnapshot.json' with { ty
 import balanceSheetSnapshot from '../../mocks/balanceSheetSnapshot.json' with { type: 'json' }
 import productionSnapshot from '../../mocks/productionSnapshot.json' with { type: 'json' }
 import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
+import { createInitialGameState } from '../factory-settings/initialGameState.js'
 import {
   calculateAllowedNewVariations,
   calculateDemandPerVariation,
@@ -594,8 +595,105 @@ test('annual interest rate override changes interest without changing debt logic
   const forecast = calculateRoundForecast(gameState, {}, customSettings)
   const defaultForecast = calculateRoundForecast(gameState)
 
-    assert.equal(forecast.forecast.finance.interest, 34720)
-    assert.equal(forecast.forecast.finance.interest > defaultForecast.forecast.finance.interest, true)
+  assert.equal(forecast.forecast.finance.interest, 8400)
+  assert.equal(defaultForecast.forecast.finance.interest, 5250)
+  assert.equal(forecast.forecast.finance.interest > defaultForecast.forecast.finance.interest, true)
+})
+
+test('interest uses opening debt and settings-derived round rate on first playable round', () => {
+  const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+  const forecast = calculateRoundForecast(gameState)
+
+  assert.equal(forecast.forecast.finance.openingInterestBearingDebt, 2957900)
+  assert.equal(forecast.forecast.finance.roundInterestRate, 0.0125)
+  assert.equal(forecast.forecast.finance.interest, 36973.75)
+  assert.equal(Math.round(forecast.forecast.finance.interest), 36974)
+})
+
+test('same-round investments do not change interest when opening debt is the same', () => {
+  const baseState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+  const withoutInvestment = calculateRoundForecast({
+    ...baseState,
+    investmentsDecision: {
+      round: 1,
+      investments: [],
+    },
+  })
+  const withInvestment = calculateRoundForecast({
+    ...baseState,
+    investmentsDecision: {
+      round: 1,
+      investments: [
+        { type: 'new-machine', quantity: 1, cost: 500000 },
+        { type: 'factory-expansion', quantity: 1, cost: 1000000 },
+      ],
+    },
+  })
+
+  assert.equal(withoutInvestment.forecast.finance.openingInterestBearingDebt, 2957900)
+  assert.equal(withInvestment.forecast.finance.openingInterestBearingDebt, 2957900)
+  assert.equal(withoutInvestment.forecast.finance.interest, withInvestment.forecast.finance.interest)
+})
+
+test('ACT market decisions do not change same-round interest when opening debt is unchanged', () => {
+  const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+  const scenarioA = calculateRoundForecast(gameState, {
+    market: {
+      price: 25000,
+      productionQuantity: 132,
+      addedVariations: 0,
+    },
+  })
+  const scenarioB = calculateRoundForecast(gameState, {
+    market: {
+      price: 22000,
+      productionQuantity: 90,
+      addedVariations: 2,
+    },
+  })
+
+  assert.equal(scenarioA.forecast.finance.openingInterestBearingDebt, 2957900)
+  assert.equal(scenarioB.forecast.finance.openingInterestBearingDebt, 2957900)
+  assert.equal(scenarioA.forecast.finance.interest, scenarioB.forecast.finance.interest)
+})
+
+test('zero opening debt yields zero interest even when same-round debtAfter grows from investments', () => {
+  const baseState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+  const zeroDebtState = {
+    ...baseState,
+    finance: {
+      ...baseState.finance,
+      bankLoans: 0,
+      cash: 0,
+    },
+    investmentsDecision: {
+      round: 1,
+      investments: [
+        { type: 'new-machine', quantity: 1, cost: 500000 },
+      ],
+    },
+  }
+
+  const forecast = calculateRoundForecast(zeroDebtState)
+
+  assert.equal(forecast.forecast.finance.openingInterestBearingDebt, 0)
+  assert.equal(forecast.forecast.finance.interest, 0)
+  assert.equal(forecast.forecast.investments.totalCost > 0, true)
+})
+
+test('round interest rate is derived from settings and not hardcoded', () => {
+  const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+  const customSettings = cloneSettings({
+    finance: {
+      ...DEFAULT_FACTORY_SETTINGS.finance,
+      annualInterestRate: 0.08,
+    },
+  })
+
+  const forecast = calculateRoundForecast(gameState, {}, customSettings)
+
+  assert.equal(forecast.forecast.finance.roundInterestRate, 0.02)
+  assert.equal(forecast.forecast.finance.interest, 59158)
 })
 
 test('depreciation override changes depreciation while leaving asset base intact', () => {

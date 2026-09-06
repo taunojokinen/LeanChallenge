@@ -15,7 +15,6 @@ const PRICE_ELASTICITY = -4
 const STAFF_COST_PER_ROUND = 12500
 const MATERIAL_COST_PER_SOLD_CONTAINER = 10000
 const FIXED_COST_PER_ROUND = 750000
-const INTEREST_RATE_PER_ROUND = 0.0125
 
 const MACHINERY_DEPRECIATION_PER_ROUND = 0.05
 const BUILDING_DEPRECIATION_PER_ROUND = 0.025
@@ -801,7 +800,12 @@ function calculateScenario({
     toNumber(settings.finance.maxDebtToEquity, 2),
   )
 
-  const interest = financing.debtAfter * (toNumber(settings.finance.annualInterestRate, 0.05) * roundFraction)
+  const openingInterestBearingDebt = toNumber(
+    balanceSheetSnapshot.liabilities?.bankLoans,
+    toNumber(balanceSheetSnapshot.liabilities?.interestBearingDebt),
+  )
+  const roundInterestRate = toNumber(settings.finance.annualInterestRate, 0.05) * roundFraction
+  const interest = openingInterestBearingDebt * roundInterestRate
 
   const result = revenue - materials - labor - fixedCosts + inventoryChange - depreciation - interest
 
@@ -859,6 +863,8 @@ function calculateScenario({
       fixedCosts,
       inventoryChange,
       depreciation,
+      openingInterestBearingDebt,
+      roundInterestRate,
       interest,
       result,
     },

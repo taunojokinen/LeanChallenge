@@ -16,6 +16,7 @@ import { appRoutes } from './router/index.jsx'
 import { DEFAULT_FACTORY_SETTINGS } from '../entities/factory-settings/defaultFactorySettings.js'
 import { createInitialGameState } from '../entities/factory-settings/initialGameState.js'
 import { calculateRoundForecast } from '../entities/forecast/model.js'
+import { buildGameHeaderKpis } from './headerKpis.js'
 
 function normalizePath(pathname, shouldReplace = false) {
   const currentPath = pathname || '/'
@@ -84,36 +85,6 @@ const placeholderContentByPageKey = {
   },
 }
 
-const headerKpiMap = {
-  oee: 'KNL',
-  production: 'Tuotantomäärä',
-  revenue: 'Liikevaihto',
-  result: 'Tulos',
-  inventoryTurnover: 'Varaston kiertonopeus',
-}
-
-function formatSignedPercent(delta) {
-  const value = Number(delta) || 0
-  const sign = value > 0 ? '+' : ''
-
-  return `${sign}${value.toLocaleString('fi-FI', {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  })} %`
-}
-
-function formatCurrency(value) {
-  return `${Math.round(Number(value) || 0).toLocaleString('fi-FI')} €`
-}
-
-function formatContainers(value) {
-  return `${Math.round(Number(value) || 0).toLocaleString('fi-FI')} kpl`
-}
-
-function formatKnl(value) {
-  return `${Math.round((Number(value) || 0) * 100).toLocaleString('fi-FI')} %`
-}
-
 function App() {
   const [pathname, setPathname] = useState(() => normalizePath(window.location.pathname, true))
   const [gameState] = useState(() => createInitialGameState(DEFAULT_FACTORY_SETTINGS))
@@ -133,44 +104,7 @@ function App() {
     return deliveries / averageInventory
   }, [baseForecast])
 
-  const gameHeaderKpis = useMemo(
-    () => [
-      {
-        key: 'oee',
-        label: headerKpiMap.oee,
-        value: formatKnl(baseForecast.forecast.knl.machining.knl),
-        delta: formatSignedPercent(0),
-      },
-      {
-        key: 'production',
-        label: headerKpiMap.production,
-        value: formatContainers(baseForecast.summary.actualProduction),
-        delta: formatSignedPercent(0),
-      },
-      {
-        key: 'revenue',
-        label: headerKpiMap.revenue,
-        value: formatCurrency(baseForecast.summary.revenue),
-        delta: formatSignedPercent(0),
-      },
-      {
-        key: 'result',
-        label: headerKpiMap.result,
-        value: formatCurrency(baseForecast.summary.result),
-        delta: formatSignedPercent(0),
-      },
-      {
-        key: 'inventoryTurnover',
-        label: headerKpiMap.inventoryTurnover,
-        value: `${inventoryTurnover.toLocaleString('fi-FI', {
-          minimumFractionDigits: 1,
-          maximumFractionDigits: 1,
-        })}x`,
-        delta: '+0.0',
-      },
-    ],
-    [baseForecast, inventoryTurnover],
-  )
+  const gameHeaderKpis = useMemo(() => buildGameHeaderKpis(gameState, DEFAULT_FACTORY_SETTINGS), [gameState])
 
   useEffect(() => {
     const handlePopState = () => {

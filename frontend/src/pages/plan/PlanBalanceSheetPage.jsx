@@ -9,22 +9,22 @@ function renderRows(rows, round, previousRound) {
     <div className="plan-balance-sheet-table" role="table">
       <div className="plan-balance-sheet-row is-header" role="row">
         <span role="columnheader">Erä</span>
-        <span role="columnheader">Kierros {round}</span>
         <span role="columnheader">Kierros {previousRound}</span>
+        <span role="columnheader">Kierros {round}</span>
       </div>
 
       {rows.map((row) => (
         <div
-          className={`plan-balance-sheet-row ${row.kind === 'total' ? 'is-total' : ''}`}
+          className={`plan-balance-sheet-row ${row.kind === 'subtotal' ? 'is-subtotal' : ''} ${row.kind === 'total' ? 'is-total' : ''}`}
           key={row.key}
           role="row"
         >
           <span role="cell">{row.label}</span>
-          <span className="plan-balance-sheet-value" role="cell">
-            {row.currentValue}
-          </span>
           <span className="plan-balance-sheet-value is-previous" role="cell">
             {row.previousValue}
+          </span>
+          <span className="plan-balance-sheet-value" role="cell">
+            {row.currentValue}
           </span>
         </div>
       ))}

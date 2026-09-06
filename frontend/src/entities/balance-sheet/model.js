@@ -69,6 +69,10 @@ export function buildBalanceSheetViewModel(snapshot, inventoryTurnover) {
   const liabilitiesTotal = equity + currentDebt + currentOtherLiabilities + currentOverdraft
   const previousLiabilitiesTotal =
     previousEquity + previousDebt + previousOtherLiabilities + previousOverdraft
+  const fixedAssetsCurrent = (Number(snapshot.assets.machinery) || 0) + (Number(snapshot.assets.buildings) || 0)
+  const fixedAssetsPrevious =
+    (Number(snapshot.previousAssets.machinery) || 0) +
+    (Number(snapshot.previousAssets.buildings) || 0)
 
   const solvencyRatio = (equity / assetsTotal) * 100
 
@@ -89,6 +93,13 @@ export function buildBalanceSheetViewModel(snapshot, inventoryTurnover) {
         previousValue: formatCurrency(Number(snapshot.previousAssets.buildings) || 0),
       },
       {
+        key: 'fixedAssets',
+        label: 'KIINTEÄ OMAISUUS',
+        currentValue: formatCurrency(fixedAssetsCurrent),
+        previousValue: formatCurrency(fixedAssetsPrevious),
+        kind: 'subtotal',
+      },
+      {
         key: 'finishedGoodsInventory',
         label: 'Valmistuotevarasto',
         currentValue: formatCurrency(Number(snapshot.assets.finishedGoodsInventory) || 0),
@@ -101,16 +112,17 @@ export function buildBalanceSheetViewModel(snapshot, inventoryTurnover) {
         previousValue: formatCurrency(Number(snapshot.previousAssets.rawMaterialInventory) || 0),
       },
       {
+        key: 'inventory',
+        label: 'VAIHTO-OMAISUUS',
+        currentValue: formatCurrency(currentInventory),
+        previousValue: formatCurrency(previousInventory),
+        kind: 'subtotal',
+      },
+      {
         key: 'cash',
         label: 'Rahat ja pankkisaamiset',
         currentValue: formatCurrency(Number(snapshot.assets.cash) || 0),
         previousValue: formatCurrency(Number(snapshot.previousAssets.cash) || 0),
-      },
-      {
-        key: 'inventory',
-        label: 'Vaihto-omaisuus',
-        currentValue: formatCurrency(currentInventory),
-        previousValue: formatCurrency(previousInventory),
       },
       {
         key: 'assetsTotal',

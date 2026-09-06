@@ -53,6 +53,15 @@
   color: var(--color-text-secondary);
 }
 
+.plan-balance-sheet-row.is-subtotal {
+  border-top: var(--border-width-regular) solid var(--color-border-soft);
+  background: color-mix(in srgb, var(--color-panel-soft) 45%, white 55%);
+}
+
+.plan-balance-sheet-row.is-subtotal span {
+  font-weight: var(--font-weight-bold);
+}
+
 .plan-balance-sheet-value {
   justify-self: end;
   text-align: right;

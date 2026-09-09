@@ -1,0 +1,8 @@
+function toNumber(value, fallback = 0) {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : fallback
+}
+
+export function calculateKNL(kPct, nPct, lPct) {
+  return (toNumber(kPct) / 100) * (toNumber(nPct) / 100) * (toNumber(lPct) / 100)
+}

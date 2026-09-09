@@ -21,20 +21,45 @@ function normalizeInvestment(item) {
     return null
   }
 
-  return {
+  const normalized = {
     type,
     quantity: Math.max(1, sanitizeAmount(item.quantity || 1)),
-    machineId: item.machineId == null ? null : sanitizeAmount(item.machineId),
     cost: sanitizeAmount(item.cost),
   }
+
+  if (item.machineId != null) {
+    normalized.machineId = sanitizeAmount(item.machineId)
+  }
+
+  return normalized
 }
 
-function normalizeInvestments(items) {
+function normalizeInvestments(items, includeLegacyFields = true) {
   if (!Array.isArray(items)) {
     return []
   }
 
-  return items.map(normalizeInvestment).filter(Boolean)
+  const normalized = items.map(normalizeInvestment).filter(Boolean)
+  const setupAutomation = normalized.find((item) => item.type === 'mold-change-automation')
+
+  return normalized.filter((item, index) => {
+    if (item.type !== 'mold-change-automation') {
+      return true
+    }
+
+    return item === setupAutomation && normalized.findIndex((candidate) => candidate.type === item.type) === index
+  }).map((item) => {
+    const canonicalItem = item.type === 'mold-change-automation'
+      ? { ...item, quantity: 1 }
+      : item
+
+    if (!includeLegacyFields) {
+      delete canonicalItem.cost
+      delete canonicalItem.machineId
+    }
+
+    return canonicalItem
+  })
 }
 
 export function loadInvestmentsDecision(round) {
@@ -66,13 +91,11 @@ export function loadInvestmentsDecision(round) {
 }
 
 export function saveInvestmentsDecision(decision) {
-  const investments = normalizeInvestments(decision?.investments)
+  const investments = normalizeInvestments(decision?.investments, false)
 
   const normalizedDecision = {
     round: Number(decision?.round) || 0,
     investments,
-    totalCost: sanitizeAmount(decision?.totalCost),
-    financingNeed: sanitizeAmount(decision?.financingNeed),
     savedAt: decision?.savedAt ?? new Date().toISOString(),
   }
 

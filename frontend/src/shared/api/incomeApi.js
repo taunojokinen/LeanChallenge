@@ -1,4 +1,4 @@
-import snapshot from '../../mocks/incomeSnapshot.json'
+import snapshot from '../../mocks/incomeSnapshot.json' with { type: 'json' }
 import { DEFAULT_FACTORY_SETTINGS } from '../../entities/factory-settings/defaultFactorySettings.js'
 import { createInitialGameState } from '../../entities/factory-settings/initialGameState.js'
 import { buildInitialIncomeHistory } from '../../entities/factory-settings/financialHistory.js'

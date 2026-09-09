@@ -46,12 +46,11 @@ function toNonNegativeInteger(value, fallback = 0) {
   return Math.round(numericValue)
 }
 
-function ActPage({ onNavigate, gameState, factorySettings }) {
+function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statusMessage: roundStatusMessage }) {
   const [decisionGameState, setDecisionGameState] = useState(null)
   const [price, setPrice] = useState(25000)
   const [productionQuantity, setProductionQuantity] = useState(0)
   const [addedVariations, setAddedVariations] = useState(0)
-  const [statusMessage, setStatusMessage] = useState('')
 
   useEffect(() => {
     if (!gameState) {
@@ -204,9 +203,7 @@ function ActPage({ onNavigate, gameState, factorySettings }) {
       savedAt: new Date().toISOString(),
     })
 
-    setStatusMessage(
-      'Päätökset tallennettu. Kierrossiirtymä ei ole vielä käytössä tässä prototyyppiversiossa.',
-    )
+    onAdvanceRound(approvedForecast)
   }
 
   if (!forecast) {
@@ -381,7 +378,7 @@ function ActPage({ onNavigate, gameState, factorySettings }) {
         </Button>
       </section>
 
-      {statusMessage ? <p className="act-status">{statusMessage}</p> : null}
+      {roundStatusMessage ? <p className="act-status">{roundStatusMessage}</p> : null}
     </section>
   )
 }

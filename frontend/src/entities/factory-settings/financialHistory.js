@@ -1,6 +1,30 @@
 import { DEFAULT_FACTORY_SETTINGS } from './defaultFactorySettings.js'
 import { createInitialGameState } from './initialGameState.js'
 import { calculateFinancingStructure } from './financingStructure.js'
+import { calculateRoundForecast } from '../forecast/model.js'
+
+const REQUIRED_INCOME_FIELDS = [
+  'salesUnits',
+  'revenue',
+  'inventoryChange',
+  'materials',
+  'labor',
+  'fixedCosts',
+  'depreciation',
+  'financingCosts',
+  'result',
+]
+
+const REQUIRED_FINANCE_FIELDS = [
+  'cash',
+  'bankLoans',
+  'equity',
+  'otherLiabilities',
+  'machineryBookValue',
+  'buildingsBookValue',
+  'finishedGoodsInventoryBookValue',
+  'rawMaterialInventoryBookValue',
+]
 
 function toNumber(value, fallback = 0) {
   const numeric = Number(value)
@@ -19,12 +43,15 @@ function toPercentDelta(currentValue, previousValue) {
 }
 
 function buildIncomeRows(current, previous) {
+  const currentSales = current.salesUnits ?? current.sales
+  const previousSales = previous.salesUnits ?? previous.sales
+
   return {
     sales: {
       label: 'Myynti',
       unit: 'kpl',
-      amount: toNumber(current.sales),
-      deltaPct: toPercentDelta(current.sales, previous.sales),
+      amount: toNumber(currentSales),
+      deltaPct: toPercentDelta(currentSales, previousSales),
     },
     revenue: {
       label: 'Liikevaihto',
@@ -71,8 +98,128 @@ function buildIncomeRows(current, previous) {
   }
 }
 
-function buildRoundZeroCanonicalFinance(gameState, factorySettings) {
-  const initialFinance = gameState.finance || {}
+function buildCanonicalEntry(round, incomeStatement, finance) {
+  return {
+    round,
+    incomeStatement: { ...incomeStatement },
+    finance: { ...finance },
+  }
+}
+
+function buildAnchoredOpeningState(openingState, roundZeroFinance, roundOneHistoryForecast, settings) {
+  const machineryRate = Number(settings.finance.machineryDepreciationPerRound)
+  const buildingsRate = Number(settings.finance.buildingDepreciationPerRound)
+  const openingMachinery = roundZeroFinance.machineryBookValue / (1 - machineryRate)
+  const openingBuildings = roundZeroFinance.buildingsBookValue / (1 - buildingsRate)
+  const openingEquity = roundZeroFinance.equity - roundOneHistoryForecast.forecast.finance.result
+
+  return {
+    ...structuredClone(openingState),
+    finance: {
+      ...openingState.finance,
+      cash: roundZeroFinance.cash,
+      bankLoans: roundZeroFinance.bankLoans,
+      equity: openingEquity,
+      machineryBookValue: openingMachinery,
+      buildingsBookValue: openingBuildings,
+    },
+  }
+}
+
+function buildAnchoredFinance(roundZeroFinance, forecast, isRoundZero) {
+  if (isRoundZero) {
+    return {
+      cash: roundZeroFinance.cash,
+      bankLoans: roundZeroFinance.bankLoans,
+      equity: roundZeroFinance.equity,
+      otherLiabilities: roundZeroFinance.otherLiabilities,
+      machineryBookValue: roundZeroFinance.machineryBookValue,
+      buildingsBookValue: roundZeroFinance.buildingsBookValue,
+      finishedGoodsInventoryBookValue: forecast.inventory.finishedGoodsValue,
+      rawMaterialInventoryBookValue: Math.round(Math.abs(forecast.finance.materials) * 0.4),
+    }
+  }
+
+  return {
+    cash: roundZeroFinance.cash,
+    bankLoans: roundZeroFinance.bankLoans,
+    equity: roundZeroFinance.equity,
+    otherLiabilities: Math.round(Math.abs(forecast.finance.materials) * 0.5),
+    machineryBookValue: roundZeroFinance.machineryBookValue,
+    buildingsBookValue: roundZeroFinance.buildingsBookValue,
+    finishedGoodsInventoryBookValue: forecast.inventory.finishedGoodsValue,
+    rawMaterialInventoryBookValue: Math.round(Math.abs(forecast.finance.materials) * 0.4),
+  }
+}
+
+export function assertCanonicalFinancialHistoryEntry(entry) {
+  const missingIncome = REQUIRED_INCOME_FIELDS.filter(
+    (field) => !Number.isFinite(Number(entry?.incomeStatement?.[field])),
+  )
+  const missingFinance = REQUIRED_FINANCE_FIELDS.filter(
+    (field) => !Number.isFinite(Number(entry?.finance?.[field])),
+  )
+
+  if (missingIncome.length > 0 || missingFinance.length > 0) {
+    throw new Error(
+      `Canonical financial history entry ${entry?.round ?? 'unknown'} is missing required fields: ${[
+        ...missingIncome.map((field) => `incomeStatement.${field}`),
+        ...missingFinance.map((field) => `finance.${field}`),
+      ].join(', ')}`,
+    )
+  }
+
+  return entry
+}
+
+export function normalizeFinancialHistoryEntry(entry, { strict = false } = {}) {
+  if (strict) {
+    assertCanonicalFinancialHistoryEntry(entry)
+  }
+
+  const income = entry?.incomeStatement ?? {}
+  const finance = entry?.finance ?? {}
+  const assets = entry?.assets ?? {}
+  const liabilities = entry?.liabilities ?? {}
+  const salesUnits =
+    income.salesUnits ??
+    entry?.production?.deliveries ??
+    entry?.production?.actualProduction ??
+    income.sales
+
+  return buildCanonicalEntry(
+    Number(entry?.round) || 0,
+    {
+      salesUnits: toNumber(salesUnits),
+      revenue: toNumber(income.revenue),
+      inventoryChange: toNumber(income.inventoryChange),
+      materials: toNumber(income.materials),
+      labor: toNumber(income.labor),
+      fixedCosts: toNumber(income.fixedCosts),
+      depreciation: toNumber(income.depreciation),
+      financingCosts: toNumber(income.financingCosts ?? income.interest),
+      result: toNumber(income.result),
+    },
+    {
+      cash: toNumber(finance.cash ?? assets.cash),
+      bankLoans: toNumber(finance.bankLoans ?? liabilities.bankLoans),
+      equity: toNumber(finance.equity ?? liabilities.equity),
+      otherLiabilities: toNumber(finance.otherLiabilities ?? liabilities.otherLiabilities),
+      machineryBookValue: toNumber(finance.machineryBookValue ?? assets.machinery),
+      buildingsBookValue: toNumber(finance.buildingsBookValue ?? assets.buildings),
+      finishedGoodsInventoryBookValue: toNumber(
+        finance.finishedGoodsInventoryBookValue ?? assets.finishedGoodsInventory,
+      ),
+      rawMaterialInventoryBookValue: toNumber(
+        finance.rawMaterialInventoryBookValue ?? assets.rawMaterialInventory,
+      ),
+    },
+  )
+}
+
+export function buildRoundZeroCanonicalFinance(factorySettings) {
+  const initialState = createInitialGameState(factorySettings)
+  const initialFinance = initialState.finance || {}
   const previousBalanceInput =
     factorySettings.initialState?.finance?.history?.previousRoundBalanceSheet || {}
   const previousIncome =
@@ -216,15 +363,100 @@ function buildRoundZeroCanonicalFinance(gameState, factorySettings) {
   }
 }
 
+export function buildCanonicalFinancialHistory(
+  gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS),
+  factorySettings = DEFAULT_FACTORY_SETTINGS,
+) {
+  const settings = factorySettings ?? gameState?.factorySettings ?? DEFAULT_FACTORY_SETTINGS
+  const openingState = createInitialGameState(settings)
+  const configuredProduction = Math.max(
+    0,
+    Math.round(Number(settings.production?.initialProductionQuantity) || 0),
+  )
+  const roundZeroProbe = calculateRoundForecast(
+    openingState,
+    { market: { productionQuantity: configuredProduction } },
+    settings,
+  )
+  const effectiveRoundZeroProduction = roundZeroProbe.forecast.actualProduction
+  const productionByRound = new Map([
+    [-2, Math.max(0, effectiveRoundZeroProduction - 10)],
+    [-1, Math.max(0, effectiveRoundZeroProduction - 5)],
+    [0, effectiveRoundZeroProduction],
+  ])
+  const entries = []
+  let openingFinishedGoodsContainers = openingState.inventory.finishedGoodsContainers
+  const roundZeroFinance = {
+    cash: openingState.finance.cash,
+    bankLoans: openingState.finance.bankLoans,
+    equity: openingState.finance.equity,
+    otherLiabilities: openingState.finance.otherLiabilities,
+    machineryBookValue: openingState.finance.machineryBookValue,
+    buildingsBookValue: openingState.finance.buildingsBookValue,
+  }
+  let anchoredState = openingState
+
+  for (const round of [-2, -1, 0]) {
+    const state = structuredClone(anchoredState)
+    state.inventory.finishedGoodsContainers = openingFinishedGoodsContainers
+    const forecast = calculateRoundForecast(
+      state,
+      { market: { productionQuantity: productionByRound.get(round) } },
+      settings,
+    )
+    const income = forecast.closingState.finance.incomeStatement
+    const entry = buildCanonicalEntry(
+      round,
+      {
+        salesUnits: forecast.forecast.actualProduction,
+        revenue: income.revenue,
+        inventoryChange: income.inventoryChange,
+        materials: income.materials,
+        labor: income.labor,
+        fixedCosts: income.fixedCosts,
+        depreciation: income.depreciation,
+        financingCosts: income.interest,
+        result: income.result,
+      },
+      buildAnchoredFinance(roundZeroFinance, forecast.forecast, round === 0),
+    )
+    entries.push(assertCanonicalFinancialHistoryEntry(entry))
+    openingFinishedGoodsContainers = forecast.forecast.inventory.averageFinishedGoodsInventory
+
+    if (round === -2) {
+      const roundMinusOneState = structuredClone(openingState)
+      roundMinusOneState.inventory.finishedGoodsContainers = openingFinishedGoodsContainers
+      const roundMinusOneProbe = calculateRoundForecast(
+        roundMinusOneState,
+        { market: { productionQuantity: productionByRound.get(-1) } },
+        settings,
+      )
+      anchoredState = buildAnchoredOpeningState(
+        roundMinusOneState,
+        roundZeroFinance,
+        roundMinusOneProbe,
+        settings,
+      )
+    } else if (round === -1) {
+      anchoredState = structuredClone(openingState)
+      anchoredState.inventory.finishedGoodsContainers = openingFinishedGoodsContainers
+    }
+  }
+
+  return entries
+}
+
 export function buildInitialIncomeHistory(
   gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS),
   factorySettings = DEFAULT_FACTORY_SETTINGS,
 ) {
-  const canonicalFinance = buildRoundZeroCanonicalFinance(gameState, factorySettings)
-  const currentIncome = canonicalFinance.currentIncome || {}
-  const previousIncome = canonicalFinance.previousIncome || {}
+  const entries = buildCanonicalFinancialHistory(gameState, factorySettings)
+  const [previousEntry, currentEntry] = entries.slice(-2)
+  const currentIncome = currentEntry.incomeStatement
+  const previousIncome = previousEntry.incomeStatement
 
   return {
+    entries,
     round: 0,
     previousRound: -1,
     rows: buildIncomeRows(currentIncome, previousIncome),
@@ -232,7 +464,7 @@ export function buildInitialIncomeHistory(
       sales: {
         label: 'Myynti',
         unit: 'kpl',
-        amount: toNumber(previousIncome.sales),
+        amount: toNumber(previousIncome.salesUnits),
       },
       revenue: {
         label: 'Liikevaihto',
@@ -278,43 +510,42 @@ export function buildInitialBalanceSheetHistory(
   gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS),
   factorySettings = DEFAULT_FACTORY_SETTINGS,
 ) {
-  const canonicalFinance = buildRoundZeroCanonicalFinance(gameState, factorySettings)
-  const currentBalance = canonicalFinance.currentBalance
-  const previousBalance = canonicalFinance.previousBalance
-
+  const entries = buildCanonicalFinancialHistory(gameState, factorySettings)
+  const [previousEntry, currentEntry] = entries.slice(-2)
   const currentAssets = {
-    buildings: toNumber(currentBalance.assets?.buildings),
-    machinery: toNumber(currentBalance.assets?.machinery),
-    finishedGoodsInventory: toNumber(currentBalance.assets?.finishedGoodsInventory),
-    rawMaterialInventory: toNumber(currentBalance.assets?.rawMaterialInventory),
-    cash: toNumber(currentBalance.assets?.cash),
+    buildings: currentEntry.finance.buildingsBookValue,
+    machinery: currentEntry.finance.machineryBookValue,
+    finishedGoodsInventory: currentEntry.finance.finishedGoodsInventoryBookValue,
+    rawMaterialInventory: currentEntry.finance.rawMaterialInventoryBookValue,
+    cash: currentEntry.finance.cash,
   }
 
   const currentLiabilities = {
-    equity: toNumber(currentBalance.liabilities?.equity),
-    interestBearingDebt: toNumber(currentBalance.liabilities?.interestBearingDebt),
-    bankLoans: toNumber(currentBalance.liabilities?.bankLoans),
-    otherLiabilities: toNumber(currentBalance.liabilities?.otherLiabilities),
-    overdraft: toNumber(currentBalance.liabilities?.overdraft),
+    equity: currentEntry.finance.equity,
+    interestBearingDebt: currentEntry.finance.bankLoans,
+    bankLoans: currentEntry.finance.bankLoans,
+    otherLiabilities: currentEntry.finance.otherLiabilities,
+    overdraft: 0,
   }
 
   const previousAssets = {
-    buildings: toNumber(previousBalance.assets?.buildings),
-    machinery: toNumber(previousBalance.assets?.machineryAndEquipment),
-    finishedGoodsInventory: toNumber(previousBalance.assets?.finishedGoodsInventory),
-    rawMaterialInventory: toNumber(previousBalance.assets?.rawMaterialInventory),
-    cash: toNumber(previousBalance.assets?.cash),
+    buildings: previousEntry.finance.buildingsBookValue,
+    machinery: previousEntry.finance.machineryBookValue,
+    finishedGoodsInventory: previousEntry.finance.finishedGoodsInventoryBookValue,
+    rawMaterialInventory: previousEntry.finance.rawMaterialInventoryBookValue,
+    cash: previousEntry.finance.cash,
   }
 
   const previousLiabilities = {
-    equity: toNumber(previousBalance.equityAndLiabilities?.equity),
-    interestBearingDebt: toNumber(previousBalance.equityAndLiabilities?.bankLoans),
-    bankLoans: toNumber(previousBalance.equityAndLiabilities?.bankLoans),
-    otherLiabilities: toNumber(previousBalance.equityAndLiabilities?.otherLiabilities),
-    overdraft: toNumber(previousBalance.equityAndLiabilities?.overdraft),
+    equity: previousEntry.finance.equity,
+    interestBearingDebt: previousEntry.finance.bankLoans,
+    bankLoans: previousEntry.finance.bankLoans,
+    otherLiabilities: previousEntry.finance.otherLiabilities,
+    overdraft: 0,
   }
 
   return {
+    entries,
     round: 0,
     previousRound: -1,
     assets: currentAssets,

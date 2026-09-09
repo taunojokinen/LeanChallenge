@@ -1,4 +1,5 @@
 import Button from '../../shared/ui/Button/Button.jsx'
+import { formatConfirmedKpiRound, formatGameplayRound } from './roundDisplay.js'
 import './GameHeader.css'
 
 function GameHeader({ round, totalRounds, kpis, userName, onLogout }) {
@@ -14,10 +15,8 @@ function GameHeader({ round, totalRounds, kpis, userName, onLogout }) {
       </div>
 
       <div className="game-header-round" aria-label="Kierrostieto">
-        <small>Kierros</small>
-        <p>
-          Kierros {round} / {totalRounds}
-        </p>
+        <p>{formatGameplayRound(round, totalRounds)}</p>
+        <small>{formatConfirmedKpiRound(round)}</small>
       </div>
 
       <div className="game-header-kpis" aria-label="Pelin päätunnusluvut">

@@ -35,10 +35,10 @@ function createGameState(overrides = {}) {
     },
     investmentsDecision: {
       round: 4,
-      investments: [
-        { type: 'new-machine', quantity: 1, cost: 500000 },
-        { type: 'factory-expansion', quantity: 1, cost: 1000000 },
-      ],
+       investments: [
+         { type: 'new-machine', quantity: 1, cost: 1 },
+         { type: 'factory-expansion', quantity: 1, cost: 2 },
+       ],
     },
     ...overrides,
   }
@@ -635,6 +635,21 @@ test('same-round investments do not change interest when opening debt is the sam
   assert.equal(withoutInvestment.forecast.finance.interest, withInvestment.forecast.finance.interest)
 })
 
+test('legacy decision costs cannot override canonical investment catalog prices', () => {
+  const gameState = createGameState({
+    investmentsDecision: {
+      round: 1,
+      investments: [
+        { type: 'new-machine', quantity: 1, cost: 1 },
+        { type: 'factory-expansion', quantity: 1, cost: 2 },
+      ],
+    },
+  })
+  const forecast = calculateRoundForecast(gameState)
+
+  assert.equal(forecast.forecast.investments.totalCost, 1500000)
+})
+
 test('ACT market decisions do not change same-round interest when opening debt is unchanged', () => {
   const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
   const scenarioA = calculateRoundForecast(gameState, {
@@ -961,4 +976,346 @@ test('baseline capacities are in expected scale with 6h/90h/10h norm times', () 
   assert.equal(forecast.forecast.capacityByDepartment.machining < 300, true)
 
   assert.equal(forecast.forecast.demand, 200)
+})
+
+test('closing market state carries total variations, not opening active variations', () => {
+  const forecast = calculateRoundForecast(createInitialGameState(), {
+    market: {
+      price: 25000,
+      addedVariations: 2,
+    },
+  }, cloneSettings({
+    variationRules: {
+      ...DEFAULT_FACTORY_SETTINGS.variationRules,
+      minimumQualityForZeroAdditionalVariations: 0,
+      oneVariationMinQuality: 0,
+    },
+  }))
+
+  assert.equal(forecast.forecast.market.activeVariationCount, 20)
+  assert.equal(forecast.forecast.market.totalVariations, 22)
+  assert.equal(forecast.closingState.market.activeVariations, 22)
+  assert.equal(forecast.closingState.market.price, forecast.forecast.market.price)
+  assert.equal(
+    forecast.closingState.market.productionRunsPerVariation,
+    forecast.forecast.market.runsPerVariation,
+  )
+})
+
+test('closing staffing uses CHECK assembly and shipping plus derived machining staffing', () => {
+  const gameState = createInitialGameState()
+  const forecast = calculateRoundForecast(
+    {
+      ...gameState,
+      investmentsDecision: {
+        round: gameState.round,
+        investments: [{ type: 'new-machine', quantity: 1, cost: 500000 }],
+      },
+    },
+    { staffing: { assembly: 31, shipping: 8 } },
+  )
+
+  assert.deepEqual(forecast.closingState.staffing, {
+    machining: 15,
+    assembly: 31,
+    shipping: 8,
+  })
+})
+
+test('closing 5S state uses the existing next-state calculation', () => {
+  const gameState = createInitialGameState()
+  const forecast = calculateRoundForecast({
+    ...gameState,
+    fiveSDecision: {
+      round: gameState.round,
+      investedHours: { machining: 100, assembly: 0, shipping: 0 },
+    },
+  })
+
+  assert.equal(forecast.closingState.lean.fiveS.departments.machining.effectiveHours, 669)
+  assert.equal(forecast.closingState.lean.fiveS.departments.assembly.effectiveHours, 709.65)
+  assert.equal(forecast.closingState.lean.fiveS.departments.machining.weight, 0.42)
+})
+
+test('closing 5S state preserves decay when no investment is made', () => {
+  const gameState = createInitialGameState()
+  const forecast = calculateRoundForecast({
+    ...gameState,
+    fiveSDecision: {
+      round: gameState.round,
+      investedHours: { machining: 0, assembly: 0, shipping: 0 },
+    },
+  })
+
+  assert.equal(forecast.closingState.lean.fiveS.departments.machining.effectiveHours, 540.55)
+  assert.equal(forecast.closingState.lean.fiveS.departments.assembly.effectiveHours, 709.65)
+})
+
+test('closing project methods carry cumulative merged hours', () => {
+  const gameState = createInitialGameState()
+  const forecast = calculateRoundForecast({
+    ...gameState,
+    projectsDecision: {
+      round: gameState.round,
+      selections: [{ department: 'machining', method: 'smed', investedHours: 30, cost: 3000 }],
+    },
+  })
+
+  assert.equal(forecast.closingState.lean.methods.machining.smed, 205)
+  assert.equal(forecast.closingState.lean.methods.machining.tpm, 145)
+})
+
+test('closing production and factory state include current-round additions', () => {
+  const gameState = createInitialGameState()
+  const forecast = calculateRoundForecast({
+    ...gameState,
+    investmentsDecision: {
+      round: gameState.round,
+      investments: [
+        { type: 'new-machine', quantity: 1, cost: 500000 },
+        { type: 'factory-expansion', quantity: 1, cost: 1000000 },
+      ],
+    },
+  })
+
+  assert.equal(forecast.closingState.production.machiningMachines, 3)
+  assert.equal(forecast.closingState.factory.totalAreaM2, 5000)
+  assert.equal(forecast.closingState.factory.expansionsCount, 1)
+  assert.equal(forecast.closingState.factory.dispatchM2, gameState.factory.dispatchM2)
+  assert.equal(forecast.closingState.factory.officeAndSocialM2, gameState.factory.officeAndSocialM2)
+})
+
+test('setup automation is a factory-wide one-time state without a machine id', () => {
+  const gameState = createInitialGameState()
+  const automationType = DEFAULT_FACTORY_SETTINGS.investments.setupAutomation.type
+  const withAutomation = calculateRoundForecast({
+    ...gameState,
+    investmentsDecision: {
+      round: gameState.round,
+      investments: [{ type: automationType, quantity: 1, machineId: null, cost: 250000 }],
+    },
+  })
+  const nextRound = {
+    ...gameState,
+    investments: {
+      ...gameState.investments,
+      setupAutomation: { installed: true },
+    },
+    production: { machiningMachines: 3 },
+    investmentsDecision: null,
+  }
+  const installedWithMoreMachines = calculateRoundForecast(nextRound)
+
+  assert.equal(withAutomation.closingState.investments.setupAutomation.installed, true)
+  assert.equal(installedWithMoreMachines.closingState.investments.setupAutomation.installed, true)
+  assert.equal(
+    installedWithMoreMachines.forecast.knl.machining.changeoverHours,
+    withAutomation.forecast.knl.machining.changeoverHours,
+  )
+})
+
+test('legacy installed machine ids migrate to factory-wide setup automation', () => {
+  const gameState = createInitialGameState()
+  const forecast = calculateRoundForecast({
+    ...gameState,
+    investments: {
+      ...gameState.investments,
+      setupAutomation: { installedMachineIds: [2] },
+    },
+  })
+
+  assert.equal(forecast.closingState.investments.setupAutomation.installed, true)
+})
+
+test('legacy investment snapshots also migrate installed machine ids', () => {
+  const forecast = calculateRoundForecast(createGameState({ investmentsDecision: null }))
+
+  assert.equal(forecast.closingState.investments.setupAutomation.installed, true)
+})
+
+test('factory-wide systems and finished goods use existing forecast results', () => {
+  const gameState = createInitialGameState()
+  const forecast = calculateRoundForecast({
+    ...gameState,
+    investmentsDecision: {
+      round: gameState.round,
+      investments: [
+        {
+          type: DEFAULT_FACTORY_SETTINGS.investments.automaticProcessMeasurement.type,
+          quantity: 1,
+          cost: 250000,
+        },
+        {
+          type: DEFAULT_FACTORY_SETTINGS.investments.conditionMonitoring.type,
+          quantity: 1,
+          cost: 200000,
+        },
+      ],
+    },
+  }, {
+    market: { addedVariations: 1, runsPerVariation: 3 },
+  })
+
+  assert.equal(forecast.closingState.investments.automaticProcessMeasurement.installed, true)
+  assert.equal(forecast.closingState.investments.conditionMonitoring.installed, true)
+  assert.equal(
+    forecast.closingState.inventory.finishedGoodsContainers,
+    forecast.forecast.inventory.averageFinishedGoodsInventory,
+  )
+  assert.equal(
+    forecast.closingState.inventory.finishedGoodsBookValue,
+    forecast.forecast.inventory.finishedGoodsValue,
+  )
+})
+
+test('closing equity equals opening equity plus current-round result', () => {
+  const gameState = createInitialGameState()
+  const forecast = calculateRoundForecast(gameState)
+
+  assert.equal(
+    forecast.closingState.finance.equity,
+    gameState.finance.equity + forecast.forecast.finance.result,
+  )
+})
+
+test('closing finance uses 40 percent of materials for raw material inventory', () => {
+  const forecast = calculateRoundForecast(createInitialGameState())
+
+  assert.equal(
+    forecast.closingState.finance.rawMaterialInventoryBookValue,
+    Math.round(Math.abs(forecast.forecast.finance.materials) * 0.4),
+  )
+})
+
+test('closing finance keeps finished goods and inventory totals consistent', () => {
+  const forecast = calculateRoundForecast(createInitialGameState())
+  const closingFinance = forecast.closingState.finance
+
+  assert.equal(
+    closingFinance.finishedGoodsInventoryBookValue,
+    forecast.closingState.inventory.finishedGoodsBookValue,
+  )
+  assert.equal(
+    closingFinance.inventoryBookValue,
+    closingFinance.finishedGoodsInventoryBookValue + closingFinance.rawMaterialInventoryBookValue,
+  )
+})
+
+test('closing finance splits depreciation across machinery and buildings', () => {
+  const forecast = calculateRoundForecast(createInitialGameState())
+  const closingInputs = forecast.forecast
+
+  assert.equal(
+    closingInputs.finance.machineryDepreciation + closingInputs.finance.buildingDepreciation,
+    closingInputs.finance.depreciation,
+  )
+  assert.equal(
+    forecast.closingState.finance.machineryBookValue,
+    createInitialGameState().finance.machineryBookValue - closingInputs.finance.machineryDepreciation,
+  )
+  assert.equal(
+    forecast.closingState.finance.buildingsBookValue,
+    createInitialGameState().finance.buildingsBookValue - closingInputs.finance.buildingDepreciation,
+  )
+})
+
+test('machine and factory expansion investments use separate closing asset classes', () => {
+  const gameState = createInitialGameState()
+  const forecast = calculateRoundForecast({
+    ...gameState,
+    investmentsDecision: {
+      round: gameState.round,
+      investments: [
+        { type: 'new-machine', quantity: 1, cost: 500000 },
+        { type: 'factory-expansion', quantity: 1, cost: 1000000 },
+      ],
+    },
+  })
+
+  assert.equal(
+    forecast.closingState.finance.machineryBookValue,
+    gameState.finance.machineryBookValue + 500000 - forecast.forecast.finance.machineryDepreciation,
+  )
+  assert.equal(
+    forecast.closingState.finance.buildingsBookValue,
+    gameState.finance.buildingsBookValue + 1000000 - forecast.forecast.finance.buildingDepreciation,
+  )
+})
+
+test('closing other liabilities use the canonical raw material share', () => {
+  const forecast = calculateRoundForecast(createInitialGameState())
+  const expected = Math.round(
+    Math.abs(forecast.forecast.finance.materials) *
+      DEFAULT_FACTORY_SETTINGS.finance.otherLiabilitiesRawMaterialShare,
+  )
+
+  assert.equal(forecast.closingState.finance.otherLiabilities, expected)
+})
+
+test('positive financing need keeps target cash and creates non-negative debt', () => {
+  const forecast = calculateRoundForecast(createInitialGameState())
+  const closingFinance = forecast.closingState.finance
+
+  assert.equal(closingFinance.cash, DEFAULT_FACTORY_SETTINGS.finance.targetCash)
+  assert.equal(closingFinance.bankLoans >= 0, true)
+})
+
+test('non-positive financing need pays off debt and retains excess cash', () => {
+  const gameState = createInitialGameState()
+  const forecast = calculateRoundForecast({
+    ...gameState,
+    finance: {
+      ...gameState.finance,
+      equity: 10000000,
+      bankLoans: 0,
+    },
+  })
+
+  assert.equal(forecast.closingState.finance.bankLoans, 0)
+  assert.equal(forecast.closingState.finance.cash > DEFAULT_FACTORY_SETTINGS.finance.targetCash, true)
+})
+
+test('closing balance sheet identity holds for baseline and investment scenarios', () => {
+  const scenarios = [
+    createInitialGameState(),
+    {
+      ...createInitialGameState(),
+      investmentsDecision: {
+        round: 1,
+        investments: [
+          { type: 'new-machine', quantity: 1, cost: 500000 },
+          { type: 'factory-expansion', quantity: 1, cost: 1000000 },
+        ],
+      },
+    },
+  ]
+
+  scenarios.forEach((gameState) => {
+    const closingFinance = calculateRoundForecast(gameState).closingState.finance
+    assert.equal(closingFinance.totalAssets, closingFinance.totalLiabilitiesAndEquity)
+  })
+})
+
+test('round two opening debt and interest use round one closing debt', () => {
+  const roundOne = createInitialGameState()
+  const roundOneForecast = calculateRoundForecast(roundOne)
+  const roundOneClosingFinance = roundOneForecast.closingState.finance
+  const roundTwo = {
+    ...roundOne,
+    round: 2,
+    finance: {
+      ...roundOne.finance,
+      ...roundOneClosingFinance,
+    },
+  }
+  const roundTwoForecast = calculateRoundForecast(roundTwo)
+
+  assert.equal(
+    roundTwoForecast.forecast.finance.openingInterestBearingDebt,
+    roundOneClosingFinance.bankLoans,
+  )
+  assert.equal(
+    roundTwoForecast.forecast.finance.interest,
+    roundOneClosingFinance.bankLoans * roundTwoForecast.forecast.finance.roundInterestRate,
+  )
 })

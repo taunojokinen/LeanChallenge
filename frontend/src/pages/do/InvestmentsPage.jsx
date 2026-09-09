@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import Card from '../../shared/ui/Card/Card.jsx'
 import Button from '../../shared/ui/Button/Button.jsx'
 import { getInvestmentsSnapshot } from '../../shared/api/investmentsApi.js'
-import { getBalanceSheetSnapshot } from '../../shared/api/balanceSheetApi.js'
 import { getProjectsSnapshot } from '../../shared/api/projectsApi.js'
 import { loadProjectsDecision } from '../../features/projects/decisionStore.js'
 import { buildProjectsViewModel, buildSelectionMapFromDecision } from '../../entities/lean-projects/model.js'
@@ -16,15 +15,14 @@ import {
 } from '../../features/investments/decisionStore.js'
 import './InvestmentsPage.css'
 
-function InvestmentsPage({ round }) {
+function InvestmentsPage({ round, gameState, factorySettings }) {
   const [snapshot, setSnapshot] = useState(null)
-  const [balanceSheetSnapshot, setBalanceSheetSnapshot] = useState(null)
   const [projectsViewModel, setProjectsViewModel] = useState(null)
   const [savedDecision, setSavedDecision] = useState(null)
   const [draftSelection, setDraftSelection] = useState({
     newMachineCount: 0,
     expansionCount: 0,
-    moldAutomationMachineIds: [],
+    setupAutomation: false,
     automaticProcessMeasurement: false,
     conditionMonitoring: false,
   })
@@ -34,9 +32,8 @@ function InvestmentsPage({ round }) {
     let isMounted = true
 
     const loadData = async () => {
-      const [investmentsData, balanceData, projectsData] = await Promise.all([
+      const [investmentsData, projectsData] = await Promise.all([
         getInvestmentsSnapshot(),
-        getBalanceSheetSnapshot(),
         getProjectsSnapshot(),
       ])
 
@@ -51,7 +48,6 @@ function InvestmentsPage({ round }) {
       const investmentsDecision = loadInvestmentsDecision(round)
 
       setSnapshot(investmentsData)
-      setBalanceSheetSnapshot(balanceData)
       setProjectsViewModel(projectsModel)
       setSavedDecision(investmentsDecision)
 
@@ -68,17 +64,18 @@ function InvestmentsPage({ round }) {
   }, [round])
 
   const viewModel = useMemo(() => {
-    if (!snapshot || !balanceSheetSnapshot || !projectsViewModel) {
+    if (!snapshot || !gameState || !factorySettings || !projectsViewModel) {
       return null
     }
 
     return buildInvestmentsViewModel({
       snapshot,
-      balanceSheetSnapshot,
+      gameState,
+      factorySettings,
       projectsViewModel,
       draftSelection,
     })
-  }, [snapshot, balanceSheetSnapshot, projectsViewModel, draftSelection])
+  }, [snapshot, gameState, factorySettings, projectsViewModel, draftSelection])
 
   const updateDraft = (changes) => {
     setDraftSelection((previousValue) => ({
@@ -89,7 +86,15 @@ function InvestmentsPage({ round }) {
 
   const incrementMachine = () => {
     if (!viewModel || !viewModel.guards.canAddMachine) {
-      setStatusMessage('Ei mahdollista - vapaata tehdastilaa tai rahoituskapasiteettia ei ole riittävästi.')
+      const hasSpace = viewModel?.space.projected.freeArea >= 0
+      const hasFinance = viewModel?.financing.canFinance
+      setStatusMessage(
+        !hasSpace && !hasFinance
+          ? 'Ei mahdollista - vapaata tehdastilaa ja rahoitusvaraa ei ole riittävästi.'
+          : !hasSpace
+            ? 'Ei mahdollista - vapaata tehdastilaa ei ole riittävästi.'
+            : 'Ei mahdollista - rahoitusvara ei ole riittävä.',
+      )
       return
     }
 
@@ -102,7 +107,7 @@ function InvestmentsPage({ round }) {
 
   const incrementExpansion = () => {
     if (!viewModel || !viewModel.guards.canAddExpansion) {
-      setStatusMessage('Ei mahdollista - vakavaraisuus ei riitä investoinnin rahoittamiseen.')
+      setStatusMessage('Ei mahdollista - rahoitusvara ei ole riittävä.')
       return
     }
 
@@ -113,25 +118,18 @@ function InvestmentsPage({ round }) {
     updateDraft({ expansionCount: Math.max(0, draftSelection.expansionCount - 1) })
   }
 
-  const toggleMachineAutomation = (machineId) => {
-    const existing = new Set(draftSelection.moldAutomationMachineIds)
-
-    if (existing.has(machineId)) {
-      existing.delete(machineId)
-    } else {
-      existing.add(machineId)
-    }
-
-    updateDraft({ moldAutomationMachineIds: [...existing].sort((left, right) => left - right) })
-  }
-
-  const toggleFactorySystem = (key, canUnlock, alreadyInstalled) => {
+  const toggleFactorySystem = (key, canUnlock, alreadyInstalled, canFinance) => {
     if (alreadyInstalled) {
       return
     }
 
     if (!canUnlock) {
       setStatusMessage('Investointi on lukittu - avaamisehto ei täyty vielä.')
+      return
+    }
+
+    if (!canFinance && !draftSelection[key]) {
+      setStatusMessage('Ei mahdollista - rahoitusvara ei ole riittävä.')
       return
     }
 
@@ -180,8 +178,8 @@ function InvestmentsPage({ round }) {
       <section className="investments-kpi-grid" aria-label="Rahoitus ja tehdastila">
         <Card>
           <article className="investments-kpi-card">
-            <small>Rahoituskapasiteetti</small>
-            <strong>{viewModel.financing.debtLimitText}</strong>
+            <small>Velkaraja</small>
+            <strong>{viewModel.financing.maxDebtText}</strong>
           </article>
         </Card>
         <Card>
@@ -252,9 +250,9 @@ function InvestmentsPage({ round }) {
 
         <Card>
           <article className="investments-card">
-            <h2>Muotinvaihtoautomaatti</h2>
-            <p>Hinta: 250 000 € / kone</p>
-            <p>Vaikutus: -10 min / vaihto kyseiselle koneelle</p>
+            <h2>Asetus-/muotinvaihdon automaatio</h2>
+            <p>Hinta: 250 000 €</p>
+            <p>Vaikutus: tehtaan koneistuksen asetusten ja muotinvaihtojen automaatio.</p>
             <p>Poisto: 5 % / kierros</p>
             {viewModel.guards.canUnlockMoldAutomation ? null : (
               <small>
@@ -262,24 +260,24 @@ function InvestmentsPage({ round }) {
               </small>
             )}
 
-            <div className="investments-machine-list">
-              {viewModel.machineAutomation.machines.map((machine) => (
-                <div key={machine.machineId} className="investments-machine-item">
-                  <span>Kone {machine.machineId}</span>
-                  {machine.isInstalled ? (
-                    <strong>Automaatti asennettu</strong>
-                  ) : (
-                    <Button
-                      type="button"
-                      disabled={!viewModel.guards.canUnlockMoldAutomation}
-                      onClick={() => toggleMachineAutomation(machine.machineId)}
-                    >
-                      {machine.isSelected ? 'POISTA' : 'OSTA'}
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </div>
+            {viewModel.guards.setupAutomationInstalled ? (
+              <small>Järjestelmä on jo asennettu.</small>
+            ) : (
+              <Button
+                type="button"
+                disabled={!viewModel.guards.canUnlockMoldAutomation}
+                onClick={() =>
+                  toggleFactorySystem(
+                    'setupAutomation',
+                    viewModel.guards.canUnlockMoldAutomation,
+                    viewModel.guards.setupAutomationInstalled,
+                    viewModel.guards.canAddSetupAutomation,
+                  )
+                }
+              >
+                {draftSelection.setupAutomation ? 'POISTA' : 'VALITSE'}
+              </Button>
+            )}
           </article>
         </Card>
 
@@ -304,6 +302,7 @@ function InvestmentsPage({ round }) {
                     'automaticProcessMeasurement',
                     viewModel.guards.canUnlockAutoMeasurement,
                     viewModel.guards.autoMeasurementAlreadyInstalled,
+                    viewModel.guards.canAddProcessMeasurement,
                   )
                 }
               >
@@ -334,6 +333,7 @@ function InvestmentsPage({ round }) {
                     'conditionMonitoring',
                     viewModel.guards.canUnlockConditionMonitoring,
                     viewModel.guards.conditionMonitoringAlreadyInstalled,
+                    viewModel.guards.canAddConditionMonitoring,
                   )
                 }
               >
@@ -368,7 +368,23 @@ function InvestmentsPage({ round }) {
             <strong>{viewModel.totals.totalCostText}</strong>
           </p>
           <p>
-            <span>Shekkitililtä käytetään</span>
+            <span>Vapaata velkakapasiteettia</span>
+            <strong>{viewModel.financing.debtHeadroomText}</strong>
+          </p>
+          <p>
+            <span>Investointeihin käytettävä kassa</span>
+            <strong>{viewModel.financing.availableCashText}</strong>
+          </p>
+          <p>
+            <span>Rahoitusvara yhteensä</span>
+            <strong>{viewModel.financing.financingCapacityText}</strong>
+          </p>
+          <p>
+            <span>Kassareservi</span>
+            <strong>{viewModel.financing.targetCashText}</strong>
+          </p>
+          <p>
+            <span>Kassasta käytetään</span>
             <strong>{viewModel.financing.cashUsedText}</strong>
           </p>
           <p>

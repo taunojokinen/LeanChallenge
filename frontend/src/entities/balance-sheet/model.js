@@ -7,6 +7,9 @@ const DECIMAL_FORMATTER = new Intl.NumberFormat('fi-FI', {
   maximumFractionDigits: 1,
 })
 
+import { selectLatestConfirmedRounds } from '../history/confirmedRounds.js'
+import { normalizeFinancialHistoryEntry } from '../factory-settings/financialHistory.js'
+
 function formatCurrency(amount) {
   return `${EURO_FORMATTER.format(amount)} €`
 }
@@ -34,6 +37,97 @@ function calculateAssetTotal(assets) {
     (Number(assets.cash) || 0) +
     inventory
   )
+}
+
+function normalizeBalanceEntry(entry) {
+  if (entry?.incomeStatement && entry?.finance) {
+    const normalized = normalizeFinancialHistoryEntry(entry)
+
+    return {
+      round: normalized.round,
+      assets: {
+        machinery: normalized.finance.machineryBookValue,
+        buildings: normalized.finance.buildingsBookValue,
+        finishedGoodsInventory: normalized.finance.finishedGoodsInventoryBookValue,
+        rawMaterialInventory: normalized.finance.rawMaterialInventoryBookValue,
+        cash: normalized.finance.cash,
+      },
+      liabilities: {
+        equity: normalized.finance.equity,
+        bankLoans: normalized.finance.bankLoans,
+        otherLiabilities: normalized.finance.otherLiabilities,
+        overdraft: 0,
+      },
+    }
+  }
+
+  const finance = entry.finance ?? {}
+  const assets = entry.assets ?? {}
+  const liabilities = entry.liabilities ?? {}
+  const machinery = Number(finance.machineryBookValue ?? assets.machinery) || 0
+  const buildings = Number(finance.buildingsBookValue ?? assets.buildings) || 0
+  const finishedGoodsInventory = Number(
+    finance.finishedGoodsInventoryBookValue ?? assets.finishedGoodsInventory,
+  ) || 0
+  const rawMaterialInventory = Number(
+    finance.rawMaterialInventoryBookValue ?? assets.rawMaterialInventory,
+  ) || 0
+
+  return {
+    round: Number(entry.round) || 0,
+    assets: {
+      machinery,
+      buildings,
+      finishedGoodsInventory,
+      rawMaterialInventory,
+      cash: Number(finance.cash ?? assets.cash) || 0,
+    },
+    liabilities: {
+      equity: Number(finance.equity ?? liabilities.equity) || 0,
+      bankLoans: Number(finance.bankLoans ?? liabilities.bankLoans) || 0,
+      otherLiabilities: Number(finance.otherLiabilities ?? liabilities.otherLiabilities) || 0,
+      overdraft: Number(finance.overdraft ?? liabilities.overdraft) || 0,
+    },
+  }
+}
+
+export function buildBalanceSheetHistoryView({ baselineHistory, runtimeHistory = [] }) {
+  const baselineEntries = baselineHistory.entries ?? [
+    {
+      round: baselineHistory.previousRound,
+      assets: baselineHistory.previousAssets,
+      liabilities: baselineHistory.previousLiabilities,
+    },
+    {
+      round: baselineHistory.round,
+      assets: baselineHistory.assets,
+      liabilities: baselineHistory.liabilities,
+    },
+  ]
+  const selectedEntries = selectLatestConfirmedRounds({
+    baselineEntries,
+    runtimeEntries: runtimeHistory,
+    count: 2,
+  })
+  const baselineSet = new Set(baselineEntries)
+  const normalizeSelected = (entry) => {
+    if (baselineSet.has(entry)) {
+      return normalizeBalanceEntry(normalizeFinancialHistoryEntry(entry, { strict: true }))
+    }
+
+    return normalizeBalanceEntry(entry)
+  }
+  const previous = normalizeSelected(selectedEntries[0] ?? baselineEntries[0])
+  const current = normalizeSelected(selectedEntries[1] ?? selectedEntries[0] ?? baselineEntries[1])
+
+  return {
+    round: current.round,
+    previousRound: previous.round,
+    assets: current.assets,
+    previousAssets: previous.assets,
+    liabilities: current.liabilities,
+    previousLiabilities: previous.liabilities,
+  }
 }
 
 export function buildBalanceSheetViewModel(snapshot, inventoryTurnover) {

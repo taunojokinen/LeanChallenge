@@ -1,6 +1,10 @@
 import { calculateNextFiveSState } from '../five-s/model.js'
 import { canFinanceInvestment } from '../investments/model.js'
+import { calculateFinancingStructure } from '../factory-settings/financingStructure.js'
 import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
+import { buildCanonicalCarryoverState } from './carryover.js'
+import { calculateFactoryKnl } from './factoryKnl.js'
+import { calculateKNL } from './knl.js'
 
 const HOURS_PER_MACHINE_PER_ROUND = 1040
 const HOURS_PER_WORKER_PER_ROUND = 1040
@@ -22,6 +26,7 @@ const BUILDING_DEPRECIATION_PER_ROUND = 0.025
 const FINISHED_GOODS_VALUE_PER_CONTAINER = 20000
 const FINISHED_GOODS_AREA_PER_CONTAINER = 15
 const ASSEMBLY_AREA_PER_WORKER = 25
+const RAW_MATERIAL_INVENTORY_SHARE = 0.4
 
 const MIN_COMPONENT_PCT = 0
 const MAX_COMPONENT_PCT = 95
@@ -64,9 +69,7 @@ function normalizePercentValue(value, fallback = 95) {
   return numeric
 }
 
-export function calculateKNL(kPct, nPct, lPct) {
-  return (toNumber(kPct) / 100) * (toNumber(nPct) / 100) * (toNumber(lPct) / 100)
-}
+export { calculateKNL } from './knl.js'
 
 export function calculateDemandPerVariation(price, factorySettings = DEFAULT_FACTORY_SETTINGS) {
   const settings = factorySettings ?? DEFAULT_FACTORY_SETTINGS
@@ -176,10 +179,17 @@ function summarizeProjectsDecision(projectsDecision, projectsSnapshot) {
 }
 
 function summarizeInvestmentsDecision(investmentsDecision, investmentsSnapshot) {
+  const setupAutomation = investmentsSnapshot.investments.moldChangeAutomation
   const result = {
     newMachines: 0,
     expansions: 0,
     automationMachineCount: 0,
+    setupAutomationInstalled: Boolean(
+      setupAutomation.installed ||
+        (Array.isArray(setupAutomation.installedMachineIds) &&
+          setupAutomation.installedMachineIds.length > 0),
+    ),
+    setupAutomationPurchased: false,
     automaticProcessMeasurement: Boolean(
       investmentsSnapshot.investments.automaticProcessMeasurement.installed,
     ),
@@ -192,18 +202,27 @@ function summarizeInvestmentsDecision(investmentsDecision, investmentsSnapshot) 
   rows.forEach((row) => {
     const type = String(row.type || '').trim()
     const quantity = Math.max(1, toNonNegativeInt(row.quantity, 1))
-    const cost = toNonNegativeInt(row.cost)
+    let cost = 0
 
     if (type === investmentsSnapshot.investments.newMachine.type) {
       result.newMachines += quantity
+      cost = quantity * toNumber(investmentsSnapshot.investments.newMachine.unitCost)
     } else if (type === investmentsSnapshot.investments.factoryExpansion.type) {
       result.expansions += quantity
+      cost = quantity * toNumber(investmentsSnapshot.investments.factoryExpansion.unitCost)
     } else if (type === investmentsSnapshot.investments.moldChangeAutomation.type) {
-      result.automationMachineCount += 1
+      if (!result.setupAutomationPurchased) {
+        result.automationMachineCount = 1
+        result.setupAutomationInstalled = true
+        result.setupAutomationPurchased = true
+        cost = toNumber(investmentsSnapshot.investments.moldChangeAutomation.unitCost)
+      }
     } else if (type === investmentsSnapshot.investments.automaticProcessMeasurement.type) {
       result.automaticProcessMeasurement = true
+      cost = toNumber(investmentsSnapshot.investments.automaticProcessMeasurement.unitCost)
     } else if (type === investmentsSnapshot.investments.conditionMonitoring.type) {
       result.conditionMonitoring = true
+      cost = toNumber(investmentsSnapshot.investments.conditionMonitoring.unitCost)
     }
 
     result.totalCost += cost
@@ -349,7 +368,7 @@ function buildInvestmentsSnapshotFromGameState(gameState, factorySettings) {
       assemblyWorkers: toNonNegativeInt(gameState.staffing?.assembly, 0),
       shippingWorkers: toNonNegativeInt(gameState.staffing?.shipping, 0),
       dispatchM2: toNonNegativeInt(gameState.factory?.dispatchM2, 0),
-      finishedGoodsContainers: toNonNegativeInt(gameState.inventory?.finishedGoodsContainers, 0),
+      finishedGoodsContainers: Math.max(0, toNumber(gameState.inventory?.finishedGoodsContainers, 0)),
     },
     investments: {
       newMachine: {
@@ -363,6 +382,11 @@ function buildInvestmentsSnapshotFromGameState(gameState, factorySettings) {
       moldChangeAutomation: {
         type: configuredInvestments.setupAutomation?.type || 'mold-change-automation',
         unitCost: toNumber(configuredInvestments.setupAutomation?.price, 250000),
+        installed: Boolean(
+          setupAutomationState.installed ||
+            (Array.isArray(setupAutomationState.installedMachineIds) &&
+              setupAutomationState.installedMachineIds.length > 0),
+        ),
         installedMachineIds: Array.isArray(setupAutomationState.installedMachineIds)
           ? [...setupAutomationState.installedMachineIds]
           : [],
@@ -442,7 +466,7 @@ function calculateDepartmentMetrics({
   fiveSEffectiveHours,
   methodHours,
   switches,
-  automationMachineCount,
+  setupAutomationInstalled,
   conditionMonitoring,
   automaticProcessMeasurement,
   settings,
@@ -488,8 +512,9 @@ function calculateDepartmentMetrics({
   const qualityHours = toNumber(methodHours.spc) + toNumber(methodHours['poka-yoke']) + fiveSContribution
 
   if (key === 'machining') {
-    const automationShare = machineCount > 0 ? automationMachineCount / machineCount : 0
-    const averageAutomationReductionMinutes = toNumber(smedSettings.automationReductionMinutesPerMachine, 10) * clamp(automationShare, 0, 1)
+    const averageAutomationReductionMinutes = setupAutomationInstalled
+      ? toNumber(smedSettings.automationReductionMinutesPerMachine, 10)
+      : 0
     const changeoverHours = calculateSmedChangeoverHours(smedHours, averageAutomationReductionMinutes, smedSettings)
     const downtimeLoss = calculateTpmDowntimeLoss(tpmHours, tpmSettings)
     const switchLoss = machineCount > 0 ? (switches * changeoverHours) / (machineCount * hoursPerMachinePerRound) : 0
@@ -677,7 +702,7 @@ function calculateScenario({
     fiveSEffectiveHours: fiveSHoursByDepartment.machining,
     methodHours: projects.mergedLevels.machining || {},
     switches,
-    automationMachineCount: investments.automationMachineCount,
+    setupAutomationInstalled: investments.setupAutomationInstalled,
     conditionMonitoring: investments.conditionMonitoring,
     automaticProcessMeasurement: investments.automaticProcessMeasurement,
     settings,
@@ -690,7 +715,7 @@ function calculateScenario({
     fiveSEffectiveHours: fiveSHoursByDepartment.assembly,
     methodHours: projects.mergedLevels.assembly || {},
     switches,
-    automationMachineCount: investments.automationMachineCount,
+    setupAutomationInstalled: investments.setupAutomationInstalled,
     conditionMonitoring: investments.conditionMonitoring,
     automaticProcessMeasurement: investments.automaticProcessMeasurement,
     settings,
@@ -703,7 +728,7 @@ function calculateScenario({
     fiveSEffectiveHours: fiveSHoursByDepartment.shipping,
     methodHours: projects.mergedLevels.shipping || {},
     switches,
-    automationMachineCount: investments.automationMachineCount,
+    setupAutomationInstalled: investments.setupAutomationInstalled,
     conditionMonitoring: investments.conditionMonitoring,
     automaticProcessMeasurement: investments.automaticProcessMeasurement,
     settings,
@@ -769,7 +794,9 @@ function calculateScenario({
   const buildingsBase = toNumber(balanceSheetSnapshot.assets.buildings)
   const machineryInvestments =
     investments.newMachines * toNumber(investmentsSnapshot.investments.newMachine.unitCost) +
-    investments.automationMachineCount * toNumber(investmentsSnapshot.investments.moldChangeAutomation.unitCost) +
+    (investments.setupAutomationPurchased
+      ? toNumber(investmentsSnapshot.investments.moldChangeAutomation.unitCost)
+      : 0) +
     (investments.automaticProcessMeasurement
       ? toNumber(investmentsSnapshot.investments.automaticProcessMeasurement.unitCost)
       : 0) +
@@ -779,11 +806,13 @@ function calculateScenario({
   const buildingInvestments =
     investments.expansions * toNumber(investmentsSnapshot.investments.factoryExpansion.unitCost)
 
-  const depreciation =
+  const machineryDepreciation =
     (machineryBase + machineryInvestments) *
-      toNumber(settings.finance.machineryDepreciationPerRound, MACHINERY_DEPRECIATION_PER_ROUND) +
+    toNumber(settings.finance.machineryDepreciationPerRound, MACHINERY_DEPRECIATION_PER_ROUND)
+  const buildingDepreciation =
     (buildingsBase + buildingInvestments) *
-      toNumber(settings.finance.buildingDepreciationPerRound, BUILDING_DEPRECIATION_PER_ROUND)
+    toNumber(settings.finance.buildingDepreciationPerRound, BUILDING_DEPRECIATION_PER_ROUND)
+  const depreciation = machineryDepreciation + buildingDepreciation
 
   const financing = canFinanceInvestment(
     investments.totalCost,
@@ -827,6 +856,11 @@ function calculateScenario({
       shipping: shippingMetrics,
       totalQualityAverage: projectedQualityAverage,
     },
+    factoryKnl: calculateFactoryKnl({
+      machining: machiningMetrics,
+      assembly: assemblyMetrics,
+      shipping: shippingMetrics,
+    }),
     staffing,
     capacityByDepartment,
     bottleneckKey,
@@ -867,8 +901,26 @@ function calculateScenario({
       roundInterestRate,
       interest,
       result,
+      machineryDepreciation,
+      buildingDepreciation,
     },
     investments,
+    closingStateInputs: {
+      fiveSHoursByDepartment,
+      mergedLevels: projects.mergedLevels,
+      machineCount,
+      totalArea,
+      expansions: investments.expansions,
+      setupAutomationInstalled: investments.setupAutomationInstalled,
+      automaticProcessMeasurement: investments.automaticProcessMeasurement,
+      conditionMonitoring: investments.conditionMonitoring,
+      machineryBase,
+      buildingsBase,
+      machineryInvestments,
+      buildingInvestments,
+      machineryDepreciation,
+      buildingDepreciation,
+    },
   }
 }
 
@@ -876,7 +928,6 @@ function buildCurrentStateFromProductionSnapshot(productionSnapshot) {
   if (!productionSnapshot || !Array.isArray(productionSnapshot.phases)) {
     return null
   }
-
   const knl = {
     machining: null,
     assembly: null,
@@ -964,6 +1015,143 @@ function buildInsights(currentScenario, forecastScenario) {
   return insights.slice(0, 4)
 }
 
+function buildClosingFinance(gameState, forecastScenario, normalizedInputs, factorySettings) {
+  const finance = gameState.finance ?? {}
+  const openingMachineryBookValue = toNumber(
+    finance.machineryBookValue,
+    normalizedInputs.balanceSheetSnapshot.assets.machinery,
+  )
+  const openingBuildingsBookValue = toNumber(
+    finance.buildingsBookValue,
+    normalizedInputs.balanceSheetSnapshot.assets.buildings,
+  )
+  const openingEquity = toNumber(
+    finance.equity,
+    normalizedInputs.balanceSheetSnapshot.liabilities.equity,
+  )
+  const closingFinishedGoodsInventoryBookValue = forecastScenario.inventory.finishedGoodsValue
+  const closingRawMaterialInventoryBookValue = Math.round(
+    Math.abs(forecastScenario.finance.materials) * RAW_MATERIAL_INVENTORY_SHARE,
+  )
+  const closingInventoryBookValue =
+    closingFinishedGoodsInventoryBookValue + closingRawMaterialInventoryBookValue
+  const closingMachineryBookValue =
+    openingMachineryBookValue +
+    forecastScenario.closingStateInputs.machineryInvestments -
+    forecastScenario.closingStateInputs.machineryDepreciation
+  const closingBuildingsBookValue =
+    openingBuildingsBookValue +
+    forecastScenario.closingStateInputs.buildingInvestments -
+    forecastScenario.closingStateInputs.buildingDepreciation
+  const closingEquity = openingEquity + forecastScenario.finance.result
+  const fixedAssets = closingMachineryBookValue + closingBuildingsBookValue
+  const nonCashAssets = fixedAssets + closingInventoryBookValue
+  const financingStructure = calculateFinancingStructure({
+    nonCashAssets,
+    equity: closingEquity,
+    rawMaterialCosts: forecastScenario.finance.materials,
+    factorySettings,
+  })
+  const incomeStatement = {
+    revenue: forecastScenario.finance.revenue,
+    materials: forecastScenario.finance.materials,
+    labor: forecastScenario.finance.labor,
+    fixedCosts: forecastScenario.finance.fixedCosts,
+    inventoryChange: forecastScenario.finance.inventoryChange,
+    depreciation: forecastScenario.finance.depreciation,
+    interest: forecastScenario.finance.interest,
+    result: forecastScenario.finance.result,
+  }
+
+  return {
+    cash: financingStructure.cash,
+    bankLoans: financingStructure.interestBearingDebt,
+    overdraft: 0,
+    equity: closingEquity,
+    otherLiabilities: financingStructure.otherLiabilities,
+    machineryBookValue: closingMachineryBookValue,
+    buildingsBookValue: closingBuildingsBookValue,
+    finishedGoodsInventoryBookValue: closingFinishedGoodsInventoryBookValue,
+    rawMaterialInventoryBookValue: closingRawMaterialInventoryBookValue,
+    inventoryBookValue: closingInventoryBookValue,
+    fixedAssets,
+    totalAssets: financingStructure.totalAssets,
+    totalLiabilitiesAndEquity: financingStructure.totalEquityAndLiabilities,
+    incomeStatement,
+  }
+}
+
+function buildClosingState(gameState, forecastScenario, normalizedInputs, factorySettings) {
+  const closingInputs = forecastScenario.closingStateInputs
+  const getFiveSDepartment = (departmentKey) =>
+    normalizedInputs.fiveSSnapshot.departments.find((department) => department.key === departmentKey)
+
+  return {
+    market: {
+      price: forecastScenario.market.price,
+      activeVariations: forecastScenario.market.totalVariations,
+      productionRunsPerVariation: forecastScenario.market.runsPerVariation,
+    },
+    staffing: {
+      machining: forecastScenario.staffing.machining,
+      assembly: forecastScenario.staffing.assembly,
+      shipping: forecastScenario.staffing.shipping,
+    },
+    lean: {
+      fiveS: {
+        focusBudgetHours: normalizedInputs.fiveSSnapshot.focusBudgetHours,
+        departments: {
+          machining: {
+            effectiveHours: closingInputs.fiveSHoursByDepartment.machining,
+            weight: getFiveSDepartment('machining')?.weight ?? 0,
+          },
+          assembly: {
+            effectiveHours: closingInputs.fiveSHoursByDepartment.assembly,
+            weight: getFiveSDepartment('assembly')?.weight ?? 0,
+          },
+          shipping: {
+            effectiveHours: closingInputs.fiveSHoursByDepartment.shipping,
+            weight: getFiveSDepartment('shipping')?.weight ?? 0,
+          },
+        },
+      },
+      methods: closingInputs.mergedLevels,
+    },
+    production: {
+      machiningMachines: closingInputs.machineCount,
+    },
+    factory: {
+      totalAreaM2: closingInputs.totalArea,
+      dispatchM2: gameState.factory?.dispatchM2 ?? 0,
+      officeAndSocialM2: gameState.factory?.officeAndSocialM2 ?? 0,
+      expansionsCount:
+        Number(gameState.factory?.expansionsCount ?? 0) + closingInputs.expansions,
+    },
+    investments: {
+      setupAutomation: {
+        installed: closingInputs.setupAutomationInstalled,
+      },
+      automaticProcessMeasurement: {
+        installed: closingInputs.automaticProcessMeasurement,
+      },
+      conditionMonitoring: {
+        installed: closingInputs.conditionMonitoring,
+      },
+    },
+    inventory: {
+      // This is the variation/batch-derived average inventory, not a physical end-stock balance.
+      finishedGoodsContainers: forecastScenario.inventory.averageFinishedGoodsInventory,
+      finishedGoodsBookValue: forecastScenario.inventory.finishedGoodsValue,
+    },
+    finance: buildClosingFinance(
+      gameState,
+      forecastScenario,
+      normalizedInputs,
+      factorySettings,
+    ),
+  }
+}
+
 export function calculateRoundForecast(gameState, decisions = {}, factorySettings = DEFAULT_FACTORY_SETTINGS) {
   const settings = factorySettings ?? DEFAULT_FACTORY_SETTINGS
   const normalizedInputs = resolveForecastSnapshotInputs(gameState, settings)
@@ -1045,6 +1233,17 @@ export function calculateRoundForecast(gameState, decisions = {}, factorySetting
 
   const currentFromSnapshot = buildCurrentStateFromProductionSnapshot(normalizedInputs.productionSnapshot)
   const currentState = currentFromSnapshot || currentScenario
+  const { closingStateInputs, ...forecastOutput } = forecastScenario
+  const closingState = buildClosingState(
+    gameState,
+    { ...forecastOutput, closingStateInputs },
+    normalizedInputs,
+    settings,
+  )
+  closingState.canonical = buildCanonicalCarryoverState({
+    round: gameState.round,
+    closingState,
+  })
 
   return {
     round: gameState.round,
@@ -1068,7 +1267,8 @@ export function calculateRoundForecast(gameState, decisions = {}, factorySetting
       },
     },
     current: currentState,
-    forecast: forecastScenario,
+    forecast: forecastOutput,
+    closingState,
     summary: {
       bottleneckKey: forecastScenario.bottleneckKey,
       bottleneckLabel: departmentLabels[forecastScenario.bottleneckKey],

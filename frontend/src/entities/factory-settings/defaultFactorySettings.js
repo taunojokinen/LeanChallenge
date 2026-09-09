@@ -17,6 +17,7 @@ export const DEFAULT_FACTORY_SETTINGS = {
   },
 
   production: {
+    initialProductionQuantity: 134,
     hoursPerMachinePerRound: 1040,
     hoursPerWorkerPerRound: 1040,
     workersPerMachine: 5,
@@ -29,6 +30,17 @@ export const DEFAULT_FACTORY_SETTINGS = {
       },
       shipping: {
         normHoursPerContainer: 10,
+      },
+    },
+  },
+
+  history: {
+    knl: {
+      roundMinusOne: {
+        machining: { kPct: 89, nPct: 92, lPct: 77 },
+        assembly: { kPct: 83, nPct: 77, lPct: 78 },
+        shipping: { kPct: 79, nPct: 75, lPct: 76 },
+        factory: { kPct: 84, nPct: 82, lPct: 77 },
       },
     },
   },
@@ -157,7 +169,7 @@ export const DEFAULT_FACTORY_SETTINGS = {
     setupAutomation: {
       type: 'mold-change-automation',
       scope: 'machining',
-      repeatable: true,
+      repeatable: false,
       price: 250000,
       unlockThreshold: {
         method: 'smed',

@@ -5,6 +5,9 @@
 }
 
 .gauge-card {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-4);
   padding: var(--space-8);
   border-radius: var(--radius-xl);
   border: var(--border-width-strong) solid var(--color-border);
@@ -15,7 +18,6 @@
 .gauge-ring {
   width: 160px;
   height: 160px;
-  margin: 0 auto;
   border-radius: var(--radius-pill);
   border: 16px solid var(--color-success);
   border-left-color: var(--color-danger);
@@ -27,8 +29,29 @@
 }
 
 .gauge-card h3 {
-  margin: var(--space-7) 0 0;
+  margin: var(--space-3) 0 0;
   font-size: var(--font-size-2xl);
+}
+
+.gauge-change {
+  margin: 0;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.gauge-change.is-positive,
+.comparison-change.is-positive {
+  color: var(--color-success);
+}
+
+.gauge-change.is-negative,
+.comparison-change.is-negative {
+  color: var(--color-danger);
+}
+
+.gauge-change.is-neutral,
+.comparison-change.is-neutral {
+  color: var(--color-text-secondary);
 }
 
 @media (max-width: 980px) {

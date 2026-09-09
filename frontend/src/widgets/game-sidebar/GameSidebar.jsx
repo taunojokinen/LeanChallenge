@@ -4,7 +4,6 @@ const planSubPages = [
   { key: 'plan-cockpit', label: 'Cockpit', path: '/plan/cockpit' },
   { key: 'plan-income', label: 'Tulos', path: '/plan/income' },
   { key: 'plan-balance-sheet', label: 'Tase', path: '/plan/balance-sheet' },
-  { key: 'plan-production', label: 'Tuotanto', path: '/plan/production' },
 ]
 
 const doSubPages = [
@@ -18,7 +17,6 @@ const mainPages = [
   { key: 'do', label: 'DO', path: '/do' },
   { key: 'check', label: 'CHECK', path: '/check' },
   { key: 'act', label: 'ACT', path: '/act' },
-  { key: 'investments', label: 'Investoinnit', path: '/investments' },
 ]
 
 function GameSidebar({ pageKey, onNavigate }) {

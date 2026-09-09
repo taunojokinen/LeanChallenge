@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { buildIncomeStatementRows } from '../../entities/income/model.js'
+import { buildIncomeHistoryView, buildIncomeStatementRows } from '../../entities/income/model.js'
 import { getInitialIncomeHistory } from '../../shared/api/incomeApi.js'
 import { DEFAULT_FACTORY_SETTINGS } from '../../entities/factory-settings/defaultFactorySettings.js'
 import './PlanIncomePage.css'
-
-const COLUMN_HEADERS = ['Erä', 'Kierros -1', 'Kierros 0', 'Muutos']
 
 function PlanIncomePage({ gameState }) {
   const [snapshot, setSnapshot] = useState(null)
@@ -27,13 +25,18 @@ function PlanIncomePage({ gameState }) {
     }
   }, [gameState])
 
-  const rows = useMemo(() => {
+  const historyView = useMemo(() => {
     if (!snapshot) {
-      return []
+      return null
     }
 
-    return buildIncomeStatementRows(snapshot)
-  }, [snapshot])
+    return buildIncomeHistoryView({
+      baselineHistory: snapshot,
+      runtimeHistory: gameState.history,
+    })
+  }, [gameState.history, snapshot])
+
+  const rows = useMemo(() => (historyView ? buildIncomeStatementRows(historyView) : []), [historyView])
 
   if (!snapshot) {
     return (
@@ -48,12 +51,12 @@ function PlanIncomePage({ gameState }) {
     <section className="plan-income-page" aria-label="Tuloslaskelma">
       <header className="plan-income-header">
         <h1>TULOS</h1>
-        <p>Lähtövertailu: Kierros {snapshot.previousRound} | Kierros {snapshot.round}</p>
+          <p>Lähtövertailu: Kierros {historyView.previousRound} | Kierros {historyView.round}</p>
       </header>
 
       <div className="plan-income-table" role="table" aria-label="Kierroksen tuloslaskelma">
         <div className="plan-income-row plan-income-row-header" role="row">
-          {COLUMN_HEADERS.map((header) => (
+          {['Erä', `Kierros ${historyView.previousRound}`, `Kierros ${historyView.round}`, 'Muutos'].map((header) => (
             <span key={header} className="plan-income-header-cell" role="columnheader">
               {header}
             </span>

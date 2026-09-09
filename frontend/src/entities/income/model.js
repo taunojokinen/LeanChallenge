@@ -1,3 +1,4 @@
+import { normalizeFinancialHistoryEntry } from '../factory-settings/financialHistory.js'
 const EURO_FORMATTER = new Intl.NumberFormat('fi-FI', {
   maximumFractionDigits: 0,
 })
@@ -5,6 +6,8 @@ const EURO_FORMATTER = new Intl.NumberFormat('fi-FI', {
 const INTEGER_FORMATTER = new Intl.NumberFormat('fi-FI', {
   maximumFractionDigits: 0,
 })
+
+import { selectLatestConfirmedRounds } from '../history/confirmedRounds.js'
 
 function derivePreviousAmount(currentAmount, deltaPct) {
   const ratio = 1 + deltaPct / 100
@@ -71,6 +74,76 @@ function getImpactClass(kind, deltaPct) {
   return direction === 'down' ? 'positive' : 'negative'
 }
 
+function createIncomeRows(entry) {
+  const sourceRows = entry?.rows ?? {}
+  const income = entry?.incomeStatement ?? sourceRows
+  const readAmount = (value) =>
+    typeof value === 'object' && value !== null ? value.amount : value
+  const salesUnits = Number(
+    entry?.incomeStatement?.salesUnits ??
+    entry?.production?.deliveries ??
+      entry?.production?.actualProduction ??
+      readAmount(sourceRows.sales),
+  ) || 0
+
+  return {
+    sales: { label: 'Myynti', unit: 'kpl', amount: salesUnits, deltaPct: 0 },
+    revenue: { label: 'Liikevaihto', unit: 'EUR', amount: Number(readAmount(income.revenue)) || 0, deltaPct: 0 },
+    inventoryChange: { label: 'Varaston muutos', unit: 'EUR', amount: Number(readAmount(income.inventoryChange)) || 0, deltaPct: 0 },
+    materials: { label: 'Raaka-aineet', unit: 'EUR', amount: Number(readAmount(income.materials)) || 0, deltaPct: 0 },
+    labor: { label: 'Työ', unit: 'EUR', amount: Number(readAmount(income.labor)) || 0, deltaPct: 0 },
+    fixedCosts: { label: 'Kiinteät kustannukset', unit: 'EUR', amount: Number(readAmount(income.fixedCosts)) || 0, deltaPct: 0 },
+    depreciation: { label: 'Poistot', unit: 'EUR', amount: Number(readAmount(income.depreciation)) || 0, deltaPct: 0 },
+    financingCosts: { label: 'Rahoituskustannukset', unit: 'EUR', amount: Number(readAmount(income.interest ?? income.financingCosts)) || 0, deltaPct: 0 },
+    result: income.result == null
+      ? undefined
+      : { label: 'Tulos', unit: 'EUR', amount: Number(readAmount(income.result)) || 0, deltaPct: 0 },
+  }
+}
+
+export function normalizeIncomeHistoryEntry(entry, options = {}) {
+  const normalized = entry?.incomeStatement?.salesUnits != null
+    ? normalizeFinancialHistoryEntry(entry, options)
+    : entry
+
+  return {
+    round: Number(normalized?.round) || 0,
+    rows: createIncomeRows(normalized),
+  }
+}
+
+export function buildIncomeHistoryView({ baselineHistory, runtimeHistory = [] }) {
+  const baselineEntries = baselineHistory.entries ?? [
+    {
+      round: baselineHistory.previousRound,
+      rows: baselineHistory.previousRows,
+    },
+    {
+      round: baselineHistory.round,
+      rows: baselineHistory.rows,
+    },
+  ]
+  const selected = selectLatestConfirmedRounds({
+    baselineEntries,
+    runtimeEntries: runtimeHistory,
+    count: 2,
+  })
+  const baselineSet = new Set(baselineEntries)
+  const normalizeSelected = (entry) => normalizeIncomeHistoryEntry(
+    entry,
+    { strict: baselineSet.has(entry) },
+  )
+  const previous = normalizeSelected(selected[0] ?? baselineEntries[0])
+  const current = normalizeSelected(selected[1] ?? selected[0] ?? baselineEntries[1])
+
+  return {
+    round: current.round,
+    previousRound: previous.round,
+    rows: current.rows,
+    previousRows: previous.rows,
+  }
+}
+
 function buildComparisonRow({
   key,
   label,
@@ -82,14 +155,13 @@ function buildComparisonRow({
   kind = 'normal',
   isNegative = false,
 }) {
-  const previousAmountText = formatAmount(previousAmount, unit)
   const currentAmountText = formatAmount(currentAmount, unit)
 
   return {
     key,
     label,
     previousAmount,
-    previousAmountText,
+    previousAmountText: formatAmount(previousAmount, unit),
     currentAmount,
     currentAmountText,
     amountText: currentAmountText,
@@ -113,7 +185,9 @@ export function buildIncomeStatementRows(snapshot) {
   const financingCosts = rows.financingCosts.amount
 
   const grossMarginAmount = revenue + inventoryChange - materials - labor
-  const resultAmount = grossMarginAmount - fixedCosts - depreciation - financingCosts
+  const resultAmount = rows.result
+    ? Number(rows.result.amount) || 0
+    : grossMarginAmount - fixedCosts - depreciation - financingCosts
 
   const previousRevenue = previousRows
     ? Number(previousRows.revenue?.amount) || 0
@@ -138,8 +212,9 @@ export function buildIncomeStatementRows(snapshot) {
     : derivePreviousAmount(financingCosts, rows.financingCosts.deltaPct)
 
   const previousGrossMargin = previousRevenue + previousInventoryChange - previousMaterials - previousLabor
-  const previousResult =
-    previousGrossMargin - previousFixedCosts - previousDepreciation - previousFinancingCosts
+  const previousResult = previousRows?.result
+    ? Number(previousRows.result.amount) || 0
+    : previousGrossMargin - previousFixedCosts - previousDepreciation - previousFinancingCosts
 
   const grossMarginDeltaPct = deriveDeltaPctFromAmounts(grossMarginAmount, previousGrossMargin)
   const resultDeltaPct = deriveDeltaPctFromAmounts(resultAmount, previousResult)

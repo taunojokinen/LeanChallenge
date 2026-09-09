@@ -18,23 +18,6 @@ function formatArea(value) {
   return `${EURO_FORMATTER.format(Math.round(value))} m²`
 }
 
-function clamp(value, minimum, maximum) {
-  return Math.min(maximum, Math.max(minimum, value))
-}
-
-function buildSelectionKey(type, machineId = null) {
-  return machineId == null ? type : `${type}:${machineId}`
-}
-
-function parseSelectionKey(key) {
-  const [type, machineIdRaw] = String(key).split(':')
-
-  return {
-    type,
-    machineId: machineIdRaw ? Number(machineIdRaw) : null,
-  }
-}
-
 export function calculateDebtLimit(equity, maxDebtToEquity = 2) {
   return Math.max(0, Number(equity) || 0) * Math.max(0, Number(maxDebtToEquity) || 0)
 }
@@ -85,52 +68,49 @@ export function normalizeMachineAutomationSelection(installedMachineIds, selecte
     .sort((left, right) => left - right)
 }
 
-export function canFinanceInvestment(totalCost, financialState, maxDebtToEquity = 2) {
+export function canFinanceInvestment(totalCost, financialState, options = {}) {
+  const financeOptions =
+    typeof options === 'number'
+      ? { targetCash: 0, maxDebtToEquity: options }
+      : options
   const cashBalance = Number(financialState.cashBalance) || 0
-  const bankLoanDebt = Number(financialState.bankLoanDebt) || 0
+  const bankLoanDebt = Math.max(0, Number(financialState.bankLoanDebt) || 0)
   const equity = Math.max(0, Number(financialState.equity) || 0)
+  const targetCash = Math.max(0, Number(financeOptions.targetCash) || 0)
+  const maxDebtToEquity = Math.max(0, Number(financeOptions.maxDebtToEquity ?? 2) || 0)
 
-  const availableCash = Math.max(0, cashBalance)
-  const existingDebt = bankLoanDebt + Math.max(0, -cashBalance)
+  const availableCash = Math.max(0, cashBalance - targetCash)
+  const openingDebt = bankLoanDebt
   const debtLimit = calculateDebtLimit(equity, maxDebtToEquity)
+  const debtHeadroom = Math.max(0, debtLimit - openingDebt)
+  const financingCapacity = availableCash + debtHeadroom
 
-  const cashUsed = Math.min(availableCash, totalCost)
-  const financingNeed = Math.max(0, totalCost - cashUsed)
-  const debtAfter = existingDebt + financingNeed
-  const debtCapacity = debtLimit - existingDebt
-
-  if (existingDebt > debtLimit && financingNeed > 0) {
-    return {
-      canFinance: false,
-      cashUsed,
-      financingNeed,
-      debtAfter,
-      debtLimit,
-      debtCapacity,
-      reason: 'existing-debt-over-limit',
-    }
-  }
-
-  if (debtAfter > debtLimit) {
-    return {
-      canFinance: false,
-      cashUsed,
-      financingNeed,
-      debtAfter,
-      debtLimit,
-      debtCapacity,
-      reason: 'debt-limit-exceeded',
-    }
-  }
+  const normalizedCost = Math.max(0, Number(totalCost) || 0)
+  const cashUsed = Math.min(availableCash, normalizedCost)
+  const newDebt = Math.max(0, normalizedCost - cashUsed)
+  const debtAfter = openingDebt + newDebt
+  const remainingDebtHeadroom = Math.max(0, debtLimit - debtAfter)
+  const remainingFinancingCapacity = Math.max(0, financingCapacity - normalizedCost)
+  const canFinance = normalizedCost <= financingCapacity
 
   return {
-    canFinance: true,
+    canFinance,
+    targetCash,
+    availableCash,
+    openingDebt,
+    maxDebt: debtLimit,
+    debtHeadroom,
+    financingCapacity,
     cashUsed,
-    financingNeed,
+    newDebt,
+    financingNeed: newDebt,
     debtAfter,
+    remainingDebtHeadroom,
+    remainingFinancingCapacity,
+    cashAfter: cashBalance - cashUsed,
     debtLimit,
-    debtCapacity,
-    reason: null,
+    debtCapacity: debtHeadroom,
+    reason: canFinance ? null : 'debt-limit-exceeded',
   }
 }
 
@@ -145,26 +125,23 @@ function getMethodLevel(projectsViewModel, departmentKey, methodKey) {
   return Number(method?.currentLevel) || 0
 }
 
-function parseDraftToSelectionState(draftSelection = {}, snapshot) {
+function parseDraftToSelectionState(draftSelection = {}, snapshot, gameState) {
   const newMachineCount = Math.max(0, Math.round(Number(draftSelection.newMachineCount) || 0))
   const expansionCount = Math.max(0, Math.round(Number(draftSelection.expansionCount) || 0))
   const measurementSelected = Boolean(draftSelection.automaticProcessMeasurement)
   const conditionMonitoringSelected = Boolean(draftSelection.conditionMonitoring)
 
-  const moldSelectionRaw = Array.isArray(draftSelection.moldAutomationMachineIds)
-    ? draftSelection.moldAutomationMachineIds
-    : []
-
-  const moldAutomationMachineIds = normalizeMachineAutomationSelection(
-    snapshot.investments.moldChangeAutomation.installedMachineIds,
-    moldSelectionRaw,
-    snapshot.factory.machiningMachineCount,
+  const setupAutomationState = gameState?.investments?.setupAutomation ?? {}
+  const setupAutomationInstalled = Boolean(
+    setupAutomationState.installed ||
+      (Array.isArray(setupAutomationState.installedMachineIds) &&
+        setupAutomationState.installedMachineIds.length > 0),
   )
 
   return {
     newMachineCount,
     expansionCount,
-    moldAutomationMachineIds,
+    setupAutomation: Boolean(draftSelection.setupAutomation) && !setupAutomationInstalled,
     automaticProcessMeasurement: measurementSelected,
     conditionMonitoring: conditionMonitoringSelected,
   }
@@ -191,14 +168,13 @@ function buildInvestmentRows(selectionState, snapshot) {
     })
   }
 
-  selectionState.moldAutomationMachineIds.forEach((machineId) => {
+  if (selectionState.setupAutomation) {
     rows.push({
       type: snapshot.investments.moldChangeAutomation.type,
       quantity: 1,
-      machineId,
       cost: snapshot.investments.moldChangeAutomation.unitCost,
     })
-  })
+  }
 
   if (selectionState.automaticProcessMeasurement) {
     rows.push({
@@ -231,8 +207,8 @@ function calculateSelectionDepreciation(investmentRows, snapshot) {
   }, 0)
 }
 
-export function buildInvestmentsViewModel({ snapshot, balanceSheetSnapshot, projectsViewModel, draftSelection }) {
-  const selectionState = parseDraftToSelectionState(draftSelection, snapshot)
+export function buildInvestmentsViewModel({ snapshot, gameState, factorySettings, projectsViewModel, draftSelection }) {
+  const selectionState = parseDraftToSelectionState(draftSelection, snapshot, gameState)
   const newTotalArea = applyFactoryExpansion(snapshot.factory.totalAreaM2, selectionState.expansionCount)
   const newMachineCount = applyNewMachineCount(snapshot.factory.machiningMachineCount, selectionState.newMachineCount)
 
@@ -243,16 +219,10 @@ export function buildInvestmentsViewModel({ snapshot, balanceSheetSnapshot, proj
     machiningMachineCount: newMachineCount,
   })
 
-  const assetsTotal =
-    balanceSheetSnapshot.assets.machinery +
-    balanceSheetSnapshot.assets.buildings +
-    balanceSheetSnapshot.assets.cash +
-    balanceSheetSnapshot.assets.inventory
-  const equity = assetsTotal - balanceSheetSnapshot.liabilities.bankLoans
   const financialState = {
-    cashBalance: balanceSheetSnapshot.assets.cash,
-    bankLoanDebt: balanceSheetSnapshot.liabilities.bankLoans,
-    equity,
+    cashBalance: gameState.finance.cash,
+    bankLoanDebt: gameState.finance.bankLoans,
+    equity: gameState.finance.equity,
   }
 
   const smedLevel = getMethodLevel(projectsViewModel, 'machining', 'smed')
@@ -261,26 +231,21 @@ export function buildInvestmentsViewModel({ snapshot, balanceSheetSnapshot, proj
 
   const investmentRows = buildInvestmentRows(selectionState, snapshot)
   const totalCost = investmentRows.reduce((sum, item) => sum + item.cost, 0)
-  const financing = canFinanceInvestment(totalCost, financialState)
+  const financeOptions = {
+    targetCash: factorySettings.finance.targetCash,
+    maxDebtToEquity: factorySettings.finance.maxDebtToEquity,
+  }
+  const financing = canFinanceInvestment(totalCost, financialState, financeOptions)
   const depreciationPerRound = calculateSelectionDepreciation(investmentRows, snapshot)
 
-  const machineList = Array.from({ length: snapshot.factory.machiningMachineCount }, (_, index) => index + 1)
-  const installedMoldAutomation = new Set(snapshot.investments.moldChangeAutomation.installedMachineIds)
-  const selectedMoldAutomation = new Set(selectionState.moldAutomationMachineIds)
-
-  const moldAutomationByMachine = machineList.map((machineId) => {
-    const isInstalled = installedMoldAutomation.has(machineId)
-    const isSelected = selectedMoldAutomation.has(machineId)
-
-    return {
-      machineId,
-      isInstalled,
-      isSelected,
-      canSelect: !isInstalled,
-    }
-  })
-
-  const canUnlockMoldAutomation = smedLevel >= snapshot.investments.moldChangeAutomation.requiredSmedLevel
+  const setupAutomationState = gameState.investments?.setupAutomation ?? {}
+  const setupAutomationInstalled = Boolean(
+    setupAutomationState.installed ||
+      (Array.isArray(setupAutomationState.installedMachineIds) &&
+        setupAutomationState.installedMachineIds.length > 0),
+  )
+  const canUnlockMoldAutomation =
+    smedLevel >= snapshot.investments.moldChangeAutomation.requiredSmedLevel
   const canUnlockAutoMeasurement =
     spcLevel >= snapshot.investments.automaticProcessMeasurement.requiredSpcLevel
   const canUnlockConditionMonitoring =
@@ -288,12 +253,32 @@ export function buildInvestmentsViewModel({ snapshot, balanceSheetSnapshot, proj
 
   const canAddMachineBySpace = projectedSpace.freeArea >= 0
   const oneMachineCost = snapshot.investments.newMachine.unitCost
-  const plusOneMachineFinancing = canFinanceInvestment(totalCost + oneMachineCost, financialState)
+  const plusOneMachineFinancing = canFinanceInvestment(
+    totalCost + oneMachineCost,
+    financialState,
+    financeOptions,
+  )
   const canAddMachine = canAddMachineBySpace && plusOneMachineFinancing.canFinance
 
   const plusOneExpansionFinancing = canFinanceInvestment(
     totalCost + snapshot.investments.factoryExpansion.unitCost,
     financialState,
+    financeOptions,
+  )
+  const plusOneSetupAutomationFinancing = canFinanceInvestment(
+    totalCost + snapshot.investments.moldChangeAutomation.unitCost,
+    financialState,
+    financeOptions,
+  )
+  const plusOneProcessMeasurementFinancing = canFinanceInvestment(
+    totalCost + snapshot.investments.automaticProcessMeasurement.unitCost,
+    financialState,
+    financeOptions,
+  )
+  const plusOneConditionMonitoringFinancing = canFinanceInvestment(
+    totalCost + snapshot.investments.conditionMonitoring.unitCost,
+    financialState,
+    financeOptions,
   )
 
   const machineCountAfterSelection = newMachineCount
@@ -321,15 +306,22 @@ export function buildInvestmentsViewModel({ snapshot, balanceSheetSnapshot, proj
     },
     financing: {
       ...financing,
-      equity,
+      equity: financialState.equity,
       currentCash: financialState.cashBalance,
       currentDebt: financialState.bankLoanDebt,
       currentCashText: formatCurrency(financialState.cashBalance),
       currentDebtText: formatCurrency(financialState.bankLoanDebt),
-      equityText: formatCurrency(equity),
+      equityText: formatCurrency(financialState.equity),
       debtLimitText: formatCurrency(financing.debtLimit),
+      maxDebtText: formatCurrency(financing.maxDebt),
+      availableCashText: formatCurrency(financing.availableCash),
+      debtHeadroomText: formatCurrency(financing.debtHeadroom),
+      financingCapacityText: formatCurrency(financing.financingCapacity),
+      remainingDebtHeadroomText: formatCurrency(financing.remainingDebtHeadroom),
+      remainingFinancingCapacityText: formatCurrency(financing.remainingFinancingCapacity),
+      targetCashText: formatCurrency(financing.targetCash),
       cashUsedText: formatCurrency(financing.cashUsed),
-      financingNeedText: formatCurrency(financing.financingNeed),
+      financingNeedText: formatCurrency(financing.newDebt),
       debtAfterText: formatCurrency(financing.debtAfter),
     },
     totals: {
@@ -341,14 +333,19 @@ export function buildInvestmentsViewModel({ snapshot, balanceSheetSnapshot, proj
     guards: {
       canAddMachine,
       canAddExpansion: plusOneExpansionFinancing.canFinance,
+      canAddSetupAutomation: plusOneSetupAutomationFinancing.canFinance,
       canUnlockMoldAutomation,
+      canAddProcessMeasurement: plusOneProcessMeasurementFinancing.canFinance,
       canUnlockAutoMeasurement,
+      canAddConditionMonitoring: plusOneConditionMonitoringFinancing.canFinance,
       canUnlockConditionMonitoring,
-      autoMeasurementAlreadyInstalled: snapshot.investments.automaticProcessMeasurement.installed,
-      conditionMonitoringAlreadyInstalled: snapshot.investments.conditionMonitoring.installed,
-    },
-    machineAutomation: {
-      machines: moldAutomationByMachine,
+      setupAutomationInstalled,
+      autoMeasurementAlreadyInstalled:
+        gameState.investments?.automaticProcessMeasurement?.installed ??
+        snapshot.investments.automaticProcessMeasurement.installed,
+      conditionMonitoringAlreadyInstalled:
+        gameState.investments?.conditionMonitoring?.installed ??
+        snapshot.investments.conditionMonitoring.installed,
     },
     investmentRows,
   }
@@ -358,7 +355,7 @@ export function buildDraftSelectionFromDecision(decision = {}) {
   const result = {
     newMachineCount: 0,
     expansionCount: 0,
-    moldAutomationMachineIds: [],
+    setupAutomation: false,
     automaticProcessMeasurement: false,
     conditionMonitoring: false,
   }
@@ -378,8 +375,8 @@ export function buildDraftSelectionFromDecision(decision = {}) {
       return
     }
 
-    if (item.type === 'mold-change-automation' && item.machineId != null) {
-      result.moldAutomationMachineIds.push(Number(item.machineId))
+    if (item.type === 'mold-change-automation') {
+      result.setupAutomation = true
       return
     }
 

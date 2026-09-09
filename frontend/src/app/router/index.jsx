@@ -16,10 +16,6 @@ export const appRoutes = [
     pageKey: 'plan-cockpit',
   },
   {
-    path: '/plan/production',
-    pageKey: 'plan-production',
-  },
-  {
     path: '/plan/income',
     pageKey: 'plan-income',
   },

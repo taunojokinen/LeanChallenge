@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { buildBalanceSheetViewModel } from '../../entities/balance-sheet/model.js'
+import { buildBalanceSheetHistoryView, buildBalanceSheetViewModel } from '../../entities/balance-sheet/model.js'
 import { getInitialBalanceSheetHistory } from '../../shared/api/balanceSheetApi.js'
 import { DEFAULT_FACTORY_SETTINGS } from '../../entities/factory-settings/defaultFactorySettings.js'
 import './PlanBalanceSheetPage.css'
@@ -58,8 +58,13 @@ function PlanBalanceSheetPage({ inventoryTurnover, gameState }) {
       return null
     }
 
-    return buildBalanceSheetViewModel(snapshot, Number(inventoryTurnover))
-  }, [snapshot, inventoryTurnover])
+    const historyView = buildBalanceSheetHistoryView({
+      baselineHistory: snapshot,
+      runtimeHistory: gameState.history,
+    })
+
+    return buildBalanceSheetViewModel(historyView, Number(inventoryTurnover))
+  }, [gameState.history, inventoryTurnover, snapshot])
 
   if (!viewModel) {
     return (

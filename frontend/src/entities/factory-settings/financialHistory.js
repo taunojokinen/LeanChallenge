@@ -106,6 +106,18 @@ function buildCanonicalEntry(round, incomeStatement, finance) {
   }
 }
 
+// Historical pre-game rounds (-2/-1/0) intentionally keep the pre-batchSize-decision FG averaging
+// (production runs derived from variations, not the canonical player batchSize) so the calibrated
+// round-0 opening FG anchor is not retroactively rewritten by the ACT batchSize decision mechanic.
+function calculateLegacyAverageFinishedGoodsInventory(forecastForecast) {
+  const totalVariations = Math.max(1, toNumber(forecastForecast.market?.totalVariations, 1))
+  const runsPerVariation = Math.max(1, toNumber(forecastForecast.market?.runsPerVariation, 2))
+  const productionRuns = totalVariations * runsPerVariation
+  const batches = Math.max(1, productionRuns)
+  const legacyBatchSize = toNumber(forecastForecast.actualProduction) / batches
+  return (totalVariations * legacyBatchSize) / 2
+}
+
 function buildAnchoredOpeningState(openingState, roundZeroFinance, roundOneHistoryForecast, settings) {
   const machineryRate = Number(settings.finance.machineryDepreciationPerRound)
   const buildingsRate = Number(settings.finance.buildingDepreciationPerRound)
@@ -126,7 +138,9 @@ function buildAnchoredOpeningState(openingState, roundZeroFinance, roundOneHisto
   }
 }
 
-function buildAnchoredFinance(roundZeroFinance, forecast, isRoundZero) {
+function buildAnchoredFinance(roundZeroFinance, forecast, isRoundZero, finishedGoodsValueOverride) {
+  const finishedGoodsValue = finishedGoodsValueOverride ?? forecast.inventory.finishedGoodsValue
+
   if (isRoundZero) {
     return {
       cash: roundZeroFinance.cash,
@@ -135,7 +149,7 @@ function buildAnchoredFinance(roundZeroFinance, forecast, isRoundZero) {
       otherLiabilities: roundZeroFinance.otherLiabilities,
       machineryBookValue: roundZeroFinance.machineryBookValue,
       buildingsBookValue: roundZeroFinance.buildingsBookValue,
-      finishedGoodsInventoryBookValue: forecast.inventory.finishedGoodsValue,
+      finishedGoodsInventoryBookValue: finishedGoodsValue,
       rawMaterialInventoryBookValue: Math.round(Math.abs(forecast.finance.materials) * 0.4),
     }
   }
@@ -147,7 +161,7 @@ function buildAnchoredFinance(roundZeroFinance, forecast, isRoundZero) {
     otherLiabilities: Math.round(Math.abs(forecast.finance.materials) * 0.5),
     machineryBookValue: roundZeroFinance.machineryBookValue,
     buildingsBookValue: roundZeroFinance.buildingsBookValue,
-    finishedGoodsInventoryBookValue: forecast.inventory.finishedGoodsValue,
+    finishedGoodsInventoryBookValue: finishedGoodsValue,
     rawMaterialInventoryBookValue: Math.round(Math.abs(forecast.finance.materials) * 0.4),
   }
 }
@@ -405,23 +419,42 @@ export function buildCanonicalFinancialHistory(
       settings,
     )
     const income = forecast.closingState.finance.incomeStatement
+    const legacyAverageFinishedGoodsInventory = calculateLegacyAverageFinishedGoodsInventory(
+      forecast.forecast,
+    )
+    const finishedGoodsValuePerContainer = toNumber(
+      settings.inventory?.finishedGoodsValuePerContainer,
+      20000,
+    )
+    const legacyFinishedGoodsValue = legacyAverageFinishedGoodsInventory * finishedGoodsValuePerContainer
+    const legacyInventoryChange =
+      (legacyAverageFinishedGoodsInventory - toNumber(forecast.forecast.inventory.baseFinishedGoodsContainers)) *
+      finishedGoodsValuePerContainer
+    const legacyResult =
+      toNumber(income.revenue) +
+      legacyInventoryChange -
+      toNumber(income.materials) -
+      toNumber(income.labor) -
+      toNumber(income.fixedCosts) -
+      toNumber(income.depreciation) -
+      toNumber(income.interest)
     const entry = buildCanonicalEntry(
       round,
       {
         salesUnits: forecast.forecast.actualProduction,
         revenue: income.revenue,
-        inventoryChange: income.inventoryChange,
+        inventoryChange: legacyInventoryChange,
         materials: income.materials,
         labor: income.labor,
         fixedCosts: income.fixedCosts,
         depreciation: income.depreciation,
         financingCosts: income.interest,
-        result: income.result,
+        result: legacyResult,
       },
-      buildAnchoredFinance(roundZeroFinance, forecast.forecast, round === 0),
+      buildAnchoredFinance(roundZeroFinance, forecast.forecast, round === 0, legacyFinishedGoodsValue),
     )
     entries.push(assertCanonicalFinancialHistoryEntry(entry))
-    openingFinishedGoodsContainers = forecast.forecast.inventory.averageFinishedGoodsInventory
+    openingFinishedGoodsContainers = legacyAverageFinishedGoodsInventory
 
     if (round === -2) {
       const roundMinusOneState = structuredClone(openingState)

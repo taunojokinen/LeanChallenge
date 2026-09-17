@@ -144,6 +144,45 @@ export function buildIncomeHistoryView({ baselineHistory, runtimeHistory = [] })
   }
 }
 
+export function buildIncomeForecastView({ baselineHistory, runtimeHistory = [], forecast }) {
+  const baselineEntries = baselineHistory.entries ?? [
+    {
+      round: baselineHistory.previousRound,
+      rows: baselineHistory.previousRows,
+    },
+    {
+      round: baselineHistory.round,
+      rows: baselineHistory.rows,
+    },
+  ]
+  const previousEntry = selectLatestConfirmedRounds({
+    baselineEntries,
+    runtimeEntries: runtimeHistory,
+    count: 1,
+  })[0] ?? baselineEntries[0]
+  const currentEntry = {
+    round: forecast.round,
+    incomeStatement: forecast.closingState.finance.incomeStatement,
+    production: {
+      actualProduction: forecast.forecast.actualProduction,
+      deliveries: forecast.forecast.deliveries,
+      demand: forecast.forecast.demand,
+      lostSalesUnits: forecast.forecast.lostSalesUnits,
+    },
+  }
+
+  const baselineSet = new Set(baselineEntries)
+  const previous = normalizeIncomeHistoryEntry(previousEntry, { strict: baselineSet.has(previousEntry) })
+  const current = normalizeIncomeHistoryEntry(currentEntry)
+
+  return {
+    round: current.round,
+    previousRound: previous.round,
+    rows: current.rows,
+    previousRows: previous.rows,
+  }
+}
+
 function buildComparisonRow({
   key,
   label,

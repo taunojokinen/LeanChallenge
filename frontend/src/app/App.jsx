@@ -18,6 +18,7 @@ import { calculateRoundForecast } from '../entities/forecast/model.js'
 import { buildGameHeaderKpis } from './headerKpis.js'
 import { advanceRoundState } from '../entities/game-round/advanceRound.js'
 import { resetGameDecisionStorage } from '../features/session/resetGameSession.js'
+import { loadCheckProductionDecision } from '../features/check/decisionStore.js'
 
 function normalizePath(pathname, shouldReplace = false) {
   const currentPath = pathname || '/'
@@ -137,10 +138,12 @@ function App() {
   }
 
   const handleAdvanceRound = (forecast) => {
+    const checkProductionDecision = loadCheckProductionDecision(gameState.round)
     const result = advanceRoundState({
       gameState,
       forecast,
       totalRounds: DEFAULT_FACTORY_SETTINGS.game.totalRounds,
+      checkProductionDecision,
     })
 
     setGameState(result.nextGameState)
@@ -211,7 +214,11 @@ function App() {
         ) : pageKey === 'plan-balance-sheet' ? (
           <PlanBalanceSheetPage inventoryTurnover={inventoryTurnover} gameState={gameState} />
         ) : pageKey === 'plan-income' ? (
-          <PlanIncomePage gameState={gameState} />
+          <PlanIncomePage
+            gameState={gameState}
+            forecast={baseForecast}
+            factorySettings={DEFAULT_FACTORY_SETTINGS}
+          />
         ) : pageKey === 'do-5s' ? (
           <FiveSPage round={gameState.round} />
         ) : pageKey === 'do-projects' ? (

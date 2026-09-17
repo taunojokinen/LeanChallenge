@@ -15,7 +15,7 @@ test('new game starts from round 1 canonical state', () => {
   assert.equal(gameState.market.activeVariations, 20)
   assert.equal(gameState.production.machiningMachines, 2)
   assert.equal(gameState.staffing.machining, 10)
-  assert.equal(gameState.staffing.assembly, 25)
+  assert.equal(gameState.staffing.assembly, 38)
   assert.equal(gameState.staffing.shipping, 5)
   assert.equal(gameState.factory.totalAreaM2, 4000)
 })

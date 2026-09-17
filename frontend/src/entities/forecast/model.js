@@ -37,6 +37,8 @@ const DEFAULT_MARKET_DECISION = {
   newVariations: 0,
   addedVariations: 0,
   productionQuantity: null,
+  batchSize: null,
+  targetFinishedGoodsInventory: null,
   activeVariationCount: 1,
 }
 
@@ -122,15 +124,6 @@ function calculateSmedChangeoverHours(smedHours, automationReductionMinutes = 0,
   const baselineHours = minimumSetupHours + (initialSetupHours - minimumSetupHours) * Math.exp(-safeHours / decayHours)
   const automatedHours = baselineHours - toNumber(automationReductionMinutes) / 60
   return Math.max(minimumSetupHours, automatedHours)
-}
-
-function calculateTpmDowntimeLoss(tpmHours, tpmSettings = null) {
-  const settings = tpmSettings ?? DEFAULT_FACTORY_SETTINGS.lean.tpm
-  const safeHours = Math.max(0, toNumber(tpmHours))
-  const initialDowntimeRate = toNumber(settings.initialDowntimeRate, 0.1)
-  const minimumDowntimeRate = toNumber(settings.minimumDowntimeRate, 0.01)
-  const decayHours = Math.max(1, toNumber(settings.decayHours, 450))
-  return minimumDowntimeRate + (initialDowntimeRate - minimumDowntimeRate) * Math.exp(-safeHours / decayHours)
 }
 
 function summarizeProjectsDecision(projectsDecision, projectsSnapshot) {
@@ -465,7 +458,9 @@ function calculateDepartmentMetrics({
   staffing,
   fiveSEffectiveHours,
   methodHours,
-  switches,
+  changeoversPerMachine,
+  totalChangeovers,
+  batchSize,
   setupAutomationInstalled,
   conditionMonitoring,
   automaticProcessMeasurement,
@@ -475,7 +470,6 @@ function calculateDepartmentMetrics({
   const leanSettings = settings.lean ?? DEFAULT_FACTORY_SETTINGS.lean
   const fiveSSettings = leanSettings.fiveS ?? DEFAULT_FACTORY_SETTINGS.lean.fiveS
   const smedSettings = leanSettings.smed ?? DEFAULT_FACTORY_SETTINGS.lean.smed
-  const tpmSettings = leanSettings.tpm ?? DEFAULT_FACTORY_SETTINGS.lean.tpm
   const qualitySettings = leanSettings.quality ?? DEFAULT_FACTORY_SETTINGS.lean.quality
   const performanceSettings = leanSettings.performance ?? DEFAULT_FACTORY_SETTINGS.lean.performance
   const machiningNormHoursPerContainer = toNumber(
@@ -515,14 +509,19 @@ function calculateDepartmentMetrics({
     const averageAutomationReductionMinutes = setupAutomationInstalled
       ? toNumber(smedSettings.automationReductionMinutesPerMachine, 10)
       : 0
-    const changeoverHours = calculateSmedChangeoverHours(smedHours, averageAutomationReductionMinutes, smedSettings)
-    const downtimeLoss = calculateTpmDowntimeLoss(tpmHours, tpmSettings)
-    const switchLoss = machineCount > 0 ? (switches * changeoverHours) / (machineCount * hoursPerMachinePerRound) : 0
+    // Setup time comes from the existing SMED curve; changeover count comes from the batch-size decision.
+    const setupTimeHours = calculateSmedChangeoverHours(smedHours, averageAutomationReductionMinutes, smedSettings)
+    const changeoverHoursPerMachine = changeoversPerMachine * setupTimeHours
+    const otherDowntimeRate = toNumber(productionSettings.departments?.machining?.otherDowntimeRate, 0.24)
+    const otherDowntimeHoursPerMachine = hoursPerMachinePerRound * otherDowntimeRate
+    const rawAvailability = hoursPerMachinePerRound > 0
+      ? (hoursPerMachinePerRound - otherDowntimeHoursPerMachine - changeoverHoursPerMachine) / hoursPerMachinePerRound
+      : 0
 
     const availabilityPct = clamp(
-      (1 - downtimeLoss - Math.max(0, switchLoss)) * 100 + (conditionMonitoring ? 2 : 0),
-      50,
-      MAX_COMPONENT_PCT,
+      clamp(rawAvailability, 0, 1) * 100 + (conditionMonitoring ? 2 : 0),
+      0,
+      100,
     )
     const speedPct = calculateLearningComponent(machiningBasePct, methodDevHours, performanceMaxPct, learningCurveHours)
     const qualityPct = clamp(
@@ -542,7 +541,14 @@ function calculateDepartmentMetrics({
       lPct: qualityPct,
       knl,
       capacityContainers,
-      changeoverHours,
+      // changeoverHours keeps its original meaning: per-event setup duration (SMED output), not the per-machine total.
+      changeoverHours: setupTimeHours,
+      batchSize,
+      totalChangeovers,
+      changeoversPerMachine,
+      setupTimeHours,
+      changeoverHoursPerMachine,
+      otherDowntimeHoursPerMachine,
     }
   }
 
@@ -695,13 +701,34 @@ function calculateScenario({
   const productionRuns = totalVariations * runsPerVariation
   const switches = productionRuns
 
+  // Demand is independent of capacity, so it can be resolved before department metrics
+  // and used as the "planned production" reference when no explicit ACT decision exists.
+  const demandPerVariation = calculateDemandPerVariation(market.price, settings)
+  const demand = Math.max(0, Math.round(demandPerVariation * totalVariations))
+  const hasPlannedProduction = market.productionQuantity != null
+  const requestedProductionQuantity = hasPlannedProduction
+    ? Math.max(0, toNonNegativeInt(market.productionQuantity))
+    : demand
+
+  const initialBatchSize = toNumber(productionSettings.initialBatchSize, 20)
+  const minBatchSize = toNumber(productionSettings.minBatchSize, 1)
+  const maxBatchSize = toNumber(productionSettings.maxBatchSize, 20)
+  const requestedBatchSize = market.batchSize != null
+    ? toNumber(market.batchSize, initialBatchSize)
+    : initialBatchSize
+  const machiningBatchSize = clamp(Math.round(requestedBatchSize), minBatchSize, maxBatchSize)
+  const totalChangeovers = requestedProductionQuantity / machiningBatchSize
+  const changeoversPerMachine = machineCount > 0 ? totalChangeovers / machineCount : 0
+
   const machiningMetrics = calculateDepartmentMetrics({
     key: 'machining',
     machineCount,
     staffing,
     fiveSEffectiveHours: fiveSHoursByDepartment.machining,
     methodHours: projects.mergedLevels.machining || {},
-    switches,
+    changeoversPerMachine,
+    totalChangeovers,
+    batchSize: machiningBatchSize,
     setupAutomationInstalled: investments.setupAutomationInstalled,
     conditionMonitoring: investments.conditionMonitoring,
     automaticProcessMeasurement: investments.automaticProcessMeasurement,
@@ -714,7 +741,6 @@ function calculateScenario({
     staffing,
     fiveSEffectiveHours: fiveSHoursByDepartment.assembly,
     methodHours: projects.mergedLevels.assembly || {},
-    switches,
     setupAutomationInstalled: investments.setupAutomationInstalled,
     conditionMonitoring: investments.conditionMonitoring,
     automaticProcessMeasurement: investments.automaticProcessMeasurement,
@@ -727,7 +753,6 @@ function calculateScenario({
     staffing,
     fiveSEffectiveHours: fiveSHoursByDepartment.shipping,
     methodHours: projects.mergedLevels.shipping || {},
-    switches,
     setupAutomationInstalled: investments.setupAutomationInstalled,
     conditionMonitoring: investments.conditionMonitoring,
     automaticProcessMeasurement: investments.automaticProcessMeasurement,
@@ -747,25 +772,45 @@ function calculateScenario({
 
   const plantCapacity = capacityByDepartment[bottleneckKey]
 
-  const demandPerVariation = calculateDemandPerVariation(market.price, settings)
-  const demand = Math.max(0, Math.round(demandPerVariation * totalVariations))
-  const hasPlannedProduction = market.productionQuantity != null
-  const plannedProductionQuantity = hasPlannedProduction
-    ? clamp(toNonNegativeInt(market.productionQuantity), 0, plantCapacity)
-    : plantCapacity
-  const actualProduction = Math.max(0, Math.min(plannedProductionQuantity, demand, plantCapacity))
-  const deliveries = actualProduction
-  const lostSalesUnits = Math.max(0, demand - actualProduction)
+  // requested/planned production is the player's plan (from CHECK/ACT or the demand fallback);
+  // it is intentionally NOT capped by demand, only by capacity.
+  const plannedProductionQuantity = clamp(requestedProductionQuantity, 0, plantCapacity)
+  const actualProduction = plannedProductionQuantity
   const unusedCapacity = Math.max(0, plantCapacity - actualProduction)
 
-  const batches = Math.max(1, productionRuns)
-  const batchSize = actualProduction / batches
-  const averageFinishedGoodsInventory = (totalVariations * batchSize) / 2
+  // The batch-size-driven quantity is a minimum operational/Lean buffer, not the physical stock level.
+  const minimumFinishedGoodsInventory = machineCount > 0
+    ? (totalVariations * machiningBatchSize) / (2 * machineCount)
+    : 0
+  const baseFinishedGoodsContainers = toNumber(investmentsSnapshot.factory.finishedGoodsContainers)
+  const openingFinishedGoodsInventory = baseFinishedGoodsContainers
+  const requestedFinishedGoodsInventory = market.targetFinishedGoodsInventory != null
+    ? toNonNegativeInt(market.targetFinishedGoodsInventory)
+    : minimumFinishedGoodsInventory
+  const targetFinishedGoodsInventory = Math.max(
+    minimumFinishedGoodsInventory,
+    requestedFinishedGoodsInventory,
+  )
+  const requiredProduction = Math.max(
+    0,
+    demand + targetFinishedGoodsInventory - openingFinishedGoodsInventory,
+  )
+  const availableFinishedGoodsInventory = Math.max(
+    0,
+    openingFinishedGoodsInventory + actualProduction - targetFinishedGoodsInventory,
+  )
+
+  const deliveries = Math.max(0, Math.min(demand, availableFinishedGoodsInventory))
+  const lostSalesUnits = Math.max(0, demand - deliveries)
+
+  // Physical material balance: whatever was produced but not delivered stays in stock.
+  const closingFinishedGoodsInventory = openingFinishedGoodsInventory + actualProduction - deliveries
+
   const finishedGoodsValue =
-    averageFinishedGoodsInventory *
+    closingFinishedGoodsInventory *
     toNumber(inventorySettings.finishedGoodsValuePerContainer, FINISHED_GOODS_VALUE_PER_CONTAINER)
   const finishedGoodsArea =
-    averageFinishedGoodsInventory *
+    minimumFinishedGoodsInventory *
     toNumber(inventorySettings.finishedGoodsSpacePerContainerM2, FINISHED_GOODS_AREA_PER_CONTAINER)
 
   const machineArea = machineCount * toNumber(factorySettingsSection.machineSpaceM2, 250)
@@ -775,7 +820,7 @@ function calculateScenario({
   const usedArea = machineArea + assemblyArea + dispatchArea + officeArea + finishedGoodsArea
   const freeFactorySpace = totalArea - usedArea
 
-  const revenue = actualProduction * toNumber(market.price, PRICE_REFERENCE)
+  const revenue = deliveries * toNumber(market.price, PRICE_REFERENCE)
   const materials = actualProduction * toNumber(
     settings.costs.materialCostPerContainer,
     MATERIAL_COST_PER_SOLD_CONTAINER,
@@ -785,9 +830,8 @@ function calculateScenario({
   const labor = totalPersonnel * toNumber(settings.costs.annualEmployeeCost, 50000) * roundFraction
   const fixedCosts = toNumber(settings.costs.annualFixedCosts, 3000000) * roundFraction
 
-  const baseFinishedGoodsContainers = toNumber(investmentsSnapshot.factory.finishedGoodsContainers)
   const inventoryChange =
-    (averageFinishedGoodsInventory - baseFinishedGoodsContainers) *
+    (closingFinishedGoodsInventory - openingFinishedGoodsInventory) *
     toNumber(inventorySettings.finishedGoodsValuePerContainer, FINISHED_GOODS_VALUE_PER_CONTAINER)
 
   const machineryBase = toNumber(balanceSheetSnapshot.assets.machinery)
@@ -849,6 +893,8 @@ function calculateScenario({
       totalVariations,
       runsPerVariation,
       productionQuantity: plannedProductionQuantity,
+      batchSize: machiningBatchSize,
+      targetFinishedGoodsInventory,
     },
     knl: {
       machining: machiningMetrics,
@@ -866,6 +912,7 @@ function calculateScenario({
     bottleneckKey,
     plantCapacity,
     demand,
+    requestedProductionQuantity,
     plannedProductionQuantity,
     actualProduction,
     deliveries,
@@ -873,9 +920,15 @@ function calculateScenario({
     unusedCapacity,
     productionRuns,
     switches,
-    batchSize,
     inventory: {
-      averageFinishedGoodsInventory,
+      minimumFinishedGoodsInventory,
+      averageFinishedGoodsInventory: minimumFinishedGoodsInventory,
+      openingFinishedGoodsInventory,
+      requestedFinishedGoodsInventory,
+      targetFinishedGoodsInventory,
+      requiredProduction,
+      availableFinishedGoodsInventory,
+      closingFinishedGoodsInventory,
       finishedGoodsValue,
       finishedGoodsArea,
       baseFinishedGoodsContainers,
@@ -1091,6 +1144,7 @@ function buildClosingState(gameState, forecastScenario, normalizedInputs, factor
       price: forecastScenario.market.price,
       activeVariations: forecastScenario.market.totalVariations,
       productionRunsPerVariation: forecastScenario.market.runsPerVariation,
+      batchSize: forecastScenario.market.batchSize,
     },
     staffing: {
       machining: forecastScenario.staffing.machining,
@@ -1139,8 +1193,8 @@ function buildClosingState(gameState, forecastScenario, normalizedInputs, factor
       },
     },
     inventory: {
-      // This is the variation/batch-derived average inventory, not a physical end-stock balance.
-      finishedGoodsContainers: forecastScenario.inventory.averageFinishedGoodsInventory,
+      // Physical closing stock (opening + actualProduction - deliveries), not the Lean minimum metric.
+      finishedGoodsContainers: forecastScenario.inventory.closingFinishedGoodsInventory,
       finishedGoodsBookValue: forecastScenario.inventory.finishedGoodsValue,
     },
     finance: buildClosingFinance(
@@ -1167,6 +1221,17 @@ export function calculateRoundForecast(gameState, decisions = {}, factorySetting
     gameState.market?.price,
     toNumber(settings.market.referencePrice, PRICE_REFERENCE),
   )
+  // Canonical batchSize carries over from the previous round's closing state, same as price;
+  // null here means "no carried-over decision yet" so calculateScenario falls back to initialBatchSize.
+  const baseBatchSize = gameState.market?.batchSize != null
+    ? toNumber(gameState.market.batchSize, null)
+    : null
+  // CHECK's next-round production decision is written directly onto gameState.market by
+  // advanceRoundState (see checkProductionDecision); null means no decision yet, so
+  // calculateScenario falls back to demand.
+  const baseProductionQuantity = gameState.market?.productionQuantity != null
+    ? toNumber(gameState.market.productionQuantity, null)
+    : null
 
   const initialMarketFromState = {
     price: basePrice,
@@ -1178,6 +1243,11 @@ export function calculateRoundForecast(gameState, decisions = {}, factorySetting
       ),
     ),
     activeVariationCount: Math.max(1, baseActiveVariationCount),
+    batchSize: baseBatchSize,
+    productionQuantity: baseProductionQuantity,
+      targetFinishedGoodsInventory: gameState.market?.targetFinishedGoodsInventory != null
+        ? toNumber(gameState.market.targetFinishedGoodsInventory, null)
+        : null,
   }
 
   const resolvedDecisions = {
@@ -1259,6 +1329,8 @@ export function calculateRoundForecast(gameState, decisions = {}, factorySetting
         price: resolvedDecisions.market.price,
         runsPerVariation: resolvedDecisions.market.runsPerVariation,
         productionQuantity: forecastScenario.market.productionQuantity,
+        batchSize: forecastScenario.market.batchSize,
+        targetFinishedGoodsInventory: forecastScenario.market.targetFinishedGoodsInventory,
         activeVariationCount: forecastScenario.market.activeVariationCount,
         totalVariations: forecastScenario.market.totalVariations,
         addedVariations: forecastScenario.market.addedVariations,
@@ -1273,6 +1345,7 @@ export function calculateRoundForecast(gameState, decisions = {}, factorySetting
       bottleneckKey: forecastScenario.bottleneckKey,
       bottleneckLabel: departmentLabels[forecastScenario.bottleneckKey],
       demand: forecastScenario.demand,
+      requestedProductionQuantity: forecastScenario.requestedProductionQuantity,
       productionQuantity: forecastScenario.plannedProductionQuantity,
       actualProduction: forecastScenario.actualProduction,
       unusedCapacity: forecastScenario.unusedCapacity,
@@ -1281,7 +1354,12 @@ export function calculateRoundForecast(gameState, decisions = {}, factorySetting
       plantCapacity: forecastScenario.plantCapacity,
       revenue: forecastScenario.finance.revenue,
       result: forecastScenario.finance.result,
-      finishedGoodsInventory: forecastScenario.inventory.averageFinishedGoodsInventory,
+      finishedGoodsInventory: forecastScenario.inventory.closingFinishedGoodsInventory,
+      openingFinishedGoodsInventory: forecastScenario.inventory.openingFinishedGoodsInventory,
+      minimumFinishedGoodsInventory: forecastScenario.inventory.minimumFinishedGoodsInventory,
+      targetFinishedGoodsInventory: forecastScenario.inventory.targetFinishedGoodsInventory,
+      requiredProduction: forecastScenario.inventory.requiredProduction,
+      availableFinishedGoodsInventory: forecastScenario.inventory.availableFinishedGoodsInventory,
       freeFactorySpace: forecastScenario.space.freeFactorySpace,
     },
     insights: buildInsights(currentScenario, forecastScenario),

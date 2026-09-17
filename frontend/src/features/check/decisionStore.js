@@ -10,6 +10,14 @@ function sanitizeCount(value) {
   return Math.round(numericValue)
 }
 
+function sanitizeOptionalCount(value) {
+  if (value == null) {
+    return null
+  }
+
+  return sanitizeCount(value)
+}
+
 function normalizeStaffing(staffing) {
   if (!staffing || typeof staffing !== 'object') {
     return {
@@ -56,4 +64,47 @@ export function saveCheckStaffingDecision(decision) {
   }
 
   window.localStorage.setItem(CHECK_STAFFING_DECISION_STORAGE_KEY, JSON.stringify(normalizedDecision))
+}
+
+const CHECK_PRODUCTION_DECISION_STORAGE_KEY = 'lean-challenge-check-production-decision'
+
+// This decision is made during `round` (CHECK) but is intended for round + 1's production plan
+// batch size, and finished-goods target; all are next-round decisions and share the same
+// round-scoped record.
+export function loadCheckProductionDecision(round) {
+  try {
+    const rawValue = window.localStorage.getItem(CHECK_PRODUCTION_DECISION_STORAGE_KEY)
+
+    if (!rawValue) {
+      return null
+    }
+
+    const parsedValue = JSON.parse(rawValue)
+
+    if (!parsedValue || parsedValue.round !== round) {
+      return null
+    }
+
+    return {
+      round: parsedValue.round,
+      productionQuantity: sanitizeCount(parsedValue.productionQuantity),
+      batchSize: sanitizeOptionalCount(parsedValue.batchSize),
+      targetFinishedGoodsInventory: sanitizeOptionalCount(parsedValue.targetFinishedGoodsInventory),
+      savedAt: parsedValue.savedAt,
+    }
+  } catch {
+    return null
+  }
+}
+
+export function saveCheckProductionDecision(decision) {
+  const normalizedDecision = {
+    round: Number(decision?.round) || 0,
+    productionQuantity: sanitizeCount(decision?.productionQuantity),
+    batchSize: sanitizeOptionalCount(decision?.batchSize),
+    targetFinishedGoodsInventory: sanitizeOptionalCount(decision?.targetFinishedGoodsInventory),
+    savedAt: decision?.savedAt ?? new Date().toISOString(),
+  }
+
+  window.localStorage.setItem(CHECK_PRODUCTION_DECISION_STORAGE_KEY, JSON.stringify(normalizedDecision))
 }

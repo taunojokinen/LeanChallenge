@@ -44,7 +44,7 @@ function appendHistory(history, historyEntry) {
   return [...withoutCurrentRound, historyEntry]
 }
 
-export function advanceRoundState({ gameState, forecast, totalRounds }) {
+export function advanceRoundState({ gameState, forecast, totalRounds, checkProductionDecision }) {
   const canonical = requireCanonicalClosingState(forecast)
   const currentRound = Number(gameState?.round)
 
@@ -63,6 +63,37 @@ export function advanceRoundState({ gameState, forecast, totalRounds }) {
     history: appendHistory(gameState.history, historyEntry),
   }
 
+  // CHECK's next-round decisions are made during the round being confirmed (currentRound) and
+  // only take effect for nextGameState; they never touch this round's own forecast/actuals.
+  if (!isGameComplete && checkProductionDecision && Number(checkProductionDecision.round) === currentRound) {
+    const marketOverrides = {}
+
+    if (checkProductionDecision.productionQuantity != null) {
+      marketOverrides.productionQuantity = Math.max(
+        0,
+        Math.round(Number(checkProductionDecision.productionQuantity) || 0),
+      )
+    }
+
+    if (checkProductionDecision.batchSize != null) {
+      marketOverrides.batchSize = Math.max(0, Math.round(Number(checkProductionDecision.batchSize) || 0))
+    }
+
+    if (checkProductionDecision.targetFinishedGoodsInventory != null) {
+      marketOverrides.targetFinishedGoodsInventory = Math.max(
+        0,
+        Math.round(Number(checkProductionDecision.targetFinishedGoodsInventory) || 0),
+      )
+    }
+
+    if (Object.keys(marketOverrides).length > 0) {
+      nextGameState.market = {
+        ...nextGameState.market,
+        ...marketOverrides,
+      }
+    }
+  }
+
   return {
     nextGameState,
     historyEntry,
@@ -71,3 +102,4 @@ export function advanceRoundState({ gameState, forecast, totalRounds }) {
     isGameComplete,
   }
 }
+

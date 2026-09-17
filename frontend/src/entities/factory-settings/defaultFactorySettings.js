@@ -17,13 +17,17 @@ export const DEFAULT_FACTORY_SETTINGS = {
   },
 
   production: {
-    initialProductionQuantity: 134,
+    initialProductionQuantity: 188,
     hoursPerMachinePerRound: 1040,
     hoursPerWorkerPerRound: 1040,
     workersPerMachine: 5,
+    initialBatchSize: 20,
+    minBatchSize: 1,
+    maxBatchSize: 20,
     departments: {
       machining: {
         normHoursPerContainer: 6,
+        otherDowntimeRate: 0.24,
       },
       assembly: {
         normHoursPerContainer: 90,
@@ -79,7 +83,7 @@ export const DEFAULT_FACTORY_SETTINGS = {
       maxEffectiveHours: 700,
     },
     smed: {
-      initialSetupTimeHours: 8,
+      initialSetupTimeHours: 10,
       minimumSetupTimeHours: 0.5,
       decayHours: 450,
       baseSetupCurveHours: 450,
@@ -119,9 +123,9 @@ export const DEFAULT_FACTORY_SETTINGS = {
   },
 
   costs: {
-    materialCostPerContainer: 10000,
-    annualEmployeeCost: 50000,
-    annualFixedCosts: 3000000,
+    materialCostPerContainer: 12000,
+    annualEmployeeCost: 105000,
+    annualFixedCosts: 4000000,
   },
 
   finance: {
@@ -221,7 +225,7 @@ export const DEFAULT_FACTORY_SETTINGS = {
     },
 
     staffing: {
-      assembly: 25,
+      assembly: 38,
       shipping: 5,
     },
 

@@ -3,6 +3,7 @@ export const GAME_DECISION_STORAGE_KEYS = [
   'lean-challenge-projects-decision',
   'lean-challenge-investments-decision',
   'lean-challenge-check-staffing-decision',
+  'lean-challenge-check-production-decision',
   'lean-challenge-act-decision',
 ]
 

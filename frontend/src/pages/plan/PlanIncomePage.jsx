@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
-import { buildIncomeHistoryView, buildIncomeStatementRows } from '../../entities/income/model.js'
+import { buildIncomeForecastView, buildIncomeStatementRows } from '../../entities/income/model.js'
 import { getInitialIncomeHistory } from '../../shared/api/incomeApi.js'
 import { DEFAULT_FACTORY_SETTINGS } from '../../entities/factory-settings/defaultFactorySettings.js'
 import './PlanIncomePage.css'
 
-function PlanIncomePage({ gameState }) {
+function PlanIncomePage({ gameState, forecast, factorySettings = DEFAULT_FACTORY_SETTINGS }) {
   const [snapshot, setSnapshot] = useState(null)
 
   useEffect(() => {
     let isMounted = true
 
     const loadSnapshot = async () => {
-      const data = await getInitialIncomeHistory(gameState, DEFAULT_FACTORY_SETTINGS)
+      const data = await getInitialIncomeHistory(gameState, factorySettings)
 
       if (isMounted) {
         setSnapshot(data)
@@ -23,18 +23,23 @@ function PlanIncomePage({ gameState }) {
     return () => {
       isMounted = false
     }
-  }, [gameState])
+  }, [factorySettings, gameState])
 
   const historyView = useMemo(() => {
     if (!snapshot) {
       return null
     }
 
-    return buildIncomeHistoryView({
+    if (!forecast) {
+      return null
+    }
+
+    return buildIncomeForecastView({
       baselineHistory: snapshot,
       runtimeHistory: gameState.history,
+      forecast,
     })
-  }, [gameState.history, snapshot])
+  }, [forecast, gameState.history, snapshot])
 
   const rows = useMemo(() => (historyView ? buildIncomeStatementRows(historyView) : []), [historyView])
 

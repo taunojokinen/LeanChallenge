@@ -44,9 +44,9 @@ test('default generated history uses effective production 124, 129, 134', () => 
 
   assert.deepEqual(entries.map((entry) => entry.round), [-2, -1, 0])
   assert.deepEqual(entries.map((entry) => entry.incomeStatement.salesUnits), [124, 129, 134])
-  assert.deepEqual(entries.map((entry) => entry.incomeStatement.labor), [500000, 500000, 500000])
-  assert.deepEqual(entries.map((entry) => entry.incomeStatement.materials), [1240000, 1290000, 1340000])
-  assert.deepEqual(entries.map((entry) => entry.finance.rawMaterialInventoryBookValue), [496000, 516000, 536000])
+  assert.deepEqual(entries.map((entry) => entry.incomeStatement.labor), [1391250, 1391250, 1391250])
+  assert.deepEqual(entries.map((entry) => entry.incomeStatement.materials), [1488000, 1548000, 1608000])
+  assert.deepEqual(entries.map((entry) => entry.finance.rawMaterialInventoryBookValue), [595200, 619200, 643200])
   assert.deepEqual(entries.map((entry) => entry.finance.finishedGoodsInventoryBookValue), [620000, 645000, 670000])
   assert.deepEqual(entries.map((entry) => entry.incomeStatement.inventoryChange), [-1025000, 25000, 25000])
 })
@@ -54,7 +54,7 @@ test('default generated history uses effective production 124, 129, 134', () => 
 test('teacher production setting derives all historical production quantities', () => {
   assert.deepEqual(generated(134).map((entry) => entry.incomeStatement.salesUnits), [124, 129, 134])
   assert.deepEqual(generated(120).map((entry) => entry.incomeStatement.salesUnits), [110, 115, 120])
-  assert.deepEqual(generated(150).map((entry) => entry.incomeStatement.salesUnits), [124, 129, 134])
+  assert.deepEqual(generated(150).map((entry) => entry.incomeStatement.salesUnits), [140, 145, 150])
   assert.deepEqual(generated(7).map((entry) => entry.incomeStatement.salesUnits), [0, 2, 7])
   assert.deepEqual(generated(3).map((entry) => entry.incomeStatement.salesUnits), [0, 0, 3])
 })
@@ -102,8 +102,8 @@ test('round-zero finance remains anchored while round-minus-one closes to the sa
     assert.equal(roundMinusOne.finance[field], opening[field])
   }
 
-  assert.equal(roundMinusOne.incomeStatement.labor, 500000)
-  assert.equal(roundMinusOne.incomeStatement.materials, 1290000)
+  assert.equal(roundMinusOne.incomeStatement.labor, 1391250)
+  assert.equal(roundMinusOne.incomeStatement.materials, 1548000)
   assert.equal(roundMinusOne.incomeStatement.inventoryChange, 25000)
 })
 

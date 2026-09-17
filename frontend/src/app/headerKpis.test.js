@@ -21,9 +21,9 @@ test('header KPIs come from persisted round-0 state, not forecast output', () =>
   assert.ok(result)
   assert.ok(production)
 
-  assert.equal(revenue.value.replace(/\s/g, ' '), '3 350 000 €')
-  assert.equal(result.value.replace(/\s/g, ' ').replace(/−/g, '-'), '648 136 €')
-  assert.equal(production.value.replace(/\s/g, ' '), '134 kpl')
+  assert.equal(revenue.value.replace(/\s/g, ' '), '2 906 250 €')
+  assert.equal(result.value.replace(/\s/g, ' ').replace(/−/g, '-'), '-1 684 864 €')
+  assert.equal(production.value.replace(/\s/g, ' '), '174 kpl')
 })
 
 test('header KNL matches Cockpit confirmed factory KNL', () => {

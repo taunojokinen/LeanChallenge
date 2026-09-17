@@ -25,7 +25,7 @@ test('createInitialGameState clones the default initial state', () => {
     machiningMachines: 2,
   })
   assert.equal(initialGameState.staffing.machining, 10)
-  assert.equal(initialGameState.staffing.assembly, 25)
+  assert.equal(initialGameState.staffing.assembly, 38)
   assert.equal(initialGameState.staffing.shipping, 5)
   assert.equal(initialGameState.factory.totalAreaM2, 4000)
   assert.equal(initialGameState.finance.cash, 50000)
@@ -87,7 +87,7 @@ test('createInitialGameState returns deep immutable clones per call', () => {
   stateA.investments.setupAutomation.installedMachineIds.push(77)
 
   assert.equal(DEFAULT_FACTORY_SETTINGS.initialState.market.price, 25000)
-  assert.equal(DEFAULT_FACTORY_SETTINGS.initialState.staffing.assembly, 25)
+  assert.equal(DEFAULT_FACTORY_SETTINGS.initialState.staffing.assembly, 38)
   assert.equal(
     DEFAULT_FACTORY_SETTINGS.initialState.lean.fiveS.departments.machining.effectiveHours,
     569,
@@ -98,7 +98,7 @@ test('createInitialGameState returns deep immutable clones per call', () => {
   )
 
   assert.equal(stateB.market.price, 25000)
-  assert.equal(stateB.staffing.assembly, 25)
+  assert.equal(stateB.staffing.assembly, 38)
   assert.equal(stateB.lean.fiveS.departments.machining.effectiveHours, 569)
   assert.deepStrictEqual(stateB.investments.setupAutomation.installedMachineIds, [])
 })
@@ -137,7 +137,7 @@ test('createInitialGameState works with calculateRoundForecast without attached 
   assert.equal(forecast.decisions.market.activeVariationCount, 20)
   assert.equal(forecast.decisions.market.runsPerVariation, 2)
   assert.equal(forecast.forecast.staffing.machining, 10)
-  assert.equal(forecast.forecast.staffing.assembly, 25)
+  assert.equal(forecast.forecast.staffing.assembly, 38)
   assert.equal(forecast.forecast.staffing.shipping, 5)
   assert.equal(forecast.forecast.space.totalArea, 4000)
 })

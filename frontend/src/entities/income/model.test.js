@@ -4,7 +4,7 @@ import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySett
 import { createInitialGameState } from '../factory-settings/initialGameState.js'
 import { buildInitialIncomeHistory } from '../factory-settings/financialHistory.js'
 import { getInitialIncomeHistory } from '../../shared/api/incomeApi.js'
-import { buildIncomeHistoryView, buildIncomeStatementRows } from './model.js'
+import { buildIncomeForecastView, buildIncomeHistoryView, buildIncomeStatementRows } from './model.js'
 import { calculateRoundForecast } from '../forecast/model.js'
 import { advanceRoundState } from '../game-round/advanceRound.js'
 
@@ -39,8 +39,8 @@ test('income history starts with canonical rounds -1 and 0', () => {
 
   assert.equal(view.previousRound, -1)
   assert.equal(view.round, 0)
-  assert.equal(rows.find((row) => row.key === 'sales').currentAmount, 134)
-  assert.equal(result.currentAmount, 648135.625)
+  assert.equal(rows.find((row) => row.key === 'sales').currentAmount, 174)
+  assert.equal(result.currentAmount, -1684864.375)
   assert.equal(financing.currentAmount, -36973.75)
 })
 
@@ -50,16 +50,61 @@ test('actual income API baseline pipeline preserves round zero values', async ()
   const rows = buildIncomeStatementRows(view)
   const values = Object.fromEntries(rows.map((row) => [row.key, row.currentAmount]))
 
-  assert.equal(values.sales, 134)
-  assert.equal(values.revenue, 3350000)
+  assert.equal(values.sales, 174)
+  assert.equal(values.revenue, 2906250)
   assert.equal(values.inventoryChange, 25000)
-  assert.equal(values.materials, -1340000)
-  assert.equal(values.labor, -500000)
-  assert.equal(values.grossMargin, 1535000)
-  assert.equal(values.fixedCosts, -750000)
+  assert.equal(values.materials, -2088000)
+  assert.equal(values.labor, -1391250)
+  assert.equal(values.grossMargin, -548000)
+  assert.equal(values.fixedCosts, -1000000)
   assert.equal(values.depreciation, -99890.625)
   assert.equal(values.financingCosts, -36973.75)
-  assert.equal(values.result, 648135.625)
+  assert.equal(values.result, -1684864.375)
+})
+
+test('PLAN income forecast view exposes the same canonical output used by CHECK preview', () => {
+  const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+  gameState.investmentsDecision = {
+    round: gameState.round,
+    investments: [{ type: 'new-machine', quantity: 1 }],
+  }
+  const currentForecast = calculateRoundForecast(gameState, {}, DEFAULT_FACTORY_SETTINGS)
+  const checkDecision = {
+    round: gameState.round,
+    productionQuantity: 181,
+    batchSize: 10,
+    targetFinishedGoodsInventory: 60,
+  }
+  const { nextGameState } = advanceRoundState({
+    gameState,
+    forecast: currentForecast,
+    totalRounds: 12,
+    checkProductionDecision: checkDecision,
+  })
+  const checkPreview = calculateRoundForecast(nextGameState, {}, DEFAULT_FACTORY_SETTINGS)
+  const planForecast = calculateRoundForecast(nextGameState, {}, DEFAULT_FACTORY_SETTINGS)
+  const planView = buildIncomeForecastView({
+    baselineHistory: buildInitialIncomeHistory(gameState, DEFAULT_FACTORY_SETTINGS),
+    runtimeHistory: nextGameState.history,
+    forecast: planForecast,
+  })
+  const rows = buildIncomeStatementRows(planView)
+
+  assert.equal(checkPreview.forecast.actualProduction, planForecast.forecast.actualProduction)
+  assert.equal(checkPreview.forecast.deliveries, planForecast.forecast.deliveries)
+  assert.equal(nextGameState.production.machiningMachines, 3)
+  assert.equal(nextGameState.production.machiningMachines, planForecast.closingState.production.machiningMachines)
+  assert.equal(
+    checkPreview.forecast.inventory.openingFinishedGoodsInventory,
+    planForecast.forecast.inventory.openingFinishedGoodsInventory,
+  )
+  assert.equal(
+    checkPreview.forecast.inventory.closingFinishedGoodsInventory,
+    planForecast.forecast.inventory.closingFinishedGoodsInventory,
+  )
+  assert.equal(checkPreview.forecast.finance.revenue, planForecast.forecast.finance.revenue)
+  assert.equal(rows.find((row) => row.key === 'sales').currentAmount, planForecast.forecast.deliveries)
+  assert.equal(rows.find((row) => row.key === 'revenue').currentAmount, planForecast.forecast.finance.revenue)
 })
 
 test('income history selects rounds zero and one after first confirmation', () => {

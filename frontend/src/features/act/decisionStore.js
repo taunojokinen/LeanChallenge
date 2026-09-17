@@ -33,6 +33,7 @@ export function loadActDecision(round) {
       price: sanitizeNonNegativeInteger(parsedValue.price, 25000),
       productionQuantity: sanitizeNonNegativeInteger(parsedValue.productionQuantity, 0),
       addedVariations: sanitizeNonNegativeInteger(parsedValue.addedVariations, 0),
+      // batchSize moved to CHECK's next-round decision; legacy stored values are intentionally ignored here.
       savedAt: parsedValue.savedAt,
     }
   } catch {

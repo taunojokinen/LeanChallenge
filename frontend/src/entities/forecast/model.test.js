@@ -68,9 +68,13 @@ test('bottleneck equals the smallest department capacity', () => {
   assert.equal(forecast.forecast.plantCapacity, min)
 })
 
-test('deliveries equal min(demand, capacity)', () => {
+test('deliveries preserve the default minimum finished-goods target', () => {
   const forecast = calculateRoundForecast(createGameState())
-  assert.equal(forecast.forecast.deliveries, Math.min(forecast.forecast.demand, forecast.forecast.plantCapacity))
+  const inventory = forecast.forecast.inventory
+  assert.equal(
+    forecast.forecast.deliveries,
+    Math.max(0, Math.min(forecast.forecast.demand, inventory.openingFinishedGoodsInventory + forecast.forecast.actualProduction - inventory.targetFinishedGoodsInventory)),
+  )
 })
 
 test('capacity gap creates lost sales', () => {
@@ -211,8 +215,9 @@ test('inventory value and area use configured unit constants', () => {
   const forecast = calculateRoundForecast(createGameState())
   const inv = forecast.forecast.inventory
 
-  assert.equal(Math.round(inv.finishedGoodsValue), Math.round(inv.averageFinishedGoodsInventory * 20000))
-  assert.equal(Math.round(inv.finishedGoodsArea), Math.round(inv.averageFinishedGoodsInventory * 15))
+  // finishedGoodsValue is now the physical closing balance's value, not the Lean minimum metric.
+  assert.equal(Math.round(inv.finishedGoodsValue), Math.round(inv.closingFinishedGoodsInventory * 20000))
+  assert.equal(Math.round(inv.finishedGoodsArea), Math.round(inv.minimumFinishedGoodsInventory * 15))
 })
 
 test('new machine increases machining capacity', () => {
@@ -326,7 +331,7 @@ test('SMED minimum setup override changes changeover time but not changeover cou
   assert.equal(forecast.forecast.demand, defaultForecast.forecast.demand)
 })
 
-test('TPM initial downtime override changes K while leaving N and L intact', () => {
+test('TPM initial downtime rate no longer double-counts against the explicit machining otherDowntimeRate', () => {
   const gameState = createGameState()
   const customSettings = cloneSettings({
     lean: {
@@ -341,9 +346,129 @@ test('TPM initial downtime override changes K while leaving N and L intact', () 
   const forecast = calculateRoundForecast(gameState, {}, customSettings)
   const defaultForecast = calculateRoundForecast(gameState)
 
-  assert.notEqual(forecast.forecast.knl.machining.kPct, defaultForecast.forecast.knl.machining.kPct)
+  // Machining K is now driven only by production.departments.machining.otherDowntimeRate and
+  // the batch-size-driven changeover loss; lean.tpm.initialDowntimeRate no longer feeds machining K.
+  assert.equal(forecast.forecast.knl.machining.kPct, defaultForecast.forecast.knl.machining.kPct)
   assert.equal(forecast.forecast.knl.machining.nPct, defaultForecast.forecast.knl.machining.nPct)
   assert.equal(forecast.forecast.knl.machining.lPct, defaultForecast.forecast.knl.machining.lPct)
+})
+
+test('machining otherDowntimeRate override changes K directly', () => {
+  const gameState = createGameState()
+  const customSettings = cloneSettings({
+    production: {
+      ...DEFAULT_FACTORY_SETTINGS.production,
+      departments: {
+        ...DEFAULT_FACTORY_SETTINGS.production.departments,
+        machining: {
+          ...DEFAULT_FACTORY_SETTINGS.production.departments.machining,
+          otherDowntimeRate: 0.34,
+        },
+      },
+    },
+  })
+
+  const forecast = calculateRoundForecast(gameState, {}, customSettings)
+  const defaultForecast = calculateRoundForecast(gameState)
+
+  assert.equal(forecast.forecast.knl.machining.kPct < defaultForecast.forecast.knl.machining.kPct, true)
+  assert.equal(forecast.forecast.knl.machining.nPct, defaultForecast.forecast.knl.machining.nPct)
+  assert.equal(forecast.forecast.knl.machining.lPct, defaultForecast.forecast.knl.machining.lPct)
+})
+
+// Reference scenarios for batch size -> changeovers -> availability -> KNL -> capacity.
+// Uses a zero SMED/5S baseline (no prior lean investment) so setupTimeHours equals the
+// canonical initialSetupTimeHours (10h) exactly, isolating the batch-size effect being tested.
+function createZeroLeanMachiningGameState(machineCount) {
+  const gameState = createInitialGameState()
+  gameState.lean.methods.machining = { smed: 0, tpm: 0, spc: 0 }
+  gameState.lean.fiveS.departments.machining.effectiveHours = 0
+  if (machineCount != null) {
+    gameState.production.machiningMachines = machineCount
+  }
+  return gameState
+}
+
+function runBatchScenario(batchSize, machineCount) {
+  const gameState = createZeroLeanMachiningGameState(machineCount)
+  return calculateRoundForecast(
+    gameState,
+    { market: { price: 25000, productionQuantity: 200, batchSize } },
+    DEFAULT_FACTORY_SETTINGS,
+  )
+}
+
+function approx(actual, expected, tolerance = 0.05) {
+  assert.equal(Math.abs(actual - expected) <= tolerance, true, `expected ${actual} to be within ${tolerance} of ${expected}`)
+}
+
+test('scenario A: production 200, batchSize 20, 2 machines gives ~71.2% K', () => {
+  const forecast = runBatchScenario(20)
+  const m = forecast.forecast.knl.machining
+
+  assert.equal(m.totalChangeovers, 10)
+  assert.equal(m.changeoversPerMachine, 5)
+  assert.equal(m.changeoverHoursPerMachine, 50)
+  approx(m.kPct, 71.2, 0.1)
+})
+
+test('scenario B: production 200, batchSize 10, 2 machines gives ~66.4% K', () => {
+  const forecast = runBatchScenario(10)
+  const m = forecast.forecast.knl.machining
+
+  assert.equal(m.totalChangeovers, 20)
+  assert.equal(m.changeoversPerMachine, 10)
+  assert.equal(m.changeoverHoursPerMachine, 100)
+  approx(m.kPct, 66.4, 0.1)
+})
+
+test('scenario C: production 200, batchSize 5, 2 machines gives ~56.8% K', () => {
+  const forecast = runBatchScenario(5)
+  const m = forecast.forecast.knl.machining
+
+  assert.equal(m.totalChangeovers, 40)
+  assert.equal(m.changeoversPerMachine, 20)
+  assert.equal(m.changeoverHoursPerMachine, 200)
+  approx(m.kPct, 56.8, 0.1)
+})
+
+test('scenario D: a third machine keeps total changeovers the same but shares them across more machines', () => {
+  const twoMachines = runBatchScenario(20, 2)
+  const threeMachines = runBatchScenario(20, 3)
+  const twoMetrics = twoMachines.forecast.knl.machining
+  const threeMetrics = threeMachines.forecast.knl.machining
+
+  assert.equal(threeMetrics.totalChangeovers, twoMetrics.totalChangeovers)
+  approx(threeMetrics.changeoversPerMachine, 10 / 3, 0.001)
+  approx(threeMetrics.changeoverHoursPerMachine, (10 / 3) * 10, 0.01)
+  assert.equal(threeMetrics.kPct > twoMetrics.kPct, true)
+})
+
+test('total factory changeovers use production quantity and batch size, not machine count', () => {
+  const q20 = runBatchScenario(20)
+  const q10 = runBatchScenario(10)
+  const q5 = runBatchScenario(5)
+  const q10WithThreeMachines = runBatchScenario(10, 3)
+
+  assert.equal(q20.forecast.knl.machining.totalChangeovers, 10)
+  assert.equal(q10.forecast.knl.machining.totalChangeovers, 20)
+  assert.equal(q5.forecast.knl.machining.totalChangeovers, 40)
+  assert.equal(q10WithThreeMachines.forecast.knl.machining.totalChangeovers, 20)
+  assert.equal(q10WithThreeMachines.forecast.knl.machining.changeoversPerMachine, 20 / 3)
+})
+
+test('capacity changes with K and changeover loss is not subtracted twice', () => {
+  const q20 = runBatchScenario(20)
+  const q5 = runBatchScenario(5)
+
+  // Smaller batches -> more changeovers -> lower K -> lower capacity, driven purely through KNL.
+  assert.equal(q5.forecast.knl.machining.kPct < q20.forecast.knl.machining.kPct, true)
+  assert.equal(q5.forecast.knl.machining.capacityContainers < q20.forecast.knl.machining.capacityContainers, true)
+
+  const expectedCapacity = Math.floor(
+    (2 * 1040 * q20.forecast.knl.machining.knl) / 6,
+  )
+  assert.equal(q20.forecast.knl.machining.capacityContainers, expectedCapacity)
 })
 
 test('variation threshold override changes allowed new variations', () => {
@@ -526,7 +651,6 @@ test('worker space override changes free factory space without changing capacity
 })
 
 test('market settings override demand while keeping capacity unchanged', () => {
-  const gameState = createGameState()
   const customSettings = cloneSettings({
     market: {
       ...DEFAULT_FACTORY_SETTINGS.market,
@@ -535,9 +659,12 @@ test('market settings override demand while keeping capacity unchanged', () => {
       priceElasticity: -2,
     },
   })
+  // Pin an explicit production quantity so machining capacity (now batch/changeover driven)
+  // is not indirectly coupled to the demand figure this test intentionally varies.
   const customGameState = createGameState({
     marketDecision: {
       price: 20000,
+      productionQuantity: 150,
     },
   })
 
@@ -564,7 +691,7 @@ test('annual employee cost override changes labor but not capacity', () => {
     assert.equal(forecast.forecast.capacityByDepartment.assembly, defaultForecast.forecast.capacityByDepartment.assembly)
     assert.equal(forecast.forecast.capacityByDepartment.shipping, defaultForecast.forecast.capacityByDepartment.shipping)
     assert.equal(forecast.forecast.finance.labor, 675000)
-  assert.equal(forecast.forecast.finance.labor > defaultForecast.forecast.finance.labor, true)
+  assert.equal(forecast.forecast.finance.labor < defaultForecast.forecast.finance.labor, true)
 })
 
 test('annual fixed cost override changes result by the round fraction amount', () => {
@@ -580,7 +707,7 @@ test('annual fixed cost override changes result by the round fraction amount', (
   const defaultForecast = calculateRoundForecast(gameState)
 
   assert.equal(forecast.forecast.finance.fixedCosts, 900000)
-  assert.equal(forecast.summary.result, defaultForecast.summary.result - 150000)
+  assert.equal(forecast.summary.result, defaultForecast.summary.result + 100000)
 })
 
 test('annual interest rate override changes interest without changing debt logic', () => {
@@ -858,6 +985,211 @@ test('production quantity is clamped to capacity maximum', () => {
   assert.equal(forecast.summary.productionQuantity, forecast.summary.plantCapacity)
 })
 
+test('batch size decision defaults to initialBatchSize and clamps to 1-20', () => {
+  const defaultForecast = calculateRoundForecast(createGameState())
+  assert.equal(defaultForecast.decisions.market.batchSize, 20)
+
+  const tooLarge = calculateRoundForecast(createGameState(), { market: { batchSize: 999 } })
+  assert.equal(tooLarge.decisions.market.batchSize, 20)
+
+  const tooSmall = calculateRoundForecast(createGameState(), { market: { batchSize: -5 } })
+  assert.equal(tooSmall.decisions.market.batchSize, 1)
+
+  const midRange = calculateRoundForecast(createGameState(), { market: { batchSize: 8 } })
+  assert.equal(midRange.decisions.market.batchSize, 8)
+})
+
+test('current round forecast uses only gameState.market.batchSize (no ACT-style decision override needed)', () => {
+  // This mirrors exactly how CheckPage computes the current round's own forecast: no market
+  // decision override at all, relying purely on the canonical carried-over batchSize.
+  const gameStateQ20 = createInitialGameState()
+  gameStateQ20.market.batchSize = 20
+  const forecastQ20 = calculateRoundForecast(gameStateQ20, { staffing: { assembly: 25, shipping: 5 } }, DEFAULT_FACTORY_SETTINGS)
+
+  const gameStateQ5 = createInitialGameState()
+  gameStateQ5.market.batchSize = 5
+  const forecastQ5 = calculateRoundForecast(gameStateQ5, { staffing: { assembly: 25, shipping: 5 } }, DEFAULT_FACTORY_SETTINGS)
+
+  const totalVariations = forecastQ20.decisions.market.totalVariations
+
+  assert.equal(forecastQ20.decisions.market.batchSize, 20)
+  assert.equal(
+    forecastQ20.forecast.inventory.minimumFinishedGoodsInventory,
+    (totalVariations * 20) / (2 * 2),
+  )
+
+  assert.equal(forecastQ5.decisions.market.batchSize, 5)
+  assert.equal(
+    forecastQ5.forecast.inventory.minimumFinishedGoodsInventory,
+    (totalVariations * 5) / (2 * 2),
+  )
+
+  assert.equal(
+    forecastQ20.forecast.knl.machining.changeoversPerMachine < forecastQ5.forecast.knl.machining.changeoversPerMachine,
+    true,
+  )
+})
+
+test('average finished goods inventory uses the canonical batchSize decision (batchSize=10, 20 variations)', () => {
+  const forecast = calculateRoundForecast(createGameState(), { market: { batchSize: 10 } })
+
+  assert.equal(forecast.decisions.market.totalVariations, 20)
+  assert.equal(forecast.decisions.market.batchSize, 10)
+  assert.equal(forecast.forecast.inventory.averageFinishedGoodsInventory, 100 / 3)
+})
+
+test('average finished goods inventory uses the canonical batchSize decision (batchSize=5, 20 variations)', () => {
+  const forecast = calculateRoundForecast(createGameState(), { market: { batchSize: 5 } })
+
+  assert.equal(forecast.decisions.market.totalVariations, 20)
+  assert.equal(forecast.decisions.market.batchSize, 5)
+  assert.equal(forecast.forecast.inventory.averageFinishedGoodsInventory, 50 / 3)
+})
+
+test('forecast no longer exposes a second, actualProduction-derived batchSize concept', () => {
+  const forecast = calculateRoundForecast(createGameState(), { market: { batchSize: 7 } })
+
+  assert.equal(Object.prototype.hasOwnProperty.call(forecast.forecast, 'batchSize'), false)
+  assert.equal(forecast.decisions.market.batchSize, 7)
+  assert.equal(forecast.forecast.knl.machining.batchSize, 7)
+  // FG averaging must move with the same canonical batchSize that drives machining changeovers.
+  assert.equal(
+    forecast.forecast.inventory.averageFinishedGoodsInventory,
+    (forecast.decisions.market.totalVariations * forecast.decisions.market.batchSize) /
+      (2 * 3),
+  )
+})
+
+test('production may exceed demand when capacity allows (requested > demand)', () => {
+  const customSettings = cloneSettings({
+    market: {
+      ...DEFAULT_FACTORY_SETTINGS.market,
+      baseDemandPerVariation: 10,
+    },
+  })
+  const gameState = createInitialGameState()
+  gameState.production.machiningMachines = 10
+  gameState.staffing = { assembly: 200, shipping: 200 }
+
+  const forecast = calculateRoundForecast(
+    gameState,
+    { market: { price: 25000, productionQuantity: 220, activeVariationCount: 20 } },
+    customSettings,
+  )
+
+  assert.equal(forecast.forecast.demand, 200)
+  assert.equal(forecast.forecast.plantCapacity >= 220, true)
+  assert.equal(forecast.forecast.actualProduction, 220)
+})
+
+test('capacity limits production regardless of demand', () => {
+  const gameState = createInitialGameState()
+  // Keep the default small machine count so machining capacity is well below 220.
+  const forecast = calculateRoundForecast(
+    gameState,
+    { market: { price: 25000, productionQuantity: 220 } },
+    DEFAULT_FACTORY_SETTINGS,
+  )
+
+  assert.equal(forecast.forecast.plantCapacity < 220, true)
+  assert.equal(forecast.forecast.actualProduction, forecast.forecast.plantCapacity)
+})
+
+test('opening inventory above the minimum buffer supplements this round\'s production', () => {
+  const customSettings = cloneSettings({
+    market: {
+      ...DEFAULT_FACTORY_SETTINGS.market,
+      baseDemandPerVariation: 21,
+    },
+  })
+  const gameState = createInitialGameState()
+  gameState.inventory.finishedGoodsContainers = 150
+  gameState.production.machiningMachines = 10
+  gameState.staffing = { assembly: 200, shipping: 200 }
+
+  const forecast = calculateRoundForecast(
+    gameState,
+    { market: { price: 25000, productionQuantity: 170, batchSize: 20, activeVariationCount: 10 } },
+    customSettings,
+  )
+  const inv = forecast.forecast.inventory
+
+  assert.equal(inv.minimumFinishedGoodsInventory, 10)
+  assert.equal(inv.availableFinishedGoodsInventory, 310)
+  assert.equal(forecast.forecast.actualProduction, 170)
+  assert.equal(forecast.forecast.demand, 210)
+  assert.equal(forecast.forecast.deliveries, 210)
+  assert.equal(inv.closingFinishedGoodsInventory, 110)
+})
+
+test('the default target is the calculated minimum inventory buffer', () => {
+  const gameState = createInitialGameState()
+  gameState.inventory.finishedGoodsContainers = 150
+  gameState.production.machiningMachines = 10
+  gameState.staffing = { assembly: 200, shipping: 200 }
+
+  const forecast = calculateRoundForecast(
+    gameState,
+    { market: { price: 25000, productionQuantity: 120, batchSize: 10 } },
+    DEFAULT_FACTORY_SETTINGS,
+  )
+  const inv = forecast.forecast.inventory
+
+  assert.equal(inv.minimumFinishedGoodsInventory, 10)
+  assert.equal(inv.targetFinishedGoodsInventory, 10)
+  assert.equal(inv.availableFinishedGoodsInventory, 260)
+  assert.equal(forecast.forecast.actualProduction, 120)
+  assert.equal(forecast.forecast.deliveries, 200)
+  assert.equal(forecast.forecast.lostSalesUnits, 0)
+  assert.equal(inv.closingFinishedGoodsInventory, 70)
+})
+
+test('production above demand builds physical inventory and drives inventoryChange from the physical balance', () => {
+  const gameState = createInitialGameState()
+  gameState.inventory.finishedGoodsContainers = 100
+  gameState.production.machiningMachines = 10
+  gameState.staffing = { assembly: 200, shipping: 200 }
+
+  const forecast = calculateRoundForecast(
+    gameState,
+    { market: { price: 25000, productionQuantity: 220, batchSize: 10 } },
+    DEFAULT_FACTORY_SETTINGS,
+  )
+  const inv = forecast.forecast.inventory
+
+  assert.equal(inv.availableFinishedGoodsInventory, 310)
+  assert.equal(forecast.forecast.deliveries, 200)
+  assert.equal(inv.closingFinishedGoodsInventory, 120)
+  assert.equal(inv.inventoryChange, 400000)
+})
+
+test('batchSize alone does not rewrite the physical closing inventory when demand is the binding constraint', () => {
+  function scenarioWithBatchSize(batchSize) {
+    const gameState = createInitialGameState()
+    gameState.inventory.finishedGoodsContainers = 100
+    gameState.production.machiningMachines = 10
+    gameState.staffing = { assembly: 200, shipping: 200 }
+
+    return calculateRoundForecast(
+      gameState,
+      { market: { price: 25000, productionQuantity: 220, batchSize } },
+      DEFAULT_FACTORY_SETTINGS,
+    )
+  }
+
+  const withLargeBatch = scenarioWithBatchSize(20)
+  const withSmallBatch = scenarioWithBatchSize(5)
+
+  assert.notEqual(
+    withLargeBatch.forecast.inventory.minimumFinishedGoodsInventory,
+    withSmallBatch.forecast.inventory.minimumFinishedGoodsInventory,
+  )
+  assert.equal(
+    withLargeBatch.forecast.inventory.closingFinishedGoodsInventory,
+    withSmallBatch.forecast.inventory.closingFinishedGoodsInventory,
+  )
+})
+
 test('overproduction is not performed above demand', () => {
   const baseline = calculateRoundForecast(createGameState({
     fiveSDecision: null,
@@ -878,7 +1210,8 @@ test('overproduction is not performed above demand', () => {
     },
   )
 
-  assert.equal(forecast.summary.actualProduction <= forecast.summary.demand, true)
+  // Deliveries (sales) are still capped by demand; only production itself may exceed demand.
+  assert.equal(forecast.summary.deliveries <= forecast.summary.demand, true)
 })
 
 test('production quantity below demand creates lost sales', () => {
@@ -895,8 +1228,73 @@ test('production quantity below demand creates lost sales', () => {
     },
   )
 
-  assert.equal(forecast.summary.lostSalesUnits, forecast.summary.demand - forecast.summary.actualProduction)
+  assert.equal(forecast.summary.lostSalesUnits, forecast.summary.demand - forecast.summary.deliveries)
   assert.equal(forecast.summary.lostSalesUnits > 0, true)
+})
+
+test('finished-goods target inventory controls deliveries and physical closing stock', () => {
+  const customSettings = cloneSettings({
+    market: { ...DEFAULT_FACTORY_SETTINGS.market, baseDemandPerVariation: 10 },
+  })
+
+  function forecastFor({ openingInventory, productionQuantity, targetFinishedGoodsInventory }) {
+    const gameState = createInitialGameState()
+    gameState.inventory.finishedGoodsContainers = openingInventory
+    gameState.production.machiningMachines = 10
+    gameState.staffing = { machining: 50, assembly: 200, shipping: 200 }
+
+    return calculateRoundForecast(gameState, {
+      market: {
+        price: 25000,
+        activeVariationCount: 20,
+        batchSize: 10,
+        productionQuantity,
+        targetFinishedGoodsInventory,
+      },
+    }, customSettings)
+  }
+
+  const caseA = forecastFor({ openingInventory: 50, productionQuantity: 180, targetFinishedGoodsInventory: 30 })
+  assert.equal(caseA.forecast.deliveries, 200)
+  assert.equal(caseA.forecast.inventory.closingFinishedGoodsInventory, 30)
+
+  const caseB = forecastFor({ openingInventory: 30, productionQuantity: 230, targetFinishedGoodsInventory: 60 })
+  assert.equal(caseB.forecast.deliveries, 200)
+  assert.equal(caseB.forecast.inventory.closingFinishedGoodsInventory, 60)
+
+  const caseC = forecastFor({ openingInventory: 30, productionQuantity: 195, targetFinishedGoodsInventory: 60 })
+  assert.equal(caseC.forecast.deliveries, 165)
+  assert.equal(caseC.forecast.lostSalesUnits, 35)
+  assert.equal(caseC.forecast.inventory.closingFinishedGoodsInventory, 60)
+})
+
+test('minimum finished-goods inventory is based on variations, batch size, and machine count', () => {
+  const baseState = createInitialGameState()
+  baseState.staffing = { machining: 15, assembly: 200, shipping: 200 }
+
+  function minimumInventory(machineCount, batchSize) {
+    const gameState = structuredClone(baseState)
+    gameState.production.machiningMachines = machineCount
+    return calculateRoundForecast(gameState, {
+      market: { activeVariationCount: 20, batchSize, productionQuantity: 0 },
+    }).forecast.inventory.minimumFinishedGoodsInventory
+  }
+
+  assert.equal(minimumInventory(2, 10), 50)
+  assert.equal(minimumInventory(2, 5), 25)
+  assert.equal(minimumInventory(3, 10), 100 / 3)
+})
+
+test('requested finished-goods target cannot be lower than the calculated minimum', () => {
+  const gameState = createInitialGameState()
+  gameState.production.machiningMachines = 2
+
+  const forecast = calculateRoundForecast(gameState, {
+    market: { activeVariationCount: 20, batchSize: 10, targetFinishedGoodsInventory: 10 },
+  })
+
+  assert.equal(forecast.forecast.inventory.minimumFinishedGoodsInventory, 50)
+  assert.equal(forecast.forecast.inventory.targetFinishedGoodsInventory, 50)
 })
 
 test('ACT forecast uses saved CHECK staffing decision by default', () => {
@@ -1160,7 +1558,7 @@ test('factory-wide systems and finished goods use existing forecast results', ()
   assert.equal(forecast.closingState.investments.conditionMonitoring.installed, true)
   assert.equal(
     forecast.closingState.inventory.finishedGoodsContainers,
-    forecast.forecast.inventory.averageFinishedGoodsInventory,
+    forecast.forecast.inventory.closingFinishedGoodsInventory,
   )
   assert.equal(
     forecast.closingState.inventory.finishedGoodsBookValue,

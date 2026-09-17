@@ -86,7 +86,9 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
     )
 
     const initialProductionQuantity =
-      actDecision?.productionQuantity ?? Math.min(baseForecast.summary.demand, baseForecast.summary.plantCapacity)
+      actDecision?.productionQuantity ??
+      gameState.market?.productionQuantity ??
+      Math.min(baseForecast.summary.demand, baseForecast.summary.plantCapacity)
 
     setPrice(initialPrice)
     setAddedVariations(initialAddedVariations)
@@ -336,7 +338,6 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
             <h2>Varasto</h2>
             <p>Variaatiot: {forecast.decisions.market.totalVariations}</p>
             <p>Tuotantoajot / variaatio: {forecast.decisions.market.runsPerVariation}</p>
-            <p>Eräkoko: {formatContainers(forecast.forecast.batchSize)}</p>
             <p>
               Keskimääräinen valmistuotevarasto: {formatContainers(forecast.forecast.inventory.averageFinishedGoodsInventory)}
             </p>

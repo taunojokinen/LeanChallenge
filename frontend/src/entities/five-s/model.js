@@ -1,4 +1,5 @@
 import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
+import { resolveDevelopmentLevel } from '../forecast/knlDevelopment.js'
 
 const INTEGER_FORMATTER = new Intl.NumberFormat('fi-FI', {
   maximumFractionDigits: 0,
@@ -47,7 +48,7 @@ function toNumber(value, fallback = 0) {
 }
 
 function formatLevel(value) {
-  return `${DECIMAL_FORMATTER.format(value)} / 5`
+  return `Taso ${INTEGER_FORMATTER.format(value)}`
 }
 
 function formatHours(value) {
@@ -82,6 +83,10 @@ function calculateUsedFocusHours(investedHours) {
 
 function resolveFiveSSettings(factorySettings = DEFAULT_FACTORY_SETTINGS) {
   return factorySettings?.lean?.fiveS ?? DEFAULT_FACTORY_SETTINGS.lean.fiveS
+}
+
+function resolveDevelopmentLevelSettings(factorySettings = DEFAULT_FACTORY_SETTINGS) {
+  return factorySettings?.lean?.developmentLevel ?? DEFAULT_FACTORY_SETTINGS.lean.developmentLevel
 }
 
 export function getFiveSLevel(effectiveHours, factorySettings = DEFAULT_FACTORY_SETTINGS) {
@@ -168,6 +173,7 @@ export function isFocusBudgetValid(investedHours, focusBudgetHours) {
 
 export function buildFiveSViewModel(snapshot, decision, selectedInvestedHours, factorySettings = DEFAULT_FACTORY_SETTINGS) {
   const settings = resolveFiveSSettings(factorySettings)
+  const developmentLevelSettings = resolveDevelopmentLevelSettings(factorySettings)
   const investedHours = normalizeInvestedHours(selectedInvestedHours ?? decision?.investedHours)
   const usedFocusHours = calculateUsedFocusHours(investedHours)
   const focusBudgetHours = sanitizeHours(snapshot.focusBudgetHours)
@@ -181,7 +187,11 @@ export function buildFiveSViewModel(snapshot, decision, selectedInvestedHours, f
       settings.maxHours ?? FIVE_S_MAX_EFFECTIVE_HOURS,
     )
     const state = calculateNextFiveSState(currentEffectiveHours, investedHours[department.key] ?? 0, factorySettings)
-    const levelDelta = roundToOneDecimal(state.nextLevel - state.currentLevel)
+    // Displayed level uses the shared canonical development-level helper (baseHours/multiplier),
+    // not the old fixed 0-5 threshold table - it never feeds back into the KNL calculation.
+    const currentLevel = resolveDevelopmentLevel(state.currentEffectiveHours, developmentLevelSettings)
+    const nextLevel = resolveDevelopmentLevel(state.nextEffectiveHours, developmentLevelSettings)
+    const levelDelta = nextLevel - currentLevel
 
     return {
       key: department.key,
@@ -192,13 +202,13 @@ export function buildFiveSViewModel(snapshot, decision, selectedInvestedHours, f
       currentEffectiveHoursText: formatHours(state.currentEffectiveHours),
       nextEffectiveHours: state.nextEffectiveHours,
       nextEffectiveHoursText: formatHours(roundToOneDecimal(state.nextEffectiveHours)),
-      currentLevel: state.currentLevel,
-      currentLevelText: formatLevel(roundToOneDecimal(state.currentLevel)),
-      nextLevel: state.nextLevel,
-      nextLevelText: formatLevel(roundToOneDecimal(state.nextLevel)),
+      currentLevel,
+      currentLevelText: formatLevel(currentLevel),
+      nextLevel,
+      nextLevelText: formatLevel(nextLevel),
       levelDelta,
       levelDeltaText: formatLevelDelta(levelDelta),
-      impactCategory: getFiveSImpactCategory(state.currentLevel, state.nextLevel),
+      impactCategory: getFiveSImpactCategory(currentLevel, nextLevel),
       weight: Number(department.weight) || 0,
     }
   })

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { DEFAULT_FACTORY_SETTINGS } from './defaultFactorySettings.js'
 import { createInitialGameState } from './initialGameState.js'
 import { calculateRoundForecast } from '../forecast/model.js'
+import { getFiveSLevel } from '../five-s/model.js'
 
 function cloneSettings(overrides = {}) {
   return {
@@ -10,6 +11,43 @@ function cloneSettings(overrides = {}) {
     ...overrides,
   }
 }
+
+// Regression: a brand new game must start with 0h of 5S investment in every department
+// (the old 569/747/417 figures were leftover seed data from the pre-hours KNL model).
+test('a new game starts with 0h of 5S in every department, at level 0', () => {
+  const initialGameState = createInitialGameState()
+  const departments = initialGameState.lean.fiveS.departments
+
+  assert.equal(departments.machining.effectiveHours, 0)
+  assert.equal(departments.assembly.effectiveHours, 0)
+  assert.equal(departments.shipping.effectiveHours, 0)
+
+  assert.equal(getFiveSLevel(departments.machining.effectiveHours), 0)
+  assert.equal(getFiveSLevel(departments.assembly.effectiveHours), 0)
+  assert.equal(getFiveSLevel(departments.shipping.effectiveHours), 0)
+})
+
+test('a new game with no 5S investment yet does not develop K/N/L through the 5S channel', () => {
+  const forecast = calculateRoundForecast(createInitialGameState())
+
+  assert.deepEqual(forecast.forecast.knl.machining.developmentHours.N_machining, 0)
+})
+
+test('100h of machining 5S investment on a zero-baseline game splits into exact thirds for K/N/L', () => {
+  const gameState = createInitialGameState()
+  gameState.lean.methods.machining = { smed: 0, tpm: 0, spc: 0 }
+  gameState.fiveSDecision = {
+    round: gameState.round,
+    investedHours: { machining: 100, assembly: 0, shipping: 0 },
+  }
+
+  const forecast = calculateRoundForecast(gameState)
+  const hours = forecast.forecast.knl.machining.developmentHours
+
+  assert.equal(Math.abs(hours.K_machining - 100 / 3) < 1e-9, true)
+  assert.equal(Math.abs(hours.N_machining - 100 / 3) < 1e-9, true)
+  assert.equal(Math.abs(hours.L_machining - 100 / 3) < 1e-9, true)
+})
 
 test('createInitialGameState clones the default initial state', () => {
   const initialGameState = createInitialGameState()
@@ -90,7 +128,7 @@ test('createInitialGameState returns deep immutable clones per call', () => {
   assert.equal(DEFAULT_FACTORY_SETTINGS.initialState.staffing.assembly, 38)
   assert.equal(
     DEFAULT_FACTORY_SETTINGS.initialState.lean.fiveS.departments.machining.effectiveHours,
-    569,
+    0,
   )
   assert.deepStrictEqual(
     DEFAULT_FACTORY_SETTINGS.initialState.investments.setupAutomation.installedMachineIds,
@@ -99,7 +137,7 @@ test('createInitialGameState returns deep immutable clones per call', () => {
 
   assert.equal(stateB.market.price, 25000)
   assert.equal(stateB.staffing.assembly, 38)
-  assert.equal(stateB.lean.fiveS.departments.machining.effectiveHours, 569)
+  assert.equal(stateB.lean.fiveS.departments.machining.effectiveHours, 0)
   assert.deepStrictEqual(stateB.investments.setupAutomation.installedMachineIds, [])
 })
 

@@ -36,7 +36,9 @@ test('no runtime history selects round -1 and round 0', () => {
 
   assert.equal(cockpit.previousConfirmedRound, -1)
   assert.equal(cockpit.confirmedRound, 0)
-  assert.ok(cockpit.gauges.every((gauge) => gauge.change < 0))
+  // Canonical hours-based KNL development model (2026-09): round-0 K/N/L no longer uniformly
+  // trail the hardcoded round -1 history row, so the sign of each gauge's change is no longer
+  // guaranteed; the values themselves must still match the computed round-0 forecast exactly.
   assert.deepEqual(cockpit.gauges.map((gauge) => gauge.value), [roundZero.kPct, roundZero.nPct, roundZero.lPct])
   assert.equal(cockpit.departments[0].metrics.K.previous, 89)
   assert.equal(cockpit.departments[1].metrics.K.previous, 83)

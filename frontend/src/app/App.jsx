@@ -216,11 +216,10 @@ function App() {
         ) : pageKey === 'plan-income' ? (
           <PlanIncomePage
             gameState={gameState}
-            forecast={baseForecast}
             factorySettings={DEFAULT_FACTORY_SETTINGS}
           />
         ) : pageKey === 'do-5s' ? (
-          <FiveSPage round={gameState.round} />
+          <FiveSPage gameState={gameState} round={gameState.round} factorySettings={DEFAULT_FACTORY_SETTINGS} />
         ) : pageKey === 'do-projects' ? (
           <ProjectsPage round={gameState.round} />
         ) : pageKey === 'do-investments' ? (

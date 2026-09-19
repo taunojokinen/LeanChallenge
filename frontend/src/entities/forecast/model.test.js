@@ -306,7 +306,10 @@ test('5S divisor override changes forecast KNL without changing demand inputs di
   const forecast = calculateRoundForecast(gameState, {}, customSettings)
   const defaultForecast = calculateRoundForecast(gameState)
 
-  assert.notEqual(forecast.forecast.knl.machining.knl, defaultForecast.forecast.knl.machining.knl)
+  // 2026-09 KNL rework: 5S hours are now split into exact thirds across K/N/L (spec-mandated,
+  // not configurable), so contributionDivisor no longer feeds the canonical KNL calculation.
+  // It still affects the (separate, out-of-scope) allowed-new-variations quality average.
+  assert.equal(forecast.forecast.knl.machining.knl, defaultForecast.forecast.knl.machining.knl)
   assert.notEqual(forecast.forecast.knl.totalQualityAverage, defaultForecast.forecast.knl.totalQualityAverage)
   assert.equal(forecast.forecast.demand, defaultForecast.forecast.demand)
 })
@@ -353,7 +356,7 @@ test('TPM initial downtime rate no longer double-counts against the explicit mac
   assert.equal(forecast.forecast.knl.machining.lPct, defaultForecast.forecast.knl.machining.lPct)
 })
 
-test('machining otherDowntimeRate override changes K directly', () => {
+test('machining otherDowntimeRate override no longer affects K (removed in the 2026-09 KNL rework)', () => {
   const gameState = createGameState()
   const customSettings = cloneSettings({
     production: {
@@ -371,7 +374,9 @@ test('machining otherDowntimeRate override changes K directly', () => {
   const forecast = calculateRoundForecast(gameState, {}, customSettings)
   const defaultForecast = calculateRoundForecast(gameState)
 
-  assert.equal(forecast.forecast.knl.machining.kPct < defaultForecast.forecast.knl.machining.kPct, true)
+  // K_machining is now derived from cumulative development hours (knl.baseline.K_machining +
+  // knl.knlMaximum/knlHalfLifeHours), not from production.departments.machining.otherDowntimeRate.
+  assert.equal(forecast.forecast.knl.machining.kPct, defaultForecast.forecast.knl.machining.kPct)
   assert.equal(forecast.forecast.knl.machining.nPct, defaultForecast.forecast.knl.machining.nPct)
   assert.equal(forecast.forecast.knl.machining.lPct, defaultForecast.forecast.knl.machining.lPct)
 })
@@ -402,34 +407,34 @@ function approx(actual, expected, tolerance = 0.05) {
   assert.equal(Math.abs(actual - expected) <= tolerance, true, `expected ${actual} to be within ${tolerance} of ${expected}`)
 }
 
-test('scenario A: production 200, batchSize 20, 2 machines gives ~71.2% K', () => {
+test('scenario A: production 200, batchSize 20, 2 machines gives ~72.3% K', () => {
   const forecast = runBatchScenario(20)
   const m = forecast.forecast.knl.machining
 
   assert.equal(m.totalChangeovers, 10)
   assert.equal(m.changeoversPerMachine, 5)
   assert.equal(m.changeoverHoursPerMachine, 50)
-  approx(m.kPct, 71.2, 0.1)
+  approx(m.kPct, 72.346, 0.01)
 })
 
-test('scenario B: production 200, batchSize 10, 2 machines gives ~66.4% K', () => {
+test('scenario B: production 200, batchSize 10, 2 machines gives ~68.7% K', () => {
   const forecast = runBatchScenario(10)
   const m = forecast.forecast.knl.machining
 
   assert.equal(m.totalChangeovers, 20)
   assert.equal(m.changeoversPerMachine, 10)
   assert.equal(m.changeoverHoursPerMachine, 100)
-  approx(m.kPct, 66.4, 0.1)
+  approx(m.kPct, 68.692, 0.01)
 })
 
-test('scenario C: production 200, batchSize 5, 2 machines gives ~56.8% K', () => {
+test('scenario C: production 200, batchSize 5, 2 machines gives ~61.4% K', () => {
   const forecast = runBatchScenario(5)
   const m = forecast.forecast.knl.machining
 
   assert.equal(m.totalChangeovers, 40)
   assert.equal(m.changeoversPerMachine, 20)
   assert.equal(m.changeoverHoursPerMachine, 200)
-  approx(m.kPct, 56.8, 0.1)
+  approx(m.kPct, 61.385, 0.01)
 })
 
 test('scenario D: a third machine keeps total changeovers the same but shares them across more machines', () => {
@@ -469,6 +474,19 @@ test('capacity changes with K and changeover loss is not subtracted twice', () =
     (2 * 1040 * q20.forecast.knl.machining.knl) / 6,
   )
   assert.equal(q20.forecast.knl.machining.capacityContainers, expectedCapacity)
+})
+
+// K) changeover loss must only ever be applied once: kPct is exactly kChangeoverPct * kMachiningDevelopedPct,
+// with no other field (e.g. a removed otherDowntimeHoursPerMachine) subtracting it again.
+test('K) K_changeover loss is applied exactly once in kPct, no leftover double counting', () => {
+  const forecast = runBatchScenario(10)
+  const m = forecast.forecast.knl.machining
+
+  assert.equal(m.otherDowntimeHoursPerMachine, undefined)
+  assert.equal(
+    Math.abs(m.kPct - (m.kChangeoverPct / 100) * m.kMachiningDevelopedPct) < 1e-9,
+    true,
+  )
 })
 
 test('variation threshold override changes allowed new variations', () => {
@@ -1430,8 +1448,8 @@ test('closing 5S state uses the existing next-state calculation', () => {
     },
   })
 
-  assert.equal(forecast.closingState.lean.fiveS.departments.machining.effectiveHours, 669)
-  assert.equal(forecast.closingState.lean.fiveS.departments.assembly.effectiveHours, 709.65)
+  assert.equal(forecast.closingState.lean.fiveS.departments.machining.effectiveHours, 100)
+  assert.equal(forecast.closingState.lean.fiveS.departments.assembly.effectiveHours, 0)
   assert.equal(forecast.closingState.lean.fiveS.departments.machining.weight, 0.42)
 })
 
@@ -1445,8 +1463,8 @@ test('closing 5S state preserves decay when no investment is made', () => {
     },
   })
 
-  assert.equal(forecast.closingState.lean.fiveS.departments.machining.effectiveHours, 540.55)
-  assert.equal(forecast.closingState.lean.fiveS.departments.assembly.effectiveHours, 709.65)
+  assert.equal(forecast.closingState.lean.fiveS.departments.machining.effectiveHours, 0)
+  assert.equal(forecast.closingState.lean.fiveS.departments.assembly.effectiveHours, 0)
 })
 
 test('closing project methods carry cumulative merged hours', () => {

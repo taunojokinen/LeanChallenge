@@ -5,6 +5,11 @@ import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySett
 import { buildCanonicalCarryoverState } from './carryover.js'
 import { calculateFactoryKnl } from './factoryKnl.js'
 import { calculateKNL } from './knl.js'
+import {
+  calculateDevelopedKnlValue,
+  calculateKChangeover,
+  splitFiveSHoursAcrossKnl,
+} from './knlDevelopment.js'
 
 const HOURS_PER_MACHINE_PER_ROUND = 1040
 const HOURS_PER_WORKER_PER_ROUND = 1040
@@ -318,7 +323,7 @@ function buildProjectsSnapshotFromGameState(gameState, factorySettings) {
   }
 }
 
-function buildFiveSSnapshotFromGameState(gameState, factorySettings) {
+export function buildFiveSSnapshotFromGameState(gameState, factorySettings) {
   const settings = factorySettings ?? DEFAULT_FACTORY_SETTINGS
   const fiveSSettings = settings.lean?.fiveS ?? DEFAULT_FACTORY_SETTINGS.lean.fiveS
   const stateFiveS = gameState.lean?.fiveS ?? {}
@@ -452,14 +457,40 @@ function resolveForecastSnapshotInputs(gameState, factorySettings) {
   }
 }
 
+// Maps a department's project-method hours + its (evenly-thirded) 5S hours onto the
+// department's own K/N/L development-hour buckets. This is the one place that encodes which
+// existing project methods affect which KNL parameter, per the pedagogical mapping that already
+// existed before this rework (TPM -> availability/K, SPC/poka-yoke -> quality/L,
+// method-development -> speed/N). SMED does NOT feed K_machining hours: it only affects
+// setupTimeHours (and, through that, K_changeover) - see calculateSmedChangeoverHours.
+function resolveDepartmentKnlDevelopmentHours({ key, methodHours, fiveSEffectiveHours }) {
+  const fiveSShare = splitFiveSHoursAcrossKnl(fiveSEffectiveHours)
+
+  if (key === 'machining') {
+    return {
+      K: toNumber(methodHours.tpm) + fiveSShare.K,
+      N: fiveSShare.N,
+      L: toNumber(methodHours.spc) + fiveSShare.L,
+      // Tracked only, for visibility of setup/changeover development investment - K_changeover
+      // itself is derived from actual changeover loss, not from these hours.
+      changeoverTrackingHours: toNumber(methodHours.smed),
+    }
+  }
+
+  return {
+    K: toNumber(methodHours.tpm) + fiveSShare.K,
+    N: toNumber(methodHours['method-development']) + fiveSShare.N,
+    L: toNumber(methodHours['poka-yoke']) + fiveSShare.L,
+  }
+}
+
 function calculateDepartmentMetrics({
   key,
   machineCount,
   staffing,
   fiveSEffectiveHours,
   methodHours,
-  changeoversPerMachine,
-  totalChangeovers,
+  requestedProductionQuantity,
   batchSize,
   setupAutomationInstalled,
   conditionMonitoring,
@@ -468,10 +499,12 @@ function calculateDepartmentMetrics({
 }) {
   const productionSettings = settings.production ?? DEFAULT_FACTORY_SETTINGS.production
   const leanSettings = settings.lean ?? DEFAULT_FACTORY_SETTINGS.lean
-  const fiveSSettings = leanSettings.fiveS ?? DEFAULT_FACTORY_SETTINGS.lean.fiveS
   const smedSettings = leanSettings.smed ?? DEFAULT_FACTORY_SETTINGS.lean.smed
-  const qualitySettings = leanSettings.quality ?? DEFAULT_FACTORY_SETTINGS.lean.quality
-  const performanceSettings = leanSettings.performance ?? DEFAULT_FACTORY_SETTINGS.lean.performance
+  const knlSettings = settings.knl ?? DEFAULT_FACTORY_SETTINGS.knl
+  const knlMaximum = toNumber(knlSettings.knlMaximum, 0.95)
+  const knlHalfLifeHours = toNumber(knlSettings.knlHalfLifeHours, 400)
+  const baseline = knlSettings.baseline ?? DEFAULT_FACTORY_SETTINGS.knl.baseline
+
   const machiningNormHoursPerContainer = toNumber(
     productionSettings.departments?.machining?.normHoursPerContainer,
     MACHINING_NORM_HOURS_PER_CONTAINER,
@@ -492,53 +525,66 @@ function calculateDepartmentMetrics({
     productionSettings.hoursPerWorkerPerRound,
     HOURS_PER_WORKER_PER_ROUND,
   )
-  const fiveSContributionDivisor = Math.max(1, toNumber(fiveSSettings.contributionDivisor, 3))
-  const qualityMaxPct = normalizePercentValue(qualitySettings.maxPct, MAX_COMPONENT_PCT)
-  const performanceMaxPct = normalizePercentValue(performanceSettings.maxPerformance, MAX_COMPONENT_PCT)
-  const defaultLearningBasePct = toNumber(performanceSettings.defaultBasePct, 70)
-  const machiningBasePct = normalizePercentValue(performanceSettings.machiningBasePct, 90)
-  const learningCurveHours = toNumber(qualitySettings.curveHours, 1200)
 
-  const fiveSContribution = fiveSEffectiveHours / fiveSContributionDivisor
-  const smedHours = toNumber(methodHours.smed) + fiveSContribution
-  const tpmHours = toNumber(methodHours.tpm) + fiveSContribution
-  const methodDevHours = toNumber(methodHours['method-development']) + fiveSContribution
-  const qualityHours = toNumber(methodHours.spc) + toNumber(methodHours['poka-yoke']) + fiveSContribution
+  const developmentHours = resolveDepartmentKnlDevelopmentHours({ key, methodHours, fiveSEffectiveHours })
+
+  const develop = (paramKey, cumulativeHours) => calculateDevelopedKnlValue({
+    x0: toNumber(baseline[paramKey]),
+    cumulativeHours,
+    knlMaximum,
+    knlHalfLifeHours,
+  })
 
   if (key === 'machining') {
     const averageAutomationReductionMinutes = setupAutomationInstalled
       ? toNumber(smedSettings.automationReductionMinutesPerMachine, 10)
       : 0
-    // Setup time comes from the existing SMED curve; changeover count comes from the batch-size decision.
-    const setupTimeHours = calculateSmedChangeoverHours(smedHours, averageAutomationReductionMinutes, smedSettings)
-    const changeoverHoursPerMachine = changeoversPerMachine * setupTimeHours
-    const otherDowntimeRate = toNumber(productionSettings.departments?.machining?.otherDowntimeRate, 0.24)
-    const otherDowntimeHoursPerMachine = hoursPerMachinePerRound * otherDowntimeRate
-    const rawAvailability = hoursPerMachinePerRound > 0
-      ? (hoursPerMachinePerRound - otherDowntimeHoursPerMachine - changeoverHoursPerMachine) / hoursPerMachinePerRound
-      : 0
+    // Setup time comes from the existing SMED curve (project hours only, no 5S contribution -
+    // 5S must not gain a free share of K_changeover); changeover count comes from the batch size.
+    const setupTimeHours = calculateSmedChangeoverHours(methodHours.smed, averageAutomationReductionMinutes, smedSettings)
 
-    const availabilityPct = clamp(
-      clamp(rawAvailability, 0, 1) * 100 + (conditionMonitoring ? 2 : 0),
+    const {
+      totalChangeovers,
+      totalChangeoverHours,
+      plannedMachineHours,
+      kChangeover,
+    } = calculateKChangeover({
+      productionQuantity: requestedProductionQuantity,
+      batchSize,
+      setupTimeHours,
+      machineCount,
+      plannedHoursPerMachine: hoursPerMachinePerRound,
+    })
+
+    const kMachiningDeveloped = clamp(
+      develop('K_machining', developmentHours.K) + (conditionMonitoring ? 0.02 : 0),
       0,
-      100,
+      1,
     )
-    const speedPct = calculateLearningComponent(machiningBasePct, methodDevHours, performanceMaxPct, learningCurveHours)
-    const qualityPct = clamp(
-      calculateLearningComponent(defaultLearningBasePct, qualityHours, qualityMaxPct, learningCurveHours) + (automaticProcessMeasurement ? 2 : 0),
-      MIN_COMPONENT_PCT,
-      MAX_COMPONENT_PCT,
+    const nMachiningDeveloped = develop('N_machining', developmentHours.N)
+    const lMachiningDeveloped = clamp(
+      develop('L_machining', developmentHours.L) + (automaticProcessMeasurement ? 0.02 : 0),
+      0,
+      1,
     )
 
-    const knl = calculateKNL(availabilityPct, speedPct, qualityPct)
+    // K_machining_total = K_changeover * K_machining (section 9): the changeover loss is only
+    // applied here, once, and never subtracted again elsewhere in capacity/finance.
+    const kMachiningTotalPct = clamp(kChangeover * kMachiningDeveloped, 0, 1) * 100
+    const nPct = clamp(nMachiningDeveloped * 100, 0, 100)
+    const lPct = clamp(lMachiningDeveloped * 100, 0, 100)
+
+    const knl = calculateKNL(kMachiningTotalPct, nPct, lPct)
     const theoreticalCapacityHours = machineCount * hoursPerMachinePerRound
     const effectiveCapacityHours = theoreticalCapacityHours * knl
     const capacityContainers = Math.floor(effectiveCapacityHours / machiningNormHoursPerContainer)
+    const changeoversPerMachine = machineCount > 0 ? totalChangeovers / machineCount : 0
+    const changeoverHoursPerMachine = machineCount > 0 ? totalChangeoverHours / machineCount : 0
 
     return {
-      kPct: availabilityPct,
-      nPct: speedPct,
-      lPct: qualityPct,
+      kPct: kMachiningTotalPct,
+      nPct,
+      lPct,
       knl,
       capacityContainers,
       // changeoverHours keeps its original meaning: per-event setup duration (SMED output), not the per-machine total.
@@ -548,58 +594,71 @@ function calculateDepartmentMetrics({
       changeoversPerMachine,
       setupTimeHours,
       changeoverHoursPerMachine,
-      otherDowntimeHoursPerMachine,
+      kChangeoverPct: kChangeover * 100,
+      kMachiningDevelopedPct: kMachiningDeveloped * 100,
+      plannedMachineHours,
+      totalChangeoverHours,
+      developmentHours: {
+        K_machining: developmentHours.K,
+        N_machining: developmentHours.N,
+        L_machining: developmentHours.L,
+        K_changeover: developmentHours.changeoverTrackingHours,
+      },
     }
   }
 
+  const suffix = key === 'assembly' ? 'assembly' : 'shipping'
+  const kDeveloped = clamp(
+    develop(`K_${suffix}`, developmentHours.K) + (conditionMonitoring ? 0.02 : 0),
+    0,
+    1,
+  )
+  const nDeveloped = develop(`N_${suffix}`, developmentHours.N)
+  const lDeveloped = clamp(
+    develop(`L_${suffix}`, developmentHours.L) + (automaticProcessMeasurement ? 0.02 : 0),
+    0,
+    1,
+  )
+
+  const kPct = clamp(kDeveloped * 100, 0, 100)
+  const nPct = clamp(nDeveloped * 100, 0, 100)
+  const lPct = clamp(lDeveloped * 100, 0, 100)
+  const knl = calculateKNL(kPct, nPct, lPct)
+
   if (key === 'assembly') {
-    const availabilityPct = clamp(
-      calculateLearningComponent(defaultLearningBasePct, smedHours + tpmHours, performanceMaxPct, learningCurveHours) + (conditionMonitoring ? 2 : 0),
-      MIN_COMPONENT_PCT,
-      MAX_COMPONENT_PCT,
-    )
-    const speedPct = calculateLearningComponent(defaultLearningBasePct, methodDevHours, performanceMaxPct, learningCurveHours)
-    const qualityPct = clamp(
-      calculateLearningComponent(defaultLearningBasePct, qualityHours, qualityMaxPct, learningCurveHours) + (automaticProcessMeasurement ? 2 : 0),
-      MIN_COMPONENT_PCT,
-      MAX_COMPONENT_PCT,
-    )
-    const knl = calculateKNL(availabilityPct, speedPct, qualityPct)
     const effectiveHours = staffing.assembly * hoursPerWorkerPerRound * knl
     const capacityContainers = Math.floor(effectiveHours / assemblyNormHoursPerContainer)
 
     return {
-      kPct: availabilityPct,
-      nPct: speedPct,
-      lPct: qualityPct,
+      kPct,
+      nPct,
+      lPct,
       knl,
       capacityContainers,
       changeoverHours: 0,
+      developmentHours: {
+        K_assembly: developmentHours.K,
+        N_assembly: developmentHours.N,
+        L_assembly: developmentHours.L,
+      },
     }
   }
 
-  const availabilityPct = clamp(
-    calculateLearningComponent(defaultLearningBasePct, smedHours + tpmHours, performanceMaxPct, learningCurveHours) + (conditionMonitoring ? 2 : 0),
-    MIN_COMPONENT_PCT,
-    MAX_COMPONENT_PCT,
-  )
-  const speedPct = calculateLearningComponent(defaultLearningBasePct, methodDevHours, performanceMaxPct, learningCurveHours)
-  const qualityPct = clamp(
-    calculateLearningComponent(defaultLearningBasePct, qualityHours, qualityMaxPct, learningCurveHours) + (automaticProcessMeasurement ? 2 : 0),
-    MIN_COMPONENT_PCT,
-    MAX_COMPONENT_PCT,
-  )
-  const knl = calculateKNL(availabilityPct, speedPct, qualityPct)
   const effectiveHours = staffing.shipping * hoursPerWorkerPerRound * knl
   const capacityContainers = Math.floor(effectiveHours / shippingNormHoursPerContainer)
 
   return {
-    kPct: availabilityPct,
-    nPct: speedPct,
-    lPct: qualityPct,
+    kPct,
+    nPct,
+    lPct,
     knl,
     capacityContainers,
     changeoverHours: 0,
+    developmentHours: {
+      K_shipping: developmentHours.K,
+      N_shipping: developmentHours.N,
+      L_shipping: developmentHours.L,
+    },
   }
 }
 
@@ -717,8 +776,6 @@ function calculateScenario({
     ? toNumber(market.batchSize, initialBatchSize)
     : initialBatchSize
   const machiningBatchSize = clamp(Math.round(requestedBatchSize), minBatchSize, maxBatchSize)
-  const totalChangeovers = requestedProductionQuantity / machiningBatchSize
-  const changeoversPerMachine = machineCount > 0 ? totalChangeovers / machineCount : 0
 
   const machiningMetrics = calculateDepartmentMetrics({
     key: 'machining',
@@ -726,8 +783,7 @@ function calculateScenario({
     staffing,
     fiveSEffectiveHours: fiveSHoursByDepartment.machining,
     methodHours: projects.mergedLevels.machining || {},
-    changeoversPerMachine,
-    totalChangeovers,
+    requestedProductionQuantity,
     batchSize: machiningBatchSize,
     setupAutomationInstalled: investments.setupAutomationInstalled,
     conditionMonitoring: investments.conditionMonitoring,

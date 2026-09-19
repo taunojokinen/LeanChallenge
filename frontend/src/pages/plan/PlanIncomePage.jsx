@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { buildIncomeForecastView, buildIncomeStatementRows } from '../../entities/income/model.js'
+import { buildIncomeHistoryView, buildIncomeStatementRows } from '../../entities/income/model.js'
 import { getInitialIncomeHistory } from '../../shared/api/incomeApi.js'
 import { DEFAULT_FACTORY_SETTINGS } from '../../entities/factory-settings/defaultFactorySettings.js'
 import './PlanIncomePage.css'
 
-function PlanIncomePage({ gameState, forecast, factorySettings = DEFAULT_FACTORY_SETTINGS }) {
+function PlanIncomePage({ gameState, factorySettings = DEFAULT_FACTORY_SETTINGS }) {
   const [snapshot, setSnapshot] = useState(null)
 
   useEffect(() => {
@@ -30,16 +30,13 @@ function PlanIncomePage({ gameState, forecast, factorySettings = DEFAULT_FACTORY
       return null
     }
 
-    if (!forecast) {
-      return null
-    }
-
-    return buildIncomeForecastView({
+    // PLAN/Tulos compares the two latest CONFIRMED rounds, same principle as PLAN/Tase -
+    // it must never show the in-progress round's live forecast as if it were confirmed.
+    return buildIncomeHistoryView({
       baselineHistory: snapshot,
       runtimeHistory: gameState.history,
-      forecast,
     })
-  }, [forecast, gameState.history, snapshot])
+  }, [gameState.history, snapshot])
 
   const rows = useMemo(() => (historyView ? buildIncomeStatementRows(historyView) : []), [historyView])
 

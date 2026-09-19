@@ -49,7 +49,35 @@ export const DEFAULT_FACTORY_SETTINGS = {
     },
   },
 
+  // Canonical KNL development curve (shared by all 9 non-changeover K/N/L parameters):
+  // X(H) = knlMaximum - (knlMaximum - X0) * 2 ^ (-H / knlHalfLifeHours)
+  knl: {
+    knlMaximum: 0.95,
+    knlHalfLifeHours: 400,
+    // X0 per parameter. Chosen to match each parameter's previous effective starting value:
+    // K_machining reuses the old otherDowntimeRate-implied baseline (1 - 0.24), N_machining
+    // reuses lean.performance.machiningBasePct, and the rest reuse the shared
+    // lean.performance.defaultBasePct / lean.quality.baseQualityPct (all 0.70).
+    baseline: {
+      K_machining: 0.76,
+      K_assembly: 0.7,
+      K_shipping: 0.7,
+      N_machining: 0.9,
+      N_assembly: 0.7,
+      N_shipping: 0.7,
+      L_machining: 0.7,
+      L_assembly: 0.7,
+      L_shipping: 0.7,
+    },
+  },
+
   lean: {
+    // Shared method-development-level helper (5S, SMED, TPM, ...): purely descriptive, does
+    // not feed into the KNL calculation.
+    developmentLevel: {
+      baseHours: 100,
+      multiplier: 1.5,
+    },
     fiveS: {
       maxHours: 1600,
       contributionDivisor: 3,
@@ -232,17 +260,18 @@ export const DEFAULT_FACTORY_SETTINGS = {
     lean: {
       fiveS: {
         focusBudgetHours: 400,
+        // Canonical 5S starting point for a brand new game: no investment has happened yet.
         departments: {
           machining: {
-            effectiveHours: 569,
+            effectiveHours: 0,
             weight: 0.42,
           },
           assembly: {
-            effectiveHours: 747,
+            effectiveHours: 0,
             weight: 0.35,
           },
           shipping: {
-            effectiveHours: 417,
+            effectiveHours: 0,
             weight: 0.23,
           },
         },

@@ -2,9 +2,17 @@ import { useEffect, useMemo, useState } from 'react'
 import Card from '../../shared/ui/Card/Card.jsx'
 import Button from '../../shared/ui/Button/Button.jsx'
 import { buildFiveSViewModel } from '../../entities/five-s/model.js'
-import { getFiveSSnapshot } from '../../shared/api/fiveSApi.js'
+import { buildFiveSSnapshotFromGameState } from '../../entities/forecast/model.js'
+import { DEFAULT_FACTORY_SETTINGS } from '../../entities/factory-settings/defaultFactorySettings.js'
 import { loadFiveSDecision, saveFiveSDecision } from '../../features/five-s/decisionStore.js'
 import './FiveSPage.css'
+
+// Static presentation copy only (not game data) - the old mock JSON's benefits list.
+const FIVE_S_BENEFITS = [
+  'Vähemmän hukkaa ja etsintää työpisteillä.',
+  'Parempi työympäristö ja selkeämpi tekeminen.',
+  'Jatkuvan parantamisen perusta näkyväksi osaksi arkea.',
+]
 
 const DEPARTMENT_FIELDS = [
   { key: 'machining', label: 'Koneistus' },
@@ -35,46 +43,34 @@ function formatLevelShort(level) {
   })
 }
 
-function FiveSPage({ round }) {
-  const [snapshot, setSnapshot] = useState(null)
+function FiveSPage({ gameState, round, factorySettings = DEFAULT_FACTORY_SETTINGS }) {
   const [investedHours, setInvestedHours] = useState(EMPTY_HOURS)
   const [savedDecision, setSavedDecision] = useState(null)
   const [statusMessage, setStatusMessage] = useState('')
 
   useEffect(() => {
-    let isMounted = true
+    const storedDecision = loadFiveSDecision(round)
 
-    const loadSnapshot = async () => {
-      const data = await getFiveSSnapshot()
-
-      if (!isMounted) {
-        return
-      }
-
-      setSnapshot(data)
-
-      const storedDecision = loadFiveSDecision(round)
-
-      if (storedDecision) {
-        setSavedDecision(storedDecision)
-        setInvestedHours(storedDecision.investedHours)
-      }
-    }
-
-    loadSnapshot()
-
-    return () => {
-      isMounted = false
+    if (storedDecision) {
+      setSavedDecision(storedDecision)
+      setInvestedHours(storedDecision.investedHours)
     }
   }, [round])
 
-  const viewModel = useMemo(() => {
-    if (!snapshot) {
-      return null
-    }
+  // Canonical current/confirmed 5S hours come straight from gameState.lean.fiveS on every
+  // render - never copied into local state as a parallel "current" source of truth.
+  const snapshot = useMemo(
+    () => ({
+      ...buildFiveSSnapshotFromGameState(gameState, factorySettings),
+      benefits: FIVE_S_BENEFITS,
+    }),
+    [gameState, factorySettings],
+  )
 
-    return buildFiveSViewModel(snapshot, savedDecision, investedHours)
-  }, [savedDecision, investedHours, snapshot])
+  const viewModel = useMemo(
+    () => buildFiveSViewModel(snapshot, savedDecision, investedHours, factorySettings),
+    [snapshot, savedDecision, investedHours, factorySettings],
+  )
 
   const updateDepartmentHours = (departmentKey, nextValue) => {
     setInvestedHours((previousValue) => ({
@@ -84,7 +80,7 @@ function FiveSPage({ round }) {
   }
 
   const handleSave = () => {
-    if (!snapshot || !viewModel || !viewModel.focus.canSave) {
+    if (!viewModel.focus.canSave) {
       setStatusMessage('Panostusta ei voi tallentaa, koska osastojen tuntisumma ylittää fokusbudjetin.')
       return
     }
@@ -100,17 +96,6 @@ function FiveSPage({ round }) {
     setSavedDecision(nextDecision)
     setStatusMessage(
       `5S-panostus ${viewModel.focus.usedHoursText} tallennettu kierrokselle ${round}.`,
-    )
-  }
-
-  if (!viewModel) {
-    return (
-      <section className="five-s-page" aria-label="5S-näkymä latautuu">
-        <header className="five-s-header">
-          <h1>5S – Paranna koko tehtaan suorituskykyä</h1>
-          <p>Ladataan 5S-näkymää...</p>
-        </header>
-      </section>
     )
   }
 

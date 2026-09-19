@@ -39,8 +39,9 @@ test('income history starts with canonical rounds -1 and 0', () => {
 
   assert.equal(view.previousRound, -1)
   assert.equal(view.round, 0)
-  assert.equal(rows.find((row) => row.key === 'sales').currentAmount, 174)
-  assert.equal(result.currentAmount, -1684864.375)
+  // Fresh-game 5S baseline is 0h (2026-09 fix), so machining is again the round-0 bottleneck.
+  assert.equal(rows.find((row) => row.key === 'sales').currentAmount, 179)
+  assert.equal(result.currentAmount, -1588614.375)
   assert.equal(financing.currentAmount, -36973.75)
 })
 
@@ -50,16 +51,16 @@ test('actual income API baseline pipeline preserves round zero values', async ()
   const rows = buildIncomeStatementRows(view)
   const values = Object.fromEntries(rows.map((row) => [row.key, row.currentAmount]))
 
-  assert.equal(values.sales, 174)
-  assert.equal(values.revenue, 2906250)
+  assert.equal(values.sales, 179)
+  assert.equal(values.revenue, 3062500)
   assert.equal(values.inventoryChange, 25000)
-  assert.equal(values.materials, -2088000)
+  assert.equal(values.materials, -2148000)
   assert.equal(values.labor, -1391250)
-  assert.equal(values.grossMargin, -548000)
+  assert.equal(values.grossMargin, -451750)
   assert.equal(values.fixedCosts, -1000000)
   assert.equal(values.depreciation, -99890.625)
   assert.equal(values.financingCosts, -36973.75)
-  assert.equal(values.result, -1684864.375)
+  assert.equal(values.result, -1588614.375)
 })
 
 test('PLAN income forecast view exposes the same canonical output used by CHECK preview', () => {
@@ -167,3 +168,24 @@ test('real round-one confirmation selects canonical round zero and runtime round
   assert.equal(view.round, 1)
   assert.equal(rows.find((row) => row.key === 'result').currentAmount, forecast.forecast.finance.result)
 })
+
+// Regression: PLAN/Tulos must compare the two latest CONFIRMED rounds, exactly like PLAN/Tase -
+// it must never show gameState.round's own live (unconfirmed) forecast as "confirmed".
+// General rule: rightRound = max(0, gameState.round - 1); leftRound = rightRound - 1.
+test('PLAN/Tulos with gameState.round=3 compares confirmed rounds 1 and 2, not 2 and 3', () => {
+  const baseline = buildInitialIncomeHistory(createInitialGameState(), DEFAULT_FACTORY_SETTINGS)
+  const view = buildIncomeHistoryView({
+    baselineHistory: baseline,
+    runtimeHistory: [runtimeEntry(1, 111, 210), runtimeEntry(2, 222, 220)],
+  })
+  const rows = buildIncomeStatementRows(view)
+
+  assert.equal(view.previousRound, 1)
+  assert.equal(view.round, 2)
+  // The "current" column's data must come from round 2's own confirmed entry, not a round-3 preview.
+  assert.equal(rows.find((row) => row.key === 'result').currentAmount, 222)
+  assert.equal(rows.find((row) => row.key === 'sales').currentAmount, 220)
+  assert.equal(rows.find((row) => row.key === 'result').previousAmount, 111)
+  assert.equal(rows.find((row) => row.key === 'sales').previousAmount, 210)
+})
+

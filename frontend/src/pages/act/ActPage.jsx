@@ -5,7 +5,7 @@ import { calculateRoundForecast } from '../../entities/forecast/model.js'
 import { loadFiveSDecision } from '../../features/five-s/decisionStore.js'
 import { loadProjectsDecision } from '../../features/projects/decisionStore.js'
 import { loadInvestmentsDecision } from '../../features/investments/decisionStore.js'
-import { loadCheckStaffingDecision } from '../../features/check/decisionStore.js'
+import { loadCheckStaffingDecision, loadCheckProductionDecision } from '../../features/check/decisionStore.js'
 import { loadActDecision, saveActDecision } from '../../features/act/decisionStore.js'
 import './ActPage.css'
 
@@ -51,6 +51,10 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
   const [price, setPrice] = useState(25000)
   const [productionQuantity, setProductionQuantity] = useState(0)
   const [addedVariations, setAddedVariations] = useState(0)
+  const [useFinishedGoodsInventoryForDeliveries, setUseFinishedGoodsInventoryForDeliveries] = useState(false)
+  // Read-only: batch size is CHECK's production decision for THIS planning round - it already
+  // drives capacity/K_changeover and the minimum-FG calculation identically; ACT never edits it.
+  const [batchSize, setBatchSize] = useState(null)
 
   useEffect(() => {
     if (!gameState) {
@@ -62,6 +66,7 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
     const projectsDecision = loadProjectsDecision(round)
     const investmentsDecision = loadInvestmentsDecision(round)
     const checkStaffingDecision = loadCheckStaffingDecision(round)
+    const checkProductionDecision = loadCheckProductionDecision(round)
     const actDecision = loadActDecision(round)
 
     const nextGameState = {
@@ -74,12 +79,18 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
 
     const initialPrice = actDecision?.price ?? gameState.market?.price ?? 25000
     const initialAddedVariations = actDecision?.addedVariations ?? 0
+    const initialBatchSize =
+      checkProductionDecision?.batchSize ??
+      gameState.market?.batchSize ??
+      factorySettings?.production?.initialBatchSize ??
+      20
     const baseForecast = calculateRoundForecast(
       nextGameState,
       {
         market: {
           price: initialPrice,
           addedVariations: initialAddedVariations,
+          batchSize: initialBatchSize,
         },
       },
       factorySettings,
@@ -93,6 +104,8 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
     setPrice(initialPrice)
     setAddedVariations(initialAddedVariations)
     setProductionQuantity(initialProductionQuantity)
+    setBatchSize(initialBatchSize)
+    setUseFinishedGoodsInventoryForDeliveries(actDecision?.useFinishedGoodsInventoryForDeliveries ?? false)
     setDecisionGameState(nextGameState)
   }, [factorySettings, gameState])
 
@@ -106,9 +119,19 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
         price,
         addedVariations,
         productionQuantity,
+        batchSize,
+        useFinishedGoodsInventoryForDeliveries,
       },
     }, factorySettings)
-  }, [addedVariations, decisionGameState, factorySettings, price, productionQuantity])
+  }, [
+    addedVariations,
+    decisionGameState,
+    factorySettings,
+    price,
+    productionQuantity,
+    batchSize,
+    useFinishedGoodsInventoryForDeliveries,
+  ])
 
   useEffect(() => {
     if (!forecast) {
@@ -125,11 +148,12 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
           price,
           productionQuantity: clampedQuantity,
           addedVariations,
+          useFinishedGoodsInventoryForDeliveries,
           savedAt: new Date().toISOString(),
         })
       }
     }
-  }, [addedVariations, decisionGameState, forecast, price, productionQuantity])
+  }, [addedVariations, decisionGameState, forecast, price, productionQuantity, useFinishedGoodsInventoryForDeliveries])
 
   const updateAndPersist = (nextValues) => {
     if (!decisionGameState) {
@@ -141,6 +165,7 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
       price: nextValues.price,
       productionQuantity: nextValues.productionQuantity,
       addedVariations: nextValues.addedVariations,
+      useFinishedGoodsInventoryForDeliveries: nextValues.useFinishedGoodsInventoryForDeliveries,
       savedAt: new Date().toISOString(),
     })
   }
@@ -152,6 +177,7 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
       price: nextPrice,
       productionQuantity,
       addedVariations,
+      useFinishedGoodsInventoryForDeliveries,
     })
   }
 
@@ -164,6 +190,7 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
       price,
       productionQuantity: nextQuantity,
       addedVariations,
+      useFinishedGoodsInventoryForDeliveries,
     })
   }
 
@@ -177,6 +204,17 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
       price,
       productionQuantity,
       addedVariations: nextAddedVariations,
+      useFinishedGoodsInventoryForDeliveries,
+    })
+  }
+
+  const handleUseFinishedGoodsInventoryForDeliveriesChange = (nextValue) => {
+    setUseFinishedGoodsInventoryForDeliveries(nextValue)
+    updateAndPersist({
+      price,
+      productionQuantity,
+      addedVariations,
+      useFinishedGoodsInventoryForDeliveries: nextValue,
     })
   }
 
@@ -192,6 +230,8 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
           price,
           addedVariations,
           productionQuantity,
+          batchSize,
+          useFinishedGoodsInventoryForDeliveries,
         },
       },
       factorySettings,
@@ -202,6 +242,7 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
       price,
       productionQuantity: approvedForecast.summary.productionQuantity,
       addedVariations: approvedForecast.decisions.market.addedVariations,
+      useFinishedGoodsInventoryForDeliveries,
       savedAt: new Date().toISOString(),
     })
 
@@ -314,6 +355,56 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
             <p>Toteutuva tuotanto: {formatContainers(forecast.summary.actualProduction)}</p>
             <p>Toimitukset: {formatContainers(forecast.summary.deliveries)}</p>
             <p>Menetetty myynti: {formatContainers(forecast.summary.lostSalesUnits)}</p>
+          </article>
+        </Card>
+
+        <Card>
+          <article className="act-section">
+            <h2>Toimitukset ja valmisvarasto</h2>
+            <h3>TOIMITUKSET</h3>
+            <p>Kysyntä: {formatContainers(forecast.summary.demand)}</p>
+            <p>Suunniteltu tuotanto: {formatContainers(forecast.summary.requestedProductionQuantity)}</p>
+            <p>Tuotantokapasiteetti: {formatContainers(forecast.summary.plantCapacity)}</p>
+            <p>Toteutuva tuotanto: {formatContainers(forecast.summary.actualProduction)}</p>
+            <p>Vajaus kysyntään: {formatContainers(forecast.summary.demandShortfall)}</p>
+
+            <h3>VALMISVARASTO</h3>
+            <p>Alkuvarasto: {formatContainers(forecast.summary.openingFinishedGoodsInventory)}</p>
+            <p>
+              Minimivarasto (CHECK:n valitsemalla eräkoolla {formatContainers(batchSize)}):{' '}
+              {formatContainers(forecast.summary.minimumFinishedGoodsInventory)}
+            </p>
+            <p>Myytävissä varastosta: {formatContainers(forecast.summary.sellableOpeningFinishedGoodsInventory)}</p>
+
+            <fieldset className="act-fieldset">
+              <legend>Täydennetäänkö toimituksia valmisvarastosta?</legend>
+              <label className="act-radio-row">
+                <input
+                  type="radio"
+                  name="use-finished-goods-inventory"
+                  checked={!useFinishedGoodsInventoryForDeliveries}
+                  onChange={() => handleUseFinishedGoodsInventoryForDeliveriesChange(false)}
+                />
+                Ei
+              </label>
+              <label className="act-radio-row">
+                <input
+                  type="radio"
+                  name="use-finished-goods-inventory"
+                  checked={useFinishedGoodsInventoryForDeliveries}
+                  disabled={forecast.summary.sellableOpeningFinishedGoodsInventory <= 0}
+                  onChange={() => handleUseFinishedGoodsInventoryForDeliveriesChange(true)}
+                />
+                Kyllä
+              </label>
+              {forecast.summary.sellableOpeningFinishedGoodsInventory <= 0 ? (
+                <p className="act-highlight">Varastosta ei ole myytävissä olevaa määrää tällä hetkellä.</p>
+              ) : null}
+            </fieldset>
+
+            <p>Varastosta toimitetaan: {formatContainers(forecast.summary.inventorySales)}</p>
+            <p>Toimitukset yhteensä: {formatContainers(forecast.summary.deliveries)}</p>
+            <p>Loppuvarasto: {formatContainers(forecast.summary.finishedGoodsInventory)}</p>
           </article>
         </Card>
 

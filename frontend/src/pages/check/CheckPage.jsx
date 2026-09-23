@@ -12,6 +12,7 @@ import {
   loadCheckProductionDecision,
   saveCheckProductionDecision,
 } from '../../features/check/decisionStore.js'
+import { resolveCheckRoundLabels } from './roundLabels.js'
 import './CheckPage.css'
 
 const EURO_FORMATTER = new Intl.NumberFormat('fi-FI', {
@@ -73,9 +74,7 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
   const [decisionGameState, setDecisionGameState] = useState(null)
   const [staffing, setStaffing] = useState({ assembly: 0, shipping: 0 })
   const [statusMessage, setStatusMessage] = useState('')
-  const [productionQuantity, setProductionQuantity] = useState(0)
   const [batchSize, setBatchSize] = useState(20)
-  const [targetFinishedGoodsInventory, setTargetFinishedGoodsInventory] = useState(0)
   const [productionStatusMessage, setProductionStatusMessage] = useState('')
 
   useEffect(() => {
@@ -103,12 +102,8 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
       checkStaffingDecision,
     }
 
-    // Round N's own actuals never change here; this baseline forecast is only used to derive a
-    // sensible default for round N+1's production quantity when no CHECK decision exists yet.
-    const baseForecast = calculateRoundForecast(nextGameState, { staffing: nextStaffing }, factorySettings)
-    const initialProductionQuantity = checkProductionDecision?.productionQuantity ?? baseForecast.summary.demand
-    // Default next-round batch size to the current round's own batch size, so nothing changes
-    // unless the player deliberately picks a different value.
+    // Default the planned round's batch size to the currently active (confirmed) batch size,
+    // so nothing changes unless the player deliberately picks a different value.
     const initialBatchSize =
       checkProductionDecision?.batchSize ??
       gameState.market?.batchSize ??
@@ -116,9 +111,7 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
       20
 
     setStaffing(nextStaffing)
-    setProductionQuantity(initialProductionQuantity)
     setBatchSize(initialBatchSize)
-    setTargetFinishedGoodsInventory(checkProductionDecision?.targetFinishedGoodsInventory ?? 0)
     setDecisionGameState(nextGameState)
   }, [factorySettings, gameState])
 
@@ -127,16 +120,19 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
       return null
     }
 
-    // Only the staffing decision affects this round's own forecast; productionQuantity/batchSize
-    // state here are next-round decisions and must never be passed as overrides for round N.
+    // Only the staffing decision affects this baseline forecast; batchSize is applied separately
+    // below (via previewForecast) since calculateScenario resolves current/forecast from the same
+    // market decisions and batchSize must not retroactively change the confirmed round's own capacity.
     return calculateRoundForecast(decisionGameState, {
       staffing,
     }, factorySettings)
   }, [decisionGameState, factorySettings, staffing])
 
-  // Read-only "what if I advanced now with these next-round decisions" preview. Reuses the same
-  // advanceRoundState + calculateRoundForecast engine as the real round transition, purely
-  // in-memory: no setGameState, no localStorage write, no history append.
+  // The round-N forecast including this round's own batch-size decision. Despite its name and
+  // the advanceRoundState plumbing, this represents THIS planning round's (gameState.round) own
+  // forecast, not round+1 - see the round labels above. Planned production is owned by ACT, so no
+  // productionQuantity override is passed here - it naturally falls back to a demand-driven value
+  // for capacity/minimum-FG purposes.
   const previewForecast = useMemo(() => {
     if (!decisionGameState || !forecast) {
       return null
@@ -149,9 +145,7 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
         totalRounds: factorySettings?.game?.totalRounds ?? 12,
         checkProductionDecision: {
           round: decisionGameState.round,
-          productionQuantity,
           batchSize,
-          targetFinishedGoodsInventory,
         },
       })
 
@@ -159,21 +153,43 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
     } catch {
       return null
     }
-  }, [batchSize, decisionGameState, factorySettings, forecast, productionQuantity, targetFinishedGoodsInventory])
+  }, [batchSize, decisionGameState, factorySettings, forecast])
 
-  const minimumTargetFinishedGoodsInventory = Math.ceil(
-    previewForecast?.forecast.inventory.minimumFinishedGoodsInventory ?? 0,
-  )
-  const effectiveTargetFinishedGoodsInventory = Math.max(
-    minimumTargetFinishedGoodsInventory,
-    targetFinishedGoodsInventory,
-  )
+  // Auto-persist every edit to the existing round-scoped decision stores so values entered
+  // during this round survive page navigation (component unmount/remount) without requiring an
+  // explicit save click; the Save buttons remain only to give the player an explicit confirmation.
+  const persistStaffing = (nextStaffing) => {
+    if (!decisionGameState) {
+      return
+    }
+
+    saveCheckStaffingDecision({
+      round: decisionGameState.round,
+      staffing: nextStaffing,
+      savedAt: new Date().toISOString(),
+    })
+  }
+
+  const persistBatchSizeDecision = (nextBatchSize) => {
+    if (!decisionGameState) {
+      return
+    }
+
+    saveCheckProductionDecision({
+      round: decisionGameState.round,
+      batchSize: nextBatchSize,
+      savedAt: new Date().toISOString(),
+    })
+  }
 
   const updateStaffing = (key, delta) => {
-    setStaffing((previousValue) => ({
-      ...previousValue,
-      [key]: Math.max(0, (Number(previousValue[key]) || 0) + delta),
-    }))
+    const nextStaffing = {
+      ...staffing,
+      [key]: Math.max(0, (Number(staffing[key]) || 0) + delta),
+    }
+
+    setStaffing(nextStaffing)
+    persistStaffing(nextStaffing)
   }
 
   const handleSaveStaffing = () => {
@@ -181,35 +197,18 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
       return
     }
 
-    const decision = {
-      round: decisionGameState.round,
-      staffing,
-      savedAt: new Date().toISOString(),
-    }
-
-    saveCheckStaffingDecision(decision)
+    persistStaffing(staffing)
     setStatusMessage('Henkilöstöpäätös tallennettu CHECK-vaiheeseen.')
-  }
-
-  const handleProductionQuantityChange = (rawValue) => {
-    const requestedQuantity = toNonNegativeInteger(rawValue, productionQuantity)
-    const capacityMaximum = previewForecast?.summary.plantCapacity
-    setProductionQuantity(
-      capacityMaximum == null ? requestedQuantity : Math.min(requestedQuantity, Math.floor(capacityMaximum)),
-    )
   }
 
   const handleBatchSizeChange = (rawValue) => {
     const minBatchSize = factorySettings?.production?.minBatchSize ?? 1
     const maxBatchSize = factorySettings?.production?.maxBatchSize ?? 20
-    const nextValue = toNonNegativeInteger(rawValue, batchSize)
+    const requestedValue = toNonNegativeInteger(rawValue, batchSize)
+    const nextBatchSize = Math.min(maxBatchSize, Math.max(minBatchSize, requestedValue))
 
-    setBatchSize(Math.min(maxBatchSize, Math.max(minBatchSize, nextValue)))
-  }
-
-  const handleTargetFinishedGoodsInventoryChange = (rawValue) => {
-    const requestedTarget = toNonNegativeInteger(rawValue, targetFinishedGoodsInventory)
-    setTargetFinishedGoodsInventory(Math.max(minimumTargetFinishedGoodsInventory, requestedTarget))
+    setBatchSize(nextBatchSize)
+    persistBatchSizeDecision(nextBatchSize)
   }
 
   const handleSaveNextRoundDecision = () => {
@@ -219,12 +218,10 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
 
     saveCheckProductionDecision({
       round: decisionGameState.round,
-      productionQuantity,
       batchSize,
-      targetFinishedGoodsInventory: effectiveTargetFinishedGoodsInventory,
       savedAt: new Date().toISOString(),
     })
-    setProductionStatusMessage(`Tuotanto-, eräkoko- ja varastotavoite tallennettu kierrokselle ${decisionGameState.round + 1}.`)
+    setProductionStatusMessage(`Eräkokopäätös tallennettu kierrokselle ${resolveCheckRoundLabels(decisionGameState.round).planningRound}.`)
   }
 
   if (!forecast) {
@@ -247,15 +244,7 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
   })
   const previewInventory = previewForecast?.forecast.inventory
   const previewSummary = previewForecast?.summary
-  const deliveryShortfall = previewSummary?.lostSalesUnits ?? 0
-  const targetGap = previewInventory
-    ? Math.max(0, previewInventory.targetFinishedGoodsInventory - previewInventory.closingFinishedGoodsInventory)
-    : 0
-  const previewStatusClass = deliveryShortfall > 0 || targetGap > 0
-    ? 'check-constraint-error'
-    : previewSummary && previewSummary.actualProduction < previewInventory.requiredProduction
-      ? 'check-constraint-warning'
-      : 'check-constraint-ok'
+  const { confirmedRound, planningRound } = resolveCheckRoundLabels(decisionGameState.round)
 
   const departments = [
     { key: 'machining', label: 'Koneistus' },
@@ -346,12 +335,13 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
                 <tr>
                   <th>Osasto</th>
                   <th>Nykytila</th>
-                  <th>Ennuste (kierros {decisionGameState.round + 1})</th>
+                  <th>Ennuste (kierros {planningRound})</th>
                 </tr>
               </thead>
               <tbody>
                 {departments.map((department) => {
-                  const isBottleneck = forecast.summary.bottleneckKey === department.key
+                  const highlightedBottleneckKey = previewForecast?.summary?.bottleneckKey ?? forecast.summary.bottleneckKey
+                  const isBottleneck = highlightedBottleneckKey === department.key
                   return (
                     <tr key={department.key} className={isBottleneck ? 'is-bottleneck' : ''}>
                       <td>{department.label}</td>
@@ -367,11 +357,11 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
               </tbody>
             </table>
             <p>
-              Pullonkaula (kierros {decisionGameState.round}): <strong>{forecast.summary.bottleneckLabel}</strong>
+              Pullonkaula (kierros {confirmedRound}): <strong>{forecast.summary.bottleneckLabel}</strong>
             </p>
             {previewForecast ? (
               <p>
-                Pullonkaula-ennuste (kierros {decisionGameState.round + 1}):{' '}
+                Pullonkaula-ennuste (kierros {planningRound}):{' '}
                 <strong>{previewForecast.summary.bottleneckLabel}</strong>
               </p>
             ) : null}
@@ -380,7 +370,7 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
 
         <Card>
           <article className="check-section">
-            <h2>5. Henkilosto seuraavalle kierrokselle</h2>
+            <h2>5. Henkilosto tälle kierrokselle</h2>
             <div className="check-staffing-row">
               <span>Koneistus (read-only)</span>
               <strong>{forecast.forecast.staffing.machining}</strong>
@@ -423,8 +413,8 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
               <thead>
                 <tr>
                   <th>Mittari</th>
-                  <th>Nykytila (kierros {decisionGameState.round})</th>
-                  <th>Ennuste (kierros {decisionGameState.round + 1})</th>
+                  <th>Nykytila (kierros {confirmedRound})</th>
+                  <th>Ennuste (kierros {planningRound})</th>
                 </tr>
               </thead>
               <tbody>
@@ -457,11 +447,11 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
                   </td>
                 </tr>
                 <tr>
-                  <td>Kaytettavissa oleva varasto</td>
-                  <td>{formatContainers(forecast.forecast.inventory.availableFinishedGoodsInventory)}</td>
+                  <td>Myytavissa varastosta (valitulla eraikoolla)</td>
+                  <td>{formatContainers(forecast.forecast.inventory.sellableOpeningFinishedGoodsInventory)}</td>
                   <td>
                     {previewForecast
-                      ? formatContainers(previewForecast.forecast.inventory.availableFinishedGoodsInventory)
+                      ? formatContainers(previewForecast.forecast.inventory.sellableOpeningFinishedGoodsInventory)
                       : '-'}
                   </td>
                 </tr>
@@ -516,27 +506,16 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
 
         <Card>
           <article className="check-section">
-            <h2>9. Seuraavan kierroksen paatokset</h2>
-            <label className="check-input-row">
-              <span>Suunniteltu tuotanto (kierros {decisionGameState.round + 1})</span>
-              <input
-                type="number"
-                min="0"
-                max={previewSummary ? Math.floor(previewSummary.plantCapacity) : undefined}
-                step="1"
-                value={productionQuantity}
-                onChange={(event) => handleProductionQuantityChange(event.target.value)}
-              />
-            </label>
+            <h2>9. Eräkokopäätös</h2>
             <p>Max. kapasiteetti: {previewSummary ? formatContainers(previewSummary.plantCapacity) : '-'}</p>
             <p>Rajoittava osasto: {previewSummary?.bottleneckLabel ?? '-'}</p>
             <p>
-              Nykyinen erakoko (kierros {decisionGameState.round}):{' '}
+              Nykyinen erakoko (kierros {confirmedRound}):{' '}
               {formatContainers(forecast.decisions.market.batchSize)}
             </p>
             <label className="check-input-row">
               <span>
-                Seuraavan kierroksen erakoko (kierros {decisionGameState.round + 1}, {' '}
+                Eräkoko suunniteltavalle kierrokselle (kierros {planningRound}, {' '}
                 {factorySettings?.production?.minBatchSize ?? 1}-{factorySettings?.production?.maxBatchSize ?? 20})
               </span>
               <input
@@ -548,32 +527,13 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
                 onChange={(event) => handleBatchSizeChange(event.target.value)}
               />
             </label>
-            <label className="check-input-row">
-              <span>Varastotaso (kpl)</span>
-              <input
-                type="number"
-                min={minimumTargetFinishedGoodsInventory}
-                step="1"
-                value={effectiveTargetFinishedGoodsInventory}
-                onChange={(event) => handleTargetFinishedGoodsInventoryChange(event.target.value)}
-              />
-            </label>
-            <p>Min. {previewInventory ? formatContainers(previewInventory.minimumFinishedGoodsInventory) : '-'}</p>
-            {previewForecast ? (
-              <div className={`check-constraint ${previewStatusClass}`}>
-                <p>Kysynta: {formatContainers(previewSummary.demand)}</p>
-                <p>Fyysinen alkuvarasto: {formatContainers(previewInventory.openingFinishedGoodsInventory)}</p>
-                <p>Minimivarasto: {formatContainers(previewInventory.minimumFinishedGoodsInventory)}</p>
-                <p>Pelaajan tavoitevarasto: {formatContainers(previewInventory.targetFinishedGoodsInventory)}</p>
-                <p>Kysynnan ja tavoitteen vaatima tuotanto: {formatContainers(previewInventory.requiredProduction)}</p>
-                <p>Ennustetut toimitukset: {formatContainers(previewSummary.deliveries)}</p>
-                <p>Toimitusvaje: {formatContainers(deliveryShortfall)}</p>
-                <p>Fyysinen loppuvarasto: {formatContainers(previewInventory.closingFinishedGoodsInventory)}</p>
-                {targetGap > 0 ? <p>Tavoitevarastosta puuttuu: {formatContainers(targetGap)}</p> : null}
-              </div>
-            ) : null}
+            <p>
+              Minimivarasto (valitulla eräkoolla):{' '}
+              {previewInventory ? formatContainers(previewInventory.minimumFinishedGoodsInventory) : '-'}
+            </p>
+            <p>Fyysinen valmisvarasto: {formatContainers(forecast.forecast.inventory.openingFinishedGoodsInventory)}</p>
             <Button type="button" onClick={handleSaveNextRoundDecision}>
-              TALLENNA SEURAAVAN KIERROKSEN PAATOKSET
+              TALLENNÄ ERÄKOKOPÄÄTÖS
             </Button>
             {productionStatusMessage ? <p className="check-status">{productionStatusMessage}</p> : null}
           </article>

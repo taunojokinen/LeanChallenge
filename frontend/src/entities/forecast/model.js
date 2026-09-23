@@ -43,7 +43,12 @@ const DEFAULT_MARKET_DECISION = {
   addedVariations: 0,
   productionQuantity: null,
   batchSize: null,
-  targetFinishedGoodsInventory: null,
+  // Next-round batch size selected in CHECK; used only to release/restrict opening finished-
+  // goods inventory for THIS round's delivery decision (ACT), never for capacity/K formulas.
+  selectedBatchSize: null,
+  // Explicit ACT decision: whether to supplement deliveries from sellable opening FG inventory.
+  // Defaults to false so inventory is never silently consumed.
+  useFinishedGoodsInventoryForDeliveries: false,
   activeVariationCount: 1,
 }
 
@@ -822,11 +827,20 @@ function calculateScenario({
   }
 
   const bottleneckKey = Object.entries(capacityByDepartment).reduce(
-    (smallestKey, [key, value]) => (value < capacityByDepartment[smallestKey] ? key : smallestKey),
+    (smallestKey, [key, value]) => {
+      const storedValue = Number(capacityByDepartment[smallestKey])
+      const nextValue = Number(value)
+
+      if (!Number.isFinite(storedValue) || nextValue < storedValue) {
+        return key
+      }
+
+      return smallestKey
+    },
     'machining',
   )
 
-  const plantCapacity = capacityByDepartment[bottleneckKey]
+  const plantCapacity = Number(capacityByDepartment[bottleneckKey]) || 0
 
   // requested/planned production is the player's plan (from CHECK/ACT or the demand fallback);
   // it is intentionally NOT capped by demand, only by capacity.
@@ -838,25 +852,34 @@ function calculateScenario({
   const minimumFinishedGoodsInventory = machineCount > 0
     ? (totalVariations * machiningBatchSize) / (2 * machineCount)
     : 0
+  // The next-round batch size selected in CHECK immediately changes how much of THIS round's
+  // opening FG inventory is structurally required versus sellable - capacity/K formulas are
+  // untouched and keep using the current round's own active machiningBatchSize above.
+  const requestedSelectedBatchSize = market.selectedBatchSize != null
+    ? toNumber(market.selectedBatchSize, machiningBatchSize)
+    : machiningBatchSize
+  const selectedBatchSize = clamp(Math.round(requestedSelectedBatchSize), minBatchSize, maxBatchSize)
+  const selectedBatchSizeMinimumFinishedGoodsInventory = machineCount > 0
+    ? (totalVariations * selectedBatchSize) / (2 * machineCount)
+    : 0
   const baseFinishedGoodsContainers = toNumber(investmentsSnapshot.factory.finishedGoodsContainers)
   const openingFinishedGoodsInventory = baseFinishedGoodsContainers
-  const requestedFinishedGoodsInventory = market.targetFinishedGoodsInventory != null
-    ? toNonNegativeInt(market.targetFinishedGoodsInventory)
-    : minimumFinishedGoodsInventory
-  const targetFinishedGoodsInventory = Math.max(
-    minimumFinishedGoodsInventory,
-    requestedFinishedGoodsInventory,
-  )
-  const requiredProduction = Math.max(
+  const sellableOpeningFinishedGoodsInventory = Math.max(
     0,
-    demand + targetFinishedGoodsInventory - openingFinishedGoodsInventory,
+    openingFinishedGoodsInventory - selectedBatchSizeMinimumFinishedGoodsInventory,
   )
-  const availableFinishedGoodsInventory = Math.max(
-    0,
-    openingFinishedGoodsInventory + actualProduction - targetFinishedGoodsInventory,
-  )
+  const useFinishedGoodsInventoryForDeliveries = Boolean(market.useFinishedGoodsInventoryForDeliveries)
 
-  const deliveries = Math.max(0, Math.min(demand, availableFinishedGoodsInventory))
+  // Canonical delivery model: the player's planned production quantity is never auto-adjusted
+  // toward a target stock level. Production covers demand first; only an explicit ACT decision
+  // may additionally draw down sellable opening inventory to cover any remaining shortfall.
+  const productionSales = Math.min(demand, actualProduction)
+  const demandShortfall = Math.max(0, demand - actualProduction)
+  const inventorySales = useFinishedGoodsInventoryForDeliveries
+    ? Math.min(demandShortfall, sellableOpeningFinishedGoodsInventory)
+    : 0
+
+  const deliveries = productionSales + inventorySales
   const lostSalesUnits = Math.max(0, demand - deliveries)
 
   // Physical material balance: whatever was produced but not delivered stays in stock.
@@ -950,7 +973,8 @@ function calculateScenario({
       runsPerVariation,
       productionQuantity: plannedProductionQuantity,
       batchSize: machiningBatchSize,
-      targetFinishedGoodsInventory,
+      selectedBatchSize,
+      useFinishedGoodsInventoryForDeliveries,
     },
     knl: {
       machining: machiningMetrics,
@@ -980,10 +1004,13 @@ function calculateScenario({
       minimumFinishedGoodsInventory,
       averageFinishedGoodsInventory: minimumFinishedGoodsInventory,
       openingFinishedGoodsInventory,
-      requestedFinishedGoodsInventory,
-      targetFinishedGoodsInventory,
-      requiredProduction,
-      availableFinishedGoodsInventory,
+      selectedBatchSize,
+      selectedBatchSizeMinimumFinishedGoodsInventory,
+      sellableOpeningFinishedGoodsInventory,
+      useFinishedGoodsInventoryForDeliveries,
+      productionSales,
+      demandShortfall,
+      inventorySales,
       closingFinishedGoodsInventory,
       finishedGoodsValue,
       finishedGoodsArea,
@@ -1074,7 +1101,16 @@ function buildCurrentStateFromProductionSnapshot(productionSnapshot) {
   })
 
   const bottleneckKey = Object.entries(capacityByDepartment).reduce(
-    (smallestKey, [key, value]) => (value < capacityByDepartment[smallestKey] ? key : smallestKey),
+    (smallestKey, [key, value]) => {
+      const storedValue = Number(capacityByDepartment[smallestKey])
+      const nextValue = Number(value)
+
+      if (!Number.isFinite(storedValue) || nextValue < storedValue) {
+        return key
+      }
+
+      return smallestKey
+    },
     'machining',
   )
 
@@ -1082,7 +1118,7 @@ function buildCurrentStateFromProductionSnapshot(productionSnapshot) {
     knl,
     capacityByDepartment,
     bottleneckKey,
-    plantCapacity: capacityByDepartment[bottleneckKey],
+    plantCapacity: Number(capacityByDepartment[bottleneckKey]) || 0,
   }
 }
 
@@ -1140,7 +1176,10 @@ function buildClosingFinance(gameState, forecastScenario, normalizedInputs, fact
   )
   const closingFinishedGoodsInventoryBookValue = forecastScenario.inventory.finishedGoodsValue
   const closingRawMaterialInventoryBookValue = Math.round(
-    Math.abs(forecastScenario.finance.materials) * RAW_MATERIAL_INVENTORY_SHARE,
+    Math.abs(forecastScenario.finance.materials) * toNumber(
+      factorySettings.inventory?.rawMaterialInventoryShare,
+      RAW_MATERIAL_INVENTORY_SHARE,
+    ),
   )
   const closingInventoryBookValue =
     closingFinishedGoodsInventoryBookValue + closingRawMaterialInventoryBookValue
@@ -1301,9 +1340,6 @@ export function calculateRoundForecast(gameState, decisions = {}, factorySetting
     activeVariationCount: Math.max(1, baseActiveVariationCount),
     batchSize: baseBatchSize,
     productionQuantity: baseProductionQuantity,
-      targetFinishedGoodsInventory: gameState.market?.targetFinishedGoodsInventory != null
-        ? toNumber(gameState.market.targetFinishedGoodsInventory, null)
-        : null,
   }
 
   const resolvedDecisions = {
@@ -1386,7 +1422,8 @@ export function calculateRoundForecast(gameState, decisions = {}, factorySetting
         runsPerVariation: resolvedDecisions.market.runsPerVariation,
         productionQuantity: forecastScenario.market.productionQuantity,
         batchSize: forecastScenario.market.batchSize,
-        targetFinishedGoodsInventory: forecastScenario.market.targetFinishedGoodsInventory,
+        selectedBatchSize: forecastScenario.market.selectedBatchSize,
+        useFinishedGoodsInventoryForDeliveries: forecastScenario.market.useFinishedGoodsInventoryForDeliveries,
         activeVariationCount: forecastScenario.market.activeVariationCount,
         totalVariations: forecastScenario.market.totalVariations,
         addedVariations: forecastScenario.market.addedVariations,
@@ -1413,9 +1450,13 @@ export function calculateRoundForecast(gameState, decisions = {}, factorySetting
       finishedGoodsInventory: forecastScenario.inventory.closingFinishedGoodsInventory,
       openingFinishedGoodsInventory: forecastScenario.inventory.openingFinishedGoodsInventory,
       minimumFinishedGoodsInventory: forecastScenario.inventory.minimumFinishedGoodsInventory,
-      targetFinishedGoodsInventory: forecastScenario.inventory.targetFinishedGoodsInventory,
-      requiredProduction: forecastScenario.inventory.requiredProduction,
-      availableFinishedGoodsInventory: forecastScenario.inventory.availableFinishedGoodsInventory,
+      selectedBatchSizeMinimumFinishedGoodsInventory:
+        forecastScenario.inventory.selectedBatchSizeMinimumFinishedGoodsInventory,
+      sellableOpeningFinishedGoodsInventory: forecastScenario.inventory.sellableOpeningFinishedGoodsInventory,
+      useFinishedGoodsInventoryForDeliveries: forecastScenario.inventory.useFinishedGoodsInventoryForDeliveries,
+      productionSales: forecastScenario.inventory.productionSales,
+      demandShortfall: forecastScenario.inventory.demandShortfall,
+      inventorySales: forecastScenario.inventory.inventorySales,
       freeFactorySpace: forecastScenario.space.freeFactorySpace,
     },
     insights: buildInsights(currentScenario, forecastScenario),

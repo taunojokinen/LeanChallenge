@@ -244,7 +244,7 @@ test('advanceRound carries the physical closing FG into nextGameState.inventory.
   )
 })
 
-test('CHECK production decision survives round transition and becomes next round requested production', () => {
+test('CHECK production decision is retired: a stale productionQuantity never carries into the next round', () => {
   const gameState = createInitialGameState()
   const forecast = calculateRoundForecast(
     gameState,
@@ -259,11 +259,14 @@ test('CHECK production decision survives round transition and becomes next round
     checkProductionDecision: { round: gameState.round, productionQuantity: 123 },
   })
 
-  assert.equal(result.nextGameState.market.productionQuantity, 123)
+  assert.equal(Object.prototype.hasOwnProperty.call(result.nextGameState.market, 'productionQuantity'), false)
 
+  // Planned production is owned solely by ACT; with no ACT decision, the next round's own
+  // forecast falls back to its demand-driven default, never to CHECK's stale value.
   const nextRoundForecast = calculateRoundForecast(result.nextGameState, {}, DEFAULT_FACTORY_SETTINGS)
 
-  assert.equal(nextRoundForecast.forecast.requestedProductionQuantity, 123)
+  assert.notEqual(nextRoundForecast.forecast.requestedProductionQuantity, 123)
+  assert.equal(nextRoundForecast.forecast.requestedProductionQuantity, nextRoundForecast.forecast.demand)
 })
 
 test('CHECK production decision for a different round is ignored', () => {
@@ -299,7 +302,7 @@ test('CHECK batchSize decision applies to nextGameState.market.batchSize after a
   assert.equal(result.nextGameState.market.batchSize, 5)
 })
 
-test('CHECK target finished-goods inventory applies only to the next game state', () => {
+test('CHECK target finished-goods inventory decision is retired and no longer applied to game state', () => {
   const gameState = createInitialGameState()
   const forecast = calculateRoundForecast(gameState, { market: { productionQuantity: 150 } }, DEFAULT_FACTORY_SETTINGS)
 
@@ -315,8 +318,8 @@ test('CHECK target finished-goods inventory applies only to the next game state'
     },
   })
 
-  assert.equal(result.nextGameState.market.targetFinishedGoodsInventory, 60)
-  assert.notEqual(forecast.forecast.inventory.targetFinishedGoodsInventory, 60)
+  assert.equal(Object.prototype.hasOwnProperty.call(result.nextGameState.market, 'targetFinishedGoodsInventory'), false)
+  assert.equal(result.nextGameState.market.batchSize, 5)
 })
 
 test('next round forecast uses the CHECK-decided batchSize for changeovers, K, and the minimum FG metric', () => {
@@ -391,15 +394,15 @@ test('CHECK batchSize decision does not touch this round\'s own physical closing
   assert.equal(forecast.forecast.inventory.inventoryChange, roundNInventoryChange)
 })
 
-// Phase 3: CHECK's read-only "next round preview". This mirrors exactly what CheckPage.jsx does:
-// build an in-memory nextGameState via advanceRoundState (no persistence), then run the shared
-// calculateRoundForecast on it using the CHECK input values.
-function buildPreview(gameState, currentForecast, productionQuantity, batchSize) {
+// Phase 3 (updated for batch-size/marketing ownership split): CHECK's read-only "next round
+// preview" now only ever varies batch size - planned production quantity is owned solely by ACT
+// and is never part of the CHECK decision that builds this preview.
+function buildPreview(gameState, currentForecast, batchSize) {
   const { nextGameState } = advanceRoundState({
     gameState,
     forecast: currentForecast,
     totalRounds: 12,
-    checkProductionDecision: { round: gameState.round, productionQuantity, batchSize },
+    checkProductionDecision: { round: gameState.round, batchSize },
   })
 
   return calculateRoundForecast(nextGameState, {}, DEFAULT_FACTORY_SETTINGS)
@@ -410,7 +413,7 @@ test('preview A: current minimumFG stays on current batchSize while preview uses
   gameState.market.batchSize = 5
   const currentForecast = calculateRoundForecast(gameState, { market: { productionQuantity: 150 } }, DEFAULT_FACTORY_SETTINGS)
 
-  const preview = buildPreview(gameState, currentForecast, 150, 10)
+  const preview = buildPreview(gameState, currentForecast, 10)
 
   assert.equal(currentForecast.decisions.market.batchSize, 5)
   assert.equal(
@@ -429,7 +432,7 @@ test('preview B: current changeovers stay on current batchSize while preview use
   gameState.market.batchSize = 5
   const currentForecast = calculateRoundForecast(gameState, { market: { productionQuantity: 150 } }, DEFAULT_FACTORY_SETTINGS)
 
-  const preview = buildPreview(gameState, currentForecast, 150, 10)
+  const preview = buildPreview(gameState, currentForecast, 10)
 
   assert.equal(currentForecast.forecast.knl.machining.batchSize, 5)
   assert.equal(preview.forecast.knl.machining.batchSize, 10)
@@ -439,33 +442,39 @@ test('preview B: current changeovers stay on current batchSize while preview use
   )
 })
 
-test('CHECK preview changes total factory changeovers from 9 to 18 when batch size changes from 20 to 10', () => {
+test('CHECK preview changes total factory changeovers when batch size changes from 20 to 10', () => {
   const gameState = createInitialGameState()
   gameState.production.machiningMachines = 3
   const currentForecast = calculateRoundForecast(gameState, { market: { productionQuantity: 180 } }, DEFAULT_FACTORY_SETTINGS)
 
-  const previewQ20 = buildPreview(gameState, currentForecast, 180, 20)
-  const previewQ10 = buildPreview(gameState, currentForecast, 180, 10)
+  const previewQ20 = buildPreview(gameState, currentForecast, 20)
+  const previewQ10 = buildPreview(gameState, currentForecast, 10)
 
-  assert.equal(previewQ20.forecast.actualProduction, 180)
-  assert.equal(previewQ20.forecast.knl.machining.totalChangeovers, 9)
-  assert.equal(previewQ10.forecast.actualProduction, 180)
-  assert.equal(previewQ10.forecast.knl.machining.totalChangeovers, 18)
+  // Planned production is no longer a CHECK decision, so the preview's own requested quantity
+  // is demand-driven; only the batch-size effect on changeovers is under test here.
+  assert.equal(
+    previewQ20.forecast.requestedProductionQuantity,
+    previewQ10.forecast.requestedProductionQuantity,
+  )
+  assert.equal(
+    previewQ10.forecast.knl.machining.totalChangeovers > previewQ20.forecast.knl.machining.totalChangeovers,
+    true,
+  )
   assert.notEqual(
     previewQ20.forecast.capacityByDepartment.machining,
     previewQ10.forecast.capacityByDepartment.machining,
   )
 })
 
-test('preview C: current round capacity does not change while building different previews', () => {
+test('preview C: current round capacity does not change while building different batch-size previews', () => {
   const gameState = createInitialGameState()
   gameState.market.batchSize = 5
   const currentForecast = calculateRoundForecast(gameState, { market: { productionQuantity: 150 } }, DEFAULT_FACTORY_SETTINGS)
   const capacityBefore = { ...currentForecast.forecast.capacityByDepartment }
 
-  buildPreview(gameState, currentForecast, 150, 10)
-  buildPreview(gameState, currentForecast, 220, 20)
-  buildPreview(gameState, currentForecast, 50, 1)
+  buildPreview(gameState, currentForecast, 10)
+  buildPreview(gameState, currentForecast, 20)
+  buildPreview(gameState, currentForecast, 1)
 
   assert.deepEqual(currentForecast.forecast.capacityByDepartment, capacityBefore)
 })
@@ -475,8 +484,8 @@ test('preview D: preview machining capacity changes with the batchSize input', (
   gameState.market.batchSize = 5
   const currentForecast = calculateRoundForecast(gameState, { market: { productionQuantity: 150 } }, DEFAULT_FACTORY_SETTINGS)
 
-  const previewQ5 = buildPreview(gameState, currentForecast, 150, 5)
-  const previewQ20 = buildPreview(gameState, currentForecast, 150, 20)
+  const previewQ5 = buildPreview(gameState, currentForecast, 5)
+  const previewQ20 = buildPreview(gameState, currentForecast, 20)
 
   assert.notEqual(
     previewQ5.forecast.capacityByDepartment.machining,
@@ -484,17 +493,32 @@ test('preview D: preview machining capacity changes with the batchSize input', (
   )
 })
 
-test('preview E: productionQuantity input changes preview actualProduction but not current actualProduction', () => {
+test('preview E: a stale CHECK productionQuantity has no effect - planned production is owned solely by ACT', () => {
   const gameState = createInitialGameState()
   gameState.market.batchSize = 10
   const currentForecast = calculateRoundForecast(gameState, { market: { productionQuantity: 150 } }, DEFAULT_FACTORY_SETTINGS)
-  const currentActualProduction = currentForecast.forecast.actualProduction
 
-  const previewLow = buildPreview(gameState, currentForecast, 50, 10)
-  const previewHigh = buildPreview(gameState, currentForecast, 220, 10)
+  const { nextGameState: withoutQuantity } = advanceRoundState({
+    gameState,
+    forecast: currentForecast,
+    totalRounds: 12,
+    checkProductionDecision: { round: gameState.round, batchSize: 10 },
+  })
+  const { nextGameState: withStaleQuantity } = advanceRoundState({
+    gameState,
+    forecast: currentForecast,
+    totalRounds: 12,
+    checkProductionDecision: { round: gameState.round, batchSize: 10, productionQuantity: 999 },
+  })
 
-  assert.equal(currentForecast.forecast.actualProduction, currentActualProduction)
-  assert.notEqual(previewLow.forecast.actualProduction, previewHigh.forecast.actualProduction)
+  assert.equal(Object.prototype.hasOwnProperty.call(withStaleQuantity.market, 'productionQuantity'), false)
+  assert.deepEqual(withoutQuantity.market, withStaleQuantity.market)
+
+  const forecastWithout = calculateRoundForecast(withoutQuantity, {}, DEFAULT_FACTORY_SETTINGS)
+  const forecastWithStale = calculateRoundForecast(withStaleQuantity, {}, DEFAULT_FACTORY_SETTINGS)
+
+  assert.equal(forecastWithout.forecast.requestedProductionQuantity, forecastWithStale.forecast.requestedProductionQuantity)
+  assert.notEqual(forecastWithStale.forecast.requestedProductionQuantity, 999)
 })
 
 test('preview F: preview physical FG uses round N closing FG + preview actualProduction - preview deliveries', () => {
@@ -503,7 +527,7 @@ test('preview F: preview physical FG uses round N closing FG + preview actualPro
   const currentForecast = calculateRoundForecast(gameState, { market: { productionQuantity: 150 } }, DEFAULT_FACTORY_SETTINGS)
   const roundNClosingFg = currentForecast.forecast.inventory.closingFinishedGoodsInventory
 
-  const preview = buildPreview(gameState, currentForecast, 220, 10)
+  const preview = buildPreview(gameState, currentForecast, 10)
 
   assert.equal(preview.forecast.inventory.openingFinishedGoodsInventory, roundNClosingFg)
   assert.equal(
@@ -517,8 +541,8 @@ test('preview batch-size changes do not alter the physical opening finished-good
   gameState.inventory.finishedGoodsContainers = 75
   const currentForecast = calculateRoundForecast(gameState, { market: { productionQuantity: 150 } }, DEFAULT_FACTORY_SETTINGS)
 
-  const previewQ5 = buildPreview(gameState, currentForecast, 150, 5)
-  const previewQ20 = buildPreview(gameState, currentForecast, 150, 20)
+  const previewQ5 = buildPreview(gameState, currentForecast, 5)
+  const previewQ20 = buildPreview(gameState, currentForecast, 20)
 
   assert.equal(
     previewQ5.forecast.inventory.openingFinishedGoodsInventory,
@@ -533,24 +557,24 @@ test('preview G: building a preview does not mutate gameState or the current for
   const gameStateSnapshot = JSON.stringify(gameState)
   const forecastSnapshot = JSON.stringify(currentForecast)
 
-  buildPreview(gameState, currentForecast, 220, 5)
+  buildPreview(gameState, currentForecast, 5)
 
   assert.equal(JSON.stringify(gameState), gameStateSnapshot)
   assert.equal(JSON.stringify(currentForecast), forecastSnapshot)
 })
 
-test('preview H: preview matches the real round N+1 forecast built from the same advanceRound decision', () => {
+test('preview H: preview matches the real round N+1 forecast built from the same batch-size decision', () => {
   const gameState = createInitialGameState()
   gameState.market.batchSize = 5
   const currentForecast = calculateRoundForecast(gameState, { market: { productionQuantity: 150 } }, DEFAULT_FACTORY_SETTINGS)
 
-  const preview = buildPreview(gameState, currentForecast, 220, 10)
+  const preview = buildPreview(gameState, currentForecast, 10)
 
   const { nextGameState: realNextGameState } = advanceRoundState({
     gameState,
     forecast: currentForecast,
     totalRounds: 12,
-    checkProductionDecision: { round: gameState.round, productionQuantity: 220, batchSize: 10 },
+    checkProductionDecision: { round: gameState.round, batchSize: 10 },
   })
   const realNextRoundForecast = calculateRoundForecast(realNextGameState, {}, DEFAULT_FACTORY_SETTINGS)
 
@@ -563,3 +587,180 @@ test('preview H: preview matches the real round N+1 forecast built from the same
   assert.equal(preview.forecast.capacityByDepartment.machining, realNextRoundForecast.forecast.capacityByDepartment.machining)
   assert.equal(preview.forecast.finance.result, realNextRoundForecast.forecast.finance.result)
 })
+
+// Regression for the "persist across navigation" task: end-to-end batch-size carry-forward
+// across three rounds, matching the exact example in the spec (20 -> player picks 15 -> 15 stays
+// active indefinitely until the player explicitly changes it again).
+test('batch size example scenario: active 20, CHECK picks 15, stays 15 across an unchanged round', () => {
+  let gameState = createInitialGameState()
+  gameState.market.batchSize = 20
+
+  // Round 1: active batch size is 20; CHECK decides next-round batch size 15.
+  assert.equal(gameState.market.batchSize, 20)
+  const roundOneForecast = calculateRoundForecast(
+    gameState,
+    { market: { productionQuantity: 150 } },
+    DEFAULT_FACTORY_SETTINGS,
+  )
+  assert.equal(roundOneForecast.decisions.market.batchSize, 20)
+
+  const roundOneAdvance = advanceRoundState({
+    gameState,
+    forecast: roundOneForecast,
+    totalRounds: 12,
+    checkProductionDecision: { round: gameState.round, batchSize: 15 },
+  })
+  gameState = roundOneAdvance.nextGameState
+
+  // Round 2: active batch size is now 15; CHECK's own initial default (no decision saved yet
+  // for round 2) must read the CURRENT active batch size, not the original 20.
+  assert.equal(gameState.market.batchSize, 15)
+  const initialNextRoundBatchSizeDefault = gameState.market?.batchSize ?? DEFAULT_FACTORY_SETTINGS.production.initialBatchSize
+  assert.equal(initialNextRoundBatchSizeDefault, 15)
+
+  // Player makes no change this round: no CHECK decision is saved for round 2.
+  const roundTwoForecast = calculateRoundForecast(
+    gameState,
+    { market: { productionQuantity: 150 } },
+    DEFAULT_FACTORY_SETTINGS,
+  )
+  assert.equal(roundTwoForecast.decisions.market.batchSize, 15)
+
+  const roundTwoAdvance = advanceRoundState({ gameState, forecast: roundTwoForecast, totalRounds: 12 })
+  gameState = roundTwoAdvance.nextGameState
+
+  // Round 3: batch size remains 15, unchanged since round 1's decision.
+  assert.equal(gameState.market.batchSize, 15)
+})
+
+// Regression for the CHECK -> ACT capacity data-flow fix: while planning round N (gameState.round
+// === N), CHECK's batch-size decision IS round N's own production decision - not a round N+1
+// value - so ACT's own canonical forecast must resolve the same capacity from the same decision.
+// Capacity itself depends on requestedProductionQuantity (more/less changeovers), so a fair
+// CHECK-vs-ACT comparison must hold productionQuantity fixed and identical on both sides.
+test('B/C/G: CHECK batch-size decision changes machining capacity, and ACT resolves the identical capacity from the same decisions', () => {
+  const gameState = createInitialGameState()
+  assert.equal(gameState.round, 1)
+  const fixedProductionQuantity = 100
+
+  // CHECK's own baseline (no batch-size decision yet) mirrors CheckPage's primary `forecast`.
+  const checkBaseline = calculateRoundForecast(
+    gameState,
+    { market: { productionQuantity: fixedProductionQuantity } },
+    DEFAULT_FACTORY_SETTINGS,
+  )
+  const currentBatchSize = checkBaseline.decisions.market.batchSize
+  const machiningCapacityBefore = checkBaseline.forecast.capacityByDepartment.machining
+
+  const selectedBatchSize = Math.max(DEFAULT_FACTORY_SETTINGS.production.minBatchSize, currentBatchSize - 5)
+
+  // CHECK's preview mirrors CheckPage.previewForecast: advance with the batch-size decision, then
+  // forecast the resulting planning-round state with the SAME production quantity basis.
+  const { nextGameState: checkPreviewGameState } = advanceRoundState({
+    gameState,
+    forecast: checkBaseline,
+    totalRounds: DEFAULT_FACTORY_SETTINGS.game.totalRounds,
+    checkProductionDecision: { round: gameState.round, batchSize: selectedBatchSize },
+  })
+  const checkPreview = calculateRoundForecast(
+    checkPreviewGameState,
+    { market: { productionQuantity: fixedProductionQuantity } },
+    DEFAULT_FACTORY_SETTINGS,
+  )
+
+  // B: the selected batch size changes machining capacity for the planning round.
+  assert.equal(checkPreview.decisions.market.batchSize, selectedBatchSize)
+  assert.equal(checkPreview.forecast.capacityByDepartment.machining < machiningCapacityBefore, true)
+
+  // ACT mirrors ActPage's own forecast call: the SAME CHECK-selected batch size is passed as the
+  // actual market.batchSize override (not a separate inventory-only field), with the same quantity.
+  const actForecast = calculateRoundForecast(
+    gameState,
+    { market: { batchSize: selectedBatchSize, productionQuantity: fixedProductionQuantity } },
+    DEFAULT_FACTORY_SETTINGS,
+  )
+
+  // C: CHECK and ACT agree on the planning round's max capacity for the same decisions.
+  assert.equal(actForecast.summary.plantCapacity, checkPreview.summary.plantCapacity)
+  assert.equal(
+    actForecast.forecast.capacityByDepartment.machining,
+    checkPreview.forecast.capacityByDepartment.machining,
+  )
+
+  // G: the same selected batch size drives both capacity and the minimum-FG calculation.
+  assert.equal(
+    actForecast.forecast.inventory.minimumFinishedGoodsInventory,
+    actForecast.forecast.inventory.selectedBatchSizeMinimumFinishedGoodsInventory,
+  )
+})
+
+test('D: planned production is capped at the canonical capacity resolved from the same decisions', () => {
+  const gameState = createInitialGameState()
+  const baseline = calculateRoundForecast(gameState, {}, DEFAULT_FACTORY_SETTINGS)
+  const selectedBatchSize = Math.max(
+    DEFAULT_FACTORY_SETTINGS.production.minBatchSize,
+    baseline.decisions.market.batchSize - 5,
+  )
+
+  const atCapacityForecast = calculateRoundForecast(
+    gameState,
+    { market: { batchSize: selectedBatchSize } },
+    DEFAULT_FACTORY_SETTINGS,
+  )
+  const planningRoundMaxCapacity = atCapacityForecast.summary.plantCapacity
+
+  // plannedProduction === capacity -> actualProduction === capacity.
+  const exactForecast = calculateRoundForecast(
+    gameState,
+    { market: { batchSize: selectedBatchSize, productionQuantity: planningRoundMaxCapacity } },
+    DEFAULT_FACTORY_SETTINGS,
+  )
+  assert.equal(exactForecast.forecast.actualProduction, planningRoundMaxCapacity)
+
+  // plannedProduction > capacity -> actualProduction is still capped at capacity.
+  const overForecast = calculateRoundForecast(
+    gameState,
+    { market: { batchSize: selectedBatchSize, productionQuantity: planningRoundMaxCapacity + 999 } },
+    DEFAULT_FACTORY_SETTINGS,
+  )
+  assert.equal(overForecast.forecast.actualProduction, overForecast.summary.plantCapacity)
+  assert.equal(overForecast.forecast.actualProduction <= overForecast.summary.plantCapacity, true)
+})
+
+test('E/F: confirming ACT realizes the planning round with the canonical actualProduction and batch size', () => {
+  const gameState = createInitialGameState()
+  const baseline = calculateRoundForecast(gameState, {}, DEFAULT_FACTORY_SETTINGS)
+  const selectedBatchSize = Math.max(
+    DEFAULT_FACTORY_SETTINGS.production.minBatchSize,
+    baseline.decisions.market.batchSize - 5,
+  )
+
+  const atCapacityForecast = calculateRoundForecast(
+    gameState,
+    { market: { batchSize: selectedBatchSize } },
+    DEFAULT_FACTORY_SETTINGS,
+  )
+  const planningRoundMaxCapacity = atCapacityForecast.summary.plantCapacity
+
+  const overCapacityForecast = calculateRoundForecast(
+    gameState,
+    { market: { batchSize: selectedBatchSize, productionQuantity: planningRoundMaxCapacity + 999 } },
+    DEFAULT_FACTORY_SETTINGS,
+  )
+
+  const { nextGameState: realizedGameState, historyEntry } = advanceRoundState({
+    gameState,
+    forecast: overCapacityForecast,
+    totalRounds: DEFAULT_FACTORY_SETTINGS.game.totalRounds,
+  })
+
+  // E: realized round production equals the canonical (capacity-capped) actualProduction.
+  assert.equal(historyEntry.round, 1)
+  assert.equal(historyEntry.production.actualProduction, overCapacityForecast.forecast.actualProduction)
+
+  // F: the batch size used to forecast the planning round becomes the realized round's active batch size.
+  assert.equal(realizedGameState.market.batchSize, selectedBatchSize)
+  assert.equal(realizedGameState.round, 2)
+})
+
+

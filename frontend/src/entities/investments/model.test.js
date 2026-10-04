@@ -2,8 +2,6 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import investmentsSnapshot from '../../mocks/investmentsSnapshot.json' with { type: 'json' }
 import balanceSheetSnapshot from '../../mocks/balanceSheetSnapshot.json' with { type: 'json' }
-import projectsSnapshot from '../../mocks/projectsSnapshot.json' with { type: 'json' }
-import { buildProjectsViewModel } from '../lean-projects/model.js'
 import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
 import { createInitialGameState } from '../factory-settings/initialGameState.js'
 import {
@@ -16,7 +14,6 @@ import {
   buildDraftSelectionFromDecision,
   buildInvestmentsViewModel,
   getAdditionalPersonnelFromMachines,
-  normalizeMachineAutomationSelection,
 } from './model.js'
 
 test('factory expansion adds 1000 m2', () => {
@@ -147,97 +144,6 @@ test('installed debt at the limit leaves no financing capacity', () => {
   assert.equal(financing.canFinance, false)
 })
 
-test('SMED lower than 4 keeps mold automation locked', () => {
-  const projectsViewModel = buildProjectsViewModel(projectsSnapshot, { selectionMap: {} })
-  const smed = projectsViewModel.departments
-    .find((department) => department.key === 'machining')
-    .methods.find((method) => method.key === 'smed')
-  assert.equal(smed.currentLevel < 4, true)
-})
-
-test('SMED at least 4 unlocks mold automation', () => {
-  const projectsViewModel = buildProjectsViewModel(
-    {
-      ...projectsSnapshot,
-      departments: projectsSnapshot.departments.map((department) =>
-        department.key === 'machining'
-          ? {
-              ...department,
-              methods: department.methods.map((method) =>
-                method.key === 'smed' ? { ...method, effectiveHours: 400 } : method,
-              ),
-            }
-          : department,
-      ),
-    },
-    { selectionMap: {} },
-  )
-  const smed = projectsViewModel.departments
-    .find((department) => department.key === 'machining')
-    .methods.find((method) => method.key === 'smed')
-  assert.equal(smed.currentLevel >= 4, true)
-})
-
-test('same machine cannot receive two mold automations', () => {
-  const normalized = normalizeMachineAutomationSelection([2], [1, 1, 2, 3], 3)
-  assert.deepEqual(normalized, [1, 3])
-})
-
-test('SPC >= 4 unlocks automatic process measurement', () => {
-  const projectsViewModel = buildProjectsViewModel(
-    {
-      ...projectsSnapshot,
-      departments: projectsSnapshot.departments.map((department) =>
-        department.key === 'machining'
-          ? {
-              ...department,
-              methods: department.methods.map((method) =>
-                method.key === 'spc' ? { ...method, effectiveHours: 400 } : method,
-              ),
-            }
-          : department,
-      ),
-    },
-    { selectionMap: {} },
-  )
-
-  const spc = projectsViewModel.departments
-    .find((department) => department.key === 'machining')
-    .methods.find((method) => method.key === 'spc')
-
-  assert.equal(spc.currentLevel >= 4, true)
-})
-
-test('TPM >= 4 unlocks condition monitoring', () => {
-  const projectsViewModel = buildProjectsViewModel(
-    {
-      ...projectsSnapshot,
-      departments: projectsSnapshot.departments.map((department) =>
-        department.key === 'machining'
-          ? {
-              ...department,
-              methods: department.methods.map((method) =>
-                method.key === 'tpm' ? { ...method, effectiveHours: 400 } : method,
-              ),
-            }
-          : department,
-      ),
-    },
-    { selectionMap: {} },
-  )
-
-  const tpm = projectsViewModel.departments
-    .find((department) => department.key === 'machining')
-    .methods.find((method) => method.key === 'tpm')
-
-  assert.equal(tpm.currentLevel >= 4, true)
-})
-
-test('factory-wide systems cannot be bought twice (already installed in snapshot)', () => {
-  assert.equal(investmentsSnapshot.investments.automaticProcessMeasurement.installed, false)
-  assert.equal(investmentsSnapshot.investments.conditionMonitoring.installed, false)
-})
-
 test('machines depreciation is 5 percent per round', () => {
   assert.equal(calculateRoundDepreciation(500000, 0.05), 25000)
 })
@@ -253,12 +159,10 @@ test('existing balance sheet cash and debt are available for financing checks', 
 
 test('investments view model uses canonical gameState finance', () => {
   const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
-  const projectsViewModel = buildProjectsViewModel(projectsSnapshot, { selectionMap: {} })
   const viewModel = buildInvestmentsViewModel({
     snapshot: investmentsSnapshot,
     gameState,
     factorySettings: DEFAULT_FACTORY_SETTINGS,
-    projectsViewModel,
     draftSelection: {},
   })
 
@@ -269,46 +173,50 @@ test('investments view model uses canonical gameState finance', () => {
   assert.equal(viewModel.financing.financingCapacity, 1190050)
 })
 
-test('setup automation is one factory-wide canonical investment', () => {
-  assert.equal(DEFAULT_FACTORY_SETTINGS.investments.setupAutomation.repeatable, false)
-  const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
-  const projectsViewModel = buildProjectsViewModel(projectsSnapshot, { selectionMap: {} })
+test('removed raw draft flags are ignored without legacy catalogue entries or project levels', () => {
   const viewModel = buildInvestmentsViewModel({
-    snapshot: investmentsSnapshot,
-    gameState,
-    factorySettings: DEFAULT_FACTORY_SETTINGS,
-    projectsViewModel,
-    draftSelection: { setupAutomation: true },
-  })
-
-  assert.equal(viewModel.investmentRows.filter((item) => item.type === 'mold-change-automation').length, 1)
-  assert.equal(viewModel.investmentRows.find((item) => item.type === 'mold-change-automation').machineId, undefined)
-  assert.equal(viewModel.investmentRows.find((item) => item.type === 'mold-change-automation').cost, 250000)
-
-  const legacyDraft = buildDraftSelectionFromDecision({
-    investments: [{ type: 'mold-change-automation', machineId: 2, quantity: 1, cost: 250000 }],
-  })
-  assert.equal(legacyDraft.setupAutomation, true)
-  assert.deepEqual(legacyDraft.moldAutomationMachineIds, undefined)
-})
-
-test('installed setup automation cannot be selected again', () => {
-  const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
-  const projectsViewModel = buildProjectsViewModel(projectsSnapshot, { selectionMap: {} })
-  const viewModel = buildInvestmentsViewModel({
-    snapshot: investmentsSnapshot,
-    gameState: {
-      ...gameState,
+    snapshot: {
+      ...investmentsSnapshot,
       investments: {
-        ...gameState.investments,
-        setupAutomation: { installed: true },
+        newMachine: investmentsSnapshot.investments.newMachine,
+        factoryExpansion: investmentsSnapshot.investments.factoryExpansion,
       },
     },
+    gameState: createInitialGameState(DEFAULT_FACTORY_SETTINGS),
     factorySettings: DEFAULT_FACTORY_SETTINGS,
-    projectsViewModel,
-    draftSelection: { setupAutomation: true },
+    draftSelection: {
+      newMachineCount: 1,
+      expansionCount: 1,
+      setupAutomation: true,
+      moldAutomationMachineIds: [1, 2],
+      automaticProcessMeasurement: true,
+      conditionMonitoring: true,
+    },
   })
 
-  assert.equal(viewModel.guards.setupAutomationInstalled, true)
-  assert.equal(viewModel.investmentRows.some((item) => item.type === 'mold-change-automation'), false)
+  assert.deepEqual(viewModel.selectionState, { newMachineCount: 1, expansionCount: 1 })
+  assert.deepEqual(viewModel.investmentRows.map((item) => item.type), ['new-machine', 'factory-expansion'])
+  assert.equal(viewModel.totals.totalCost, 1500000)
+  assert.equal(viewModel.totals.depreciationPerRound, 50000)
+  assert.equal(viewModel.machineCountAfterSelection, investmentsSnapshot.factory.machiningMachineCount + 1)
+  assert.equal(viewModel.addedPersonnel, 5)
+  assert.equal(viewModel.space.projected.freeArea - viewModel.space.base.freeArea, 750)
+  assert.deepEqual(Object.keys(viewModel.guards), ['canAddMachine', 'canAddExpansion'])
+  assert.equal(viewModel.methodLevels, undefined)
+})
+
+test('decision drafts aggregate machines and expansions and ignore all removed investment rows', () => {
+  const draft = buildDraftSelectionFromDecision({
+    investments: [
+      { type: 'new-machine', quantity: 1 },
+      { type: 'new-machine', quantity: 2 },
+      { type: 'factory-expansion', quantity: 1 },
+      { type: 'mold-change-automation', machineId: 2, quantity: 1 },
+      { type: 'automatic-process-measurement', quantity: 1 },
+      { type: 'condition-monitoring', quantity: 1 },
+    ],
+  })
+
+  assert.deepEqual(draft, { newMachineCount: 3, expansionCount: 1 })
+  assert.deepEqual(buildDraftSelectionFromDecision(), { newMachineCount: 0, expansionCount: 0 })
 })

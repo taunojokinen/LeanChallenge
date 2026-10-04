@@ -2,10 +2,42 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { calculateDevelopedKnlValue } from '../forecast/knlDevelopment.js'
 import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
+import { createInitialGameState } from '../factory-settings/initialGameState.js'
+import { calculateRoundForecast } from '../forecast/model.js'
+import { advanceRoundState } from '../game-round/advanceRound.js'
 import {
   normalizeDevelopmentHours, updateDevelopmentHours, sumDevelopmentHours,
   isDevelopmentHoursValid, buildDevelopmentViewModel, calculateDevelopmentPercent,
 } from './model.js'
+
+test('all twelve methods start at zero cumulative hours and percent in a new game', () => {
+  const view = buildDevelopmentViewModel(createInitialGameState(), normalizeDevelopmentHours())
+  const methods = view.departments.flatMap((department) => department.methods)
+  assert.equal(methods.length, 12)
+  for (const method of methods) {
+    assert.equal(method.currentHours, 0, method.key)
+    assert.equal(method.predictedHours, 0, method.key)
+    assert.equal(method.currentLevel, 0, method.key)
+    assert.equal(method.predictedLevel, 0, method.key)
+    assert.equal(method.value, 0, method.key)
+  }
+  assert.equal(view.usedHours, 0)
+  assert.equal(view.remainingHours, 400)
+})
+
+test('invested method hours survive round advancement from the zero starting state', () => {
+  const gameState = createInitialGameState()
+  const forecast = calculateRoundForecast({ ...gameState, projectsDecision: {
+    round: gameState.round,
+    selections: [{ department: 'machining', method: 'smed', investedHours: 100 }],
+  } })
+  const { nextGameState } = advanceRoundState({ gameState, forecast, totalRounds: 12 })
+  const view = buildDevelopmentViewModel(nextGameState, normalizeDevelopmentHours())
+  const smed = view.departments[0].methods[1]
+  assert.equal(smed.currentHours, 100)
+  assert.equal(smed.currentLevel, calculateDevelopmentPercent(100))
+  assert.equal(smed.value, 0)
+})
 
 test('normalizes all twelve choices and caps legacy over-budget decisions', () => {
   const hours = normalizeDevelopmentHours({ 'machining:five-s': 300, 'assembly:tpm': 200, unknown: 100 })

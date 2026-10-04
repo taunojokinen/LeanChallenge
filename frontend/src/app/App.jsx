@@ -220,6 +220,7 @@ function App() {
           />
         ) : pageKey === 'do-investments' ? (
           <InvestmentsPage
+            onNavigate={navigateTo}
             round={gameState.round}
             gameState={gameState}
             factorySettings={DEFAULT_FACTORY_SETTINGS}

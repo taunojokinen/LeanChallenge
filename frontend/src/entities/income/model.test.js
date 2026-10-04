@@ -39,10 +39,9 @@ test('income history starts with canonical rounds -1 and 0', () => {
 
   assert.equal(view.previousRound, -1)
   assert.equal(view.round, 0)
-  // Fresh-game 5S baseline is 0h (2026-09 fix), so machining is again the round-0 bottleneck.
-  assert.equal(rows.find((row) => row.key === 'sales').currentAmount, 179)
-  assert.equal(result.currentAmount, -203862.6619140625)
-  assert.equal(financing.currentAmount, -45854.253710937504)
+  assert.equal(rows.find((row) => row.key === 'sales').currentAmount, 150)
+  assert.ok(Math.abs(result.currentAmount - (-590787.0056640625)) < 1e-8)
+  assert.ok(Math.abs(financing.currentAmount - (-55778.597460937504)) < 1e-8)
 })
 
 test('actual income API baseline pipeline preserves round zero values', async () => {
@@ -51,16 +50,16 @@ test('actual income API baseline pipeline preserves round zero values', async ()
   const rows = buildIncomeStatementRows(view)
   const values = Object.fromEntries(rows.map((row) => [row.key, row.currentAmount]))
 
-  assert.equal(values.sales, 179)
-  assert.equal(values.revenue, 4475000)
+  assert.equal(values.sales, 150)
+  assert.equal(values.revenue, 3750000)
   assert.equal(values.inventoryChange, 0)
-  assert.equal(values.materials, -2148000)
+  assert.equal(values.materials, -1800000)
   assert.equal(values.labor, -1391250)
-  assert.equal(values.grossMargin, 935750)
+  assert.equal(values.grossMargin, 558750)
   assert.equal(values.fixedCosts, -1000000)
   assert.equal(values.depreciation, -93758.408203125)
-  assert.equal(values.financingCosts, -45854.253710937504)
-  assert.equal(values.result, -203862.6619140625)
+  assert.ok(Math.abs(values.financingCosts - (-55778.597460937504)) < 1e-8)
+  assert.ok(Math.abs(values.result - (-590787.0056640625)) < 1e-8)
 })
 
 test('income statement cost percentages use revenue minus inventory change as presentation basis', () => {

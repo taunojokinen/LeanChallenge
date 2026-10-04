@@ -114,14 +114,11 @@ export const DEFAULT_FACTORY_SETTINGS = {
       minimumSetupTimeHours: 0.5,
       decayHours: 450,
       baseSetupCurveHours: 450,
-      automationReductionMinutesPerMachine: 10,
-      automationScope: 'machining',
     },
     tpm: {
       initialDowntimeRate: 0.1,
       minimumDowntimeRate: 0.01,
       decayHours: 450,
-      availabilityBonusPctPoints: 2,
     },
     quality: {
       baseAvailabilityPct: 70,
@@ -198,45 +195,6 @@ export const DEFAULT_FACTORY_SETTINGS = {
       spaceEffectM2: 1000,
       depreciationPerRound: 0.025,
     },
-    setupAutomation: {
-      type: 'mold-change-automation',
-      scope: 'machining',
-      repeatable: false,
-      price: 250000,
-      unlockThreshold: {
-        method: 'smed',
-        level: 4,
-      },
-      setupTimeReductionMinutesPerMachine: 10,
-      depreciationPerRound: 0.05,
-      installedMachineIds: [2],
-    },
-    automaticProcessMeasurement: {
-      type: 'automatic-process-measurement',
-      scope: 'factory',
-      repeatable: false,
-      price: 250000,
-      unlockThreshold: {
-        method: 'spc',
-        level: 4,
-      },
-      qualityBonusPctPoints: 2,
-      depreciationPerRound: 0.05,
-      installed: false,
-    },
-    conditionMonitoring: {
-      type: 'condition-monitoring',
-      scope: 'factory',
-      repeatable: false,
-      price: 200000,
-      unlockThreshold: {
-        method: 'tpm',
-        level: 4,
-      },
-      availabilityBonusPctPoints: 2,
-      depreciationPerRound: 0.05,
-      installed: false,
-    },
   },
 
   initialState: {
@@ -278,19 +236,19 @@ export const DEFAULT_FACTORY_SETTINGS = {
       },
       methods: {
         machining: {
-          smed: 175,
-          tpm: 145,
-          spc: 100,
+          smed: 0,
+          tpm: 0,
+          spc: 0,
         },
         assembly: {
-          'method-development': 50,
-          tpm: 210,
-          'poka-yoke': 120,
+          'method-development': 0,
+          tpm: 0,
+          'poka-yoke': 0,
         },
         shipping: {
-          'method-development': 50,
-          tpm: 160,
-          'poka-yoke': 90,
+          'method-development': 0,
+          tpm: 0,
+          'poka-yoke': 0,
         },
       },
     },
@@ -302,17 +260,6 @@ export const DEFAULT_FACTORY_SETTINGS = {
       expansionsCount: 0,
     },
 
-    investments: {
-      setupAutomation: {
-        installedMachineIds: [],
-      },
-      automaticProcessMeasurement: {
-        installed: false,
-      },
-      conditionMonitoring: {
-        installed: false,
-      },
-    },
 
     inventory: {
       finishedGoodsContainers: 100,

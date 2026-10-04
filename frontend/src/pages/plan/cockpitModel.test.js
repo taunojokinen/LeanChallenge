@@ -44,9 +44,9 @@ test('no runtime history selects round -1 and round 0', () => {
     shipping: { K: 76.2, N: 71.7, L: 74.0 },
   }
   const expectedRoundZero = {
-    machining: { K: 77.5452, N: 90.0, L: 73.9776 },
-    assembly: { K: 77.6260, N: 72.0749, L: 74.6937 },
-    shipping: { K: 76.0535, N: 72.0749, L: 73.6101 },
+    machining: { K: 76 * (1 - 100 / 2080), N: 90, L: 70 },
+    assembly: { K: 70, N: 70, L: 70 },
+    shipping: { K: 70, N: 70, L: 70 },
   }
 
   assert.equal(cockpit.previousConfirmedRound, -1)
@@ -68,23 +68,21 @@ test('no runtime history selects round -1 and round 0', () => {
     const speed = metrics['N - nopeus']
     const quality = metrics['L - laatu']
 
-    assert.equal(availability.previous * (metrics['K - vaihdot']?.previous ?? 100) / 100, expected.K)
+    assert.ok(Math.abs(availability.previous * (metrics['K - vaihdot']?.previous ?? 100) / 100 - expected.K) < 1e-9)
     assert.equal(speed.previous, expected.N)
     assert.equal(quality.previous, expected.L)
     assert.ok(Math.abs(canonicalRoundZero.kPct - expectedCanonical.K) < 0.0001)
     assert.ok(Math.abs(canonicalRoundZero.nPct - expectedCanonical.N) < 0.0001)
-      assert.ok(Math.abs(canonicalRoundZero.lPct - expectedCanonical.L) < 0.0001)
-    assert.ok(Math.abs((availability.previous * (metrics['K - vaihdot']?.previous ?? 100) / 100) / 100 - canonicalRoundZero.kPct / 100) <= 0.005)
-    assert.ok(Math.abs(speed.previous / 100 - canonicalRoundZero.nPct / 100) <= 0.005)
-    assert.ok(Math.abs(quality.previous / 100 - canonicalRoundZero.lPct / 100) <= 0.005)
-    assert.equal(
-      metrics.KNL.previous,
-      calculateKNL(
+    assert.ok(Math.abs(canonicalRoundZero.lPct - expectedCanonical.L) < 0.0001)
+    assert.ok(Math.abs(availability.current * (metrics['K - vaihdot']?.current ?? 100) / 100 - canonicalRoundZero.kPct) < 1e-9)
+    assert.equal(speed.current, canonicalRoundZero.nPct)
+    assert.equal(quality.current, canonicalRoundZero.lPct)
+    assert.ok(Math.abs(metrics.KNL.current - canonicalRoundZero.knl * 100) < 1e-9)
+    assert.ok(Math.abs(metrics.KNL.previous - calculateKNL(
         availability.previous * (metrics['K - vaihdot']?.previous ?? 100) / 100,
         speed.previous,
         quality.previous,
-      ) * 100,
-    )
+      ) * 100) < 1e-9)
   })
 })
 
@@ -134,14 +132,11 @@ test('machining changeover K uses canonical forecast values for rounds -1 and 0'
 
   assert.equal(metrics['K - vaihdot'].current, roundZero.kChangeoverPct)
   assert.equal(metrics['K - vaihdot'].previous, roundMinusOne.kChangeoverPct)
-  assert.equal(
-    metrics.KNL.current,
-    calculateKNL(
+  assert.ok(Math.abs(metrics.KNL.current - calculateKNL(
       metrics['K - vaihdot'].current * metrics['K - käytettävyys'].current / 100,
       metrics['N - nopeus'].current,
       metrics['L - laatu'].current,
-    ) * 100,
-  )
+    ) * 100) < 1e-9)
 })
 
 test('baseline factory K/N/L uses the shared capacity-weighted department aggregation', () => {
@@ -159,9 +154,10 @@ test('baseline factory K/N/L uses the shared capacity-weighted department aggreg
   assert.notEqual(roundMinusOne.factory.kPct, 84)
   assert.notEqual(roundMinusOne.factory.nPct, 82)
   assert.notEqual(roundMinusOne.factory.lPct, 77)
-  assert.ok(Math.abs(roundZero.factory.kPct - roundMinusOne.factory.kPct) < 1)
-  assert.ok(Math.abs(roundZero.factory.nPct - roundMinusOne.factory.nPct) < 1)
-  assert.ok(Math.abs(roundZero.factory.lPct - roundMinusOne.factory.lPct) < 1)
+  const canonicalFactory = calculateRoundForecast(gameState).current.factoryKnl
+  assert.equal(roundZero.factory.kPct, canonicalFactory.kPct)
+  assert.equal(roundZero.factory.nPct, canonicalFactory.nPct)
+  assert.equal(roundZero.factory.lPct, canonicalFactory.lPct)
 })
 
 test('relative change uses absolute previous value', () => {

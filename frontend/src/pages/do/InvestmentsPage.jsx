@@ -2,9 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import Card from '../../shared/ui/Card/Card.jsx'
 import Button from '../../shared/ui/Button/Button.jsx'
 import { getInvestmentsSnapshot } from '../../shared/api/investmentsApi.js'
-import { getProjectsSnapshot } from '../../shared/api/projectsApi.js'
-import { loadProjectsDecision } from '../../features/projects/decisionStore.js'
-import { buildProjectsViewModel, buildSelectionMapFromDecision } from '../../entities/lean-projects/model.js'
 import {
   buildDraftSelectionFromDecision,
   buildInvestmentsViewModel,
@@ -18,14 +15,10 @@ import './InvestmentsPage.css'
 const EMPTY_DRAFT_SELECTION = {
   newMachineCount: 0,
   expansionCount: 0,
-  setupAutomation: false,
-  automaticProcessMeasurement: false,
-  conditionMonitoring: false,
 }
 
-function InvestmentsPage({ round, gameState, factorySettings }) {
+function InvestmentsPage({ round, gameState, factorySettings, onNavigate }) {
   const [snapshot, setSnapshot] = useState(null)
-  const [projectsViewModel, setProjectsViewModel] = useState(null)
   const [savedDecision, setSavedDecision] = useState(null)
   const [draftSelection, setDraftSelection] = useState(EMPTY_DRAFT_SELECTION)
   const [statusMessage, setStatusMessage] = useState('')
@@ -34,31 +27,26 @@ function InvestmentsPage({ round, gameState, factorySettings }) {
     let isMounted = true
 
     const loadData = async () => {
-      const [investmentsData, projectsData] = await Promise.all([
-        getInvestmentsSnapshot(),
-        getProjectsSnapshot(),
-      ])
+      const investmentsData = await getInvestmentsSnapshot()
 
       if (!isMounted) {
         return
       }
 
-      const projectsDecision = loadProjectsDecision(round)
-      const selectionMap = projectsDecision ? buildSelectionMapFromDecision(projectsDecision) : {}
-      const projectsModel = buildProjectsViewModel(projectsData, { selectionMap })
-
       const investmentsDecision = loadInvestmentsDecision(round)
 
       setSnapshot(investmentsData)
-      setProjectsViewModel(projectsModel)
       setSavedDecision(investmentsDecision)
-      // A round with no stored decision yet must not inherit the previous round's draft.
       setDraftSelection(
         investmentsDecision ? buildDraftSelectionFromDecision(investmentsDecision) : EMPTY_DRAFT_SELECTION,
       )
     }
 
-    loadData()
+    loadData().catch(() => {
+      if (isMounted) {
+        setStatusMessage('Investointikatalogin lataus epäonnistui. Yritä uudelleen.')
+      }
+    })
 
     return () => {
       isMounted = false
@@ -66,7 +54,7 @@ function InvestmentsPage({ round, gameState, factorySettings }) {
   }, [round])
 
   const viewModel = useMemo(() => {
-    if (!snapshot || !gameState || !factorySettings || !projectsViewModel) {
+    if (!snapshot || !gameState || !factorySettings) {
       return null
     }
 
@@ -74,40 +62,49 @@ function InvestmentsPage({ round, gameState, factorySettings }) {
       snapshot,
       gameState,
       factorySettings,
-      projectsViewModel,
       draftSelection,
     })
-  }, [snapshot, gameState, factorySettings, projectsViewModel, draftSelection])
+  }, [snapshot, gameState, factorySettings, draftSelection])
 
-  const updateDraft = (changes) => {
-    setDraftSelection((previousValue) => ({
-      ...previousValue,
-      ...changes,
-    }))
-  }
-
-  // Auto-persist every valid draft change to the existing round-scoped decision store so
-  // selections made during this round survive page navigation. Gated on the same financing/space
-  // validity check as the explicit Save button so an invalid combination is never persisted.
-  // Depends only on draftSelection/round (not on viewModel, which changes identity every time we
-  // call setSavedDecision) to avoid an infinite save/recompute loop.
-  useEffect(() => {
-    if (!snapshot || !viewModel || !viewModel.financing.canFinance || viewModel.space.projected.freeArea < 0) {
-      return
-    }
-
+  const persistSelection = (selectionModel) => {
     const decision = {
       round,
-      investments: viewModel.investmentRows,
-      totalCost: viewModel.totals.totalCost,
-      financingNeed: viewModel.financing.financingNeed,
+      investments: selectionModel.investmentRows,
+      totalCost: selectionModel.totals.totalCost,
+      financingNeed: selectionModel.financing.financingNeed,
       savedAt: new Date().toISOString(),
     }
 
-    saveInvestmentsDecision(decision)
-    setSavedDecision(decision)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftSelection, round, snapshot])
+    try {
+      saveInvestmentsDecision(decision)
+      setSavedDecision(decision)
+      setStatusMessage('')
+      return true
+    } catch {
+      setStatusMessage('Investointien tallennus epäonnistui. Yritä uudelleen.')
+      return false
+    }
+  }
+
+  const updateDraft = (changes) => {
+    const nextDraft = { ...draftSelection, ...changes }
+    setDraftSelection(nextDraft)
+
+    if (!snapshot || !gameState || !factorySettings) {
+      return
+    }
+
+    const nextModel = buildInvestmentsViewModel({
+      snapshot,
+      gameState,
+      factorySettings,
+      draftSelection: nextDraft,
+    })
+
+    if (nextModel.financing.canFinance && nextModel.space.projected.freeArea >= 0) {
+      persistSelection(nextModel)
+    }
+  }
 
   const incrementMachine = () => {
     if (!viewModel || !viewModel.guards.canAddMachine) {
@@ -143,43 +140,20 @@ function InvestmentsPage({ round, gameState, factorySettings }) {
     updateDraft({ expansionCount: Math.max(0, draftSelection.expansionCount - 1) })
   }
 
-  const toggleFactorySystem = (key, canUnlock, alreadyInstalled, canFinance) => {
-    if (alreadyInstalled) {
-      return
-    }
-
-    if (!canUnlock) {
-      setStatusMessage('Investointi on lukittu - avaamisehto ei täyty vielä.')
-      return
-    }
-
-    if (!canFinance && !draftSelection[key]) {
-      setStatusMessage('Ei mahdollista - rahoitusvara ei ole riittävä.')
-      return
-    }
-
-    updateDraft({ [key]: !draftSelection[key] })
-  }
-
   const handleSave = () => {
     if (!snapshot || !viewModel || !viewModel.financing.canFinance || viewModel.space.projected.freeArea < 0) {
       setStatusMessage('Investointipäätöstä ei voi tallentaa - tarkista tila- ja rahoitusrajoitteet.')
       return
     }
 
-    const decision = {
-      round,
-      investments: viewModel.investmentRows,
-      totalCost: viewModel.totals.totalCost,
-      financingNeed: viewModel.financing.financingNeed,
-      savedAt: new Date().toISOString(),
+    if (!persistSelection(viewModel)) {
+      return
     }
 
-    saveInvestmentsDecision(decision)
-    setSavedDecision(decision)
     setStatusMessage(
       `Investoinnit tallennettu: ${viewModel.totals.totalCostText}, uusi velka ${viewModel.financing.financingNeedText}.`,
     )
+    onNavigate?.('/check')
   }
 
   if (!viewModel) {
@@ -188,6 +162,7 @@ function InvestmentsPage({ round, gameState, factorySettings }) {
         <header className="investments-header">
           <h1>INVESTOINNIT</h1>
           <p>Ladataan investointikatalogia...</p>
+          {statusMessage ? <p role="status">{statusMessage}</p> : null}
         </header>
       </section>
     )
@@ -273,100 +248,6 @@ function InvestmentsPage({ round, gameState, factorySettings }) {
           </article>
         </Card>
 
-        <Card>
-          <article className="investments-card">
-            <h2>Asetus-/muotinvaihdon automaatio</h2>
-            <p>Hinta: 250 000 €</p>
-            <p>Vaikutus: tehtaan koneistuksen asetusten ja muotinvaihtojen automaatio.</p>
-            <p>Poisto: 5 % / kierros</p>
-            {viewModel.guards.canUnlockMoldAutomation ? null : (
-              <small>
-                Vaatii SMED-tason 4,0. Nykyinen taso {viewModel.methodLevels.smedLevelText}.
-              </small>
-            )}
-
-            {viewModel.guards.setupAutomationInstalled ? (
-              <small>Järjestelmä on jo asennettu.</small>
-            ) : (
-              <Button
-                type="button"
-                disabled={!viewModel.guards.canUnlockMoldAutomation}
-                onClick={() =>
-                  toggleFactorySystem(
-                    'setupAutomation',
-                    viewModel.guards.canUnlockMoldAutomation,
-                    viewModel.guards.setupAutomationInstalled,
-                    viewModel.guards.canAddSetupAutomation,
-                  )
-                }
-              >
-                {draftSelection.setupAutomation ? 'POISTA' : 'VALITSE'}
-              </Button>
-            )}
-          </article>
-        </Card>
-
-        <Card>
-          <article className="investments-card">
-            <h2>Automaattinen prosessimittaus</h2>
-            <p>Hinta: 250 000 €</p>
-            <p>Vaikutus: Laatu +2 %-yks. (simulaatiossa)</p>
-            <p>Poisto: 5 % / kierros</p>
-            {viewModel.guards.canUnlockAutoMeasurement ? null : (
-              <small>
-                Vaatii SPC-tason 4,0. Nykyinen taso {viewModel.methodLevels.spcLevelText}.
-              </small>
-            )}
-            {viewModel.guards.autoMeasurementAlreadyInstalled ? (
-              <small>Järjestelmä on jo asennettu.</small>
-            ) : (
-              <Button
-                type="button"
-                onClick={() =>
-                  toggleFactorySystem(
-                    'automaticProcessMeasurement',
-                    viewModel.guards.canUnlockAutoMeasurement,
-                    viewModel.guards.autoMeasurementAlreadyInstalled,
-                    viewModel.guards.canAddProcessMeasurement,
-                  )
-                }
-              >
-                {draftSelection.automaticProcessMeasurement ? 'POISTA' : 'VALITSE'}
-              </Button>
-            )}
-          </article>
-        </Card>
-
-        <Card>
-          <article className="investments-card">
-            <h2>Kunnonvalvontajärjestelmä</h2>
-            <p>Hinta: 200 000 €</p>
-            <p>Vaikutus: Käytettävyys +2 %-yks. (simulaatiossa)</p>
-            <p>Poisto: 5 % / kierros</p>
-            {viewModel.guards.canUnlockConditionMonitoring ? null : (
-              <small>
-                Vaatii TPM-tason 4,0. Nykyinen taso {viewModel.methodLevels.tpmLevelText}.
-              </small>
-            )}
-            {viewModel.guards.conditionMonitoringAlreadyInstalled ? (
-              <small>Järjestelmä on jo asennettu.</small>
-            ) : (
-              <Button
-                type="button"
-                onClick={() =>
-                  toggleFactorySystem(
-                    'conditionMonitoring',
-                    viewModel.guards.canUnlockConditionMonitoring,
-                    viewModel.guards.conditionMonitoringAlreadyInstalled,
-                    viewModel.guards.canAddConditionMonitoring,
-                  )
-                }
-              >
-                {draftSelection.conditionMonitoring ? 'POISTA' : 'VALITSE'}
-              </Button>
-            )}
-          </article>
-        </Card>
       </section>
 
       <section className="investments-summary" aria-label="Valitut investoinnit">
@@ -376,10 +257,10 @@ function InvestmentsPage({ round, gameState, factorySettings }) {
         ) : (
           <div className="investments-summary-list">
             {viewModel.investmentRows.map((item, index) => (
-              <p key={`${item.type}-${item.machineId ?? index}`}>
+              <p key={`${item.type}-${index}`}>
                 <span>
                   {item.type}
-                  {item.machineId ? ` / Kone ${item.machineId}` : item.quantity > 1 ? ` ×${item.quantity}` : ''}
+                  {item.quantity > 1 ? ` ×${item.quantity}` : ''}
                 </span>
                 <strong>{item.cost.toLocaleString('fi-FI')} €</strong>
               </p>
@@ -436,9 +317,9 @@ function InvestmentsPage({ round, gameState, factorySettings }) {
             disabled={!viewModel.financing.canFinance || viewModel.space.projected.freeArea < 0}
             onClick={handleSave}
           >
-            TALLENNA INVESTOINNIT
+            Tallenna ja jatka
           </Button>
-          {statusMessage ? <p>{statusMessage}</p> : null}
+          {statusMessage ? <p role="status">{statusMessage}</p> : null}
           {savedDecision ? <small>Tallennettu kierrokselle {savedDecision.round}.</small> : null}
         </div>
       </section>

@@ -122,7 +122,7 @@ test('createInitialGameState returns deep immutable clones per call', () => {
   stateA.market.price = 99999
   stateA.staffing.assembly = 99
   stateA.lean.fiveS.departments.machining.effectiveHours = 1
-  stateA.investments.setupAutomation.installedMachineIds.push(77)
+  stateA.lean.methods.machining.smed = 999
 
   assert.equal(DEFAULT_FACTORY_SETTINGS.initialState.market.price, 25000)
   assert.equal(DEFAULT_FACTORY_SETTINGS.initialState.staffing.assembly, 38)
@@ -130,15 +130,14 @@ test('createInitialGameState returns deep immutable clones per call', () => {
     DEFAULT_FACTORY_SETTINGS.initialState.lean.fiveS.departments.machining.effectiveHours,
     0,
   )
-  assert.deepStrictEqual(
-    DEFAULT_FACTORY_SETTINGS.initialState.investments.setupAutomation.installedMachineIds,
-    [],
-  )
+  assert.equal(DEFAULT_FACTORY_SETTINGS.initialState.lean.methods.machining.smed, 0)
+  assert.equal('investments' in DEFAULT_FACTORY_SETTINGS.initialState, false)
 
   assert.equal(stateB.market.price, 25000)
   assert.equal(stateB.staffing.assembly, 38)
   assert.equal(stateB.lean.fiveS.departments.machining.effectiveHours, 0)
-  assert.deepStrictEqual(stateB.investments.setupAutomation.installedMachineIds, [])
+  assert.equal(stateB.lean.methods.machining.smed, 0)
+  assert.equal('investments' in stateB, false)
 })
 
 test('createInitialGameState does not add derived forecast values', () => {

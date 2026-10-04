@@ -17,7 +17,7 @@ function normalizeInvestment(item) {
 
   const type = String(item.type ?? '').trim()
 
-  if (!type) {
+  if (!['new-machine', 'factory-expansion'].includes(type)) {
     return null
   }
 
@@ -39,26 +39,12 @@ function normalizeInvestments(items, includeLegacyFields = true) {
     return []
   }
 
-  const normalized = items.map(normalizeInvestment).filter(Boolean)
-  const setupAutomation = normalized.find((item) => item.type === 'mold-change-automation')
-
-  return normalized.filter((item, index) => {
-    if (item.type !== 'mold-change-automation') {
-      return true
-    }
-
-    return item === setupAutomation && normalized.findIndex((candidate) => candidate.type === item.type) === index
-  }).map((item) => {
-    const canonicalItem = item.type === 'mold-change-automation'
-      ? { ...item, quantity: 1 }
-      : item
-
+  return items.map(normalizeInvestment).filter(Boolean).map((item) => {
     if (!includeLegacyFields) {
-      delete canonicalItem.cost
-      delete canonicalItem.machineId
+      delete item.cost
+      delete item.machineId
     }
-
-    return canonicalItem
+    return item
   })
 }
 

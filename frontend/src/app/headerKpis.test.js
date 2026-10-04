@@ -21,11 +21,9 @@ test('header KPIs come from persisted round-0 state, not forecast output', () =>
   assert.ok(result)
   assert.ok(production)
 
-  // Values reflect the canonical hours-based KNL development model (2026-09 rework) with a
-  // fresh game's 0h 5S starting point (machining is again the round-0 bottleneck at 179 kpl).
-  assert.equal(revenue.value.replace(/\s/g, ' '), '4 475 000 €')
-  assert.equal(result.value.replace(/\s/g, ' ').replace(/−/g, '-'), '-203 863 €')
-  assert.equal(production.value.replace(/\s/g, ' '), '179 kpl')
+  assert.equal(revenue.value.replace(/\s/g, ' '), '3 750 000 €')
+  assert.equal(result.value.replace(/\s/g, ' ').replace(/−/g, '-'), '-590 787 €')
+  assert.equal(production.value.replace(/\s/g, ' '), '150 kpl')
 })
 
 test('header KNL matches Cockpit confirmed factory KNL', () => {

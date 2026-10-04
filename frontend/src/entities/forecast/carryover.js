@@ -36,17 +36,6 @@ export function buildCanonicalCarryoverState({ round, closingState }) {
       methods: cloneMethods(closingState.lean.methods),
     },
     factory: { ...closingState.factory },
-    investments: {
-      setupAutomation: {
-        installed: Boolean(closingState.investments.setupAutomation.installed),
-      },
-      automaticProcessMeasurement: {
-        installed: Boolean(closingState.investments.automaticProcessMeasurement.installed),
-      },
-      conditionMonitoring: {
-        installed: Boolean(closingState.investments.conditionMonitoring.installed),
-      },
-    },
     inventory: {
       finishedGoodsContainers: inventory.finishedGoodsContainers,
     },

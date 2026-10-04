@@ -125,15 +125,14 @@ function calculateLearningComponent(basePct, effectiveHours, maxPct = 95, curveH
   return clamp(safeBase + (safeMax - safeBase) * curveRatio, MIN_COMPONENT_PCT, MAX_COMPONENT_PCT)
 }
 
-function calculateSmedChangeoverHours(smedHours, automationReductionMinutes = 0, smedSettings = null) {
+function calculateSmedChangeoverHours(smedHours, smedSettings = null) {
   const settings = smedSettings ?? DEFAULT_FACTORY_SETTINGS.lean.smed
   const safeHours = Math.max(0, toNumber(smedHours))
   const initialSetupHours = toNumber(settings.initialSetupTimeHours, 8)
   const minimumSetupHours = toNumber(settings.minimumSetupTimeHours, 0.5)
   const decayHours = Math.max(1, toNumber(settings.decayHours, 450))
   const baselineHours = minimumSetupHours + (initialSetupHours - minimumSetupHours) * Math.exp(-safeHours / decayHours)
-  const automatedHours = baselineHours - toNumber(automationReductionMinutes) / 60
-  return Math.max(minimumSetupHours, automatedHours)
+  return Math.max(minimumSetupHours, baselineHours)
 }
 
 function summarizeProjectsDecision(projectsDecision, projectsSnapshot) {
@@ -182,21 +181,9 @@ function summarizeProjectsDecision(projectsDecision, projectsSnapshot) {
 }
 
 function summarizeInvestmentsDecision(investmentsDecision, investmentsSnapshot) {
-  const setupAutomation = investmentsSnapshot.investments.moldChangeAutomation
   const result = {
     newMachines: 0,
     expansions: 0,
-    automationMachineCount: 0,
-    setupAutomationInstalled: Boolean(
-      setupAutomation.installed ||
-        (Array.isArray(setupAutomation.installedMachineIds) &&
-          setupAutomation.installedMachineIds.length > 0),
-    ),
-    setupAutomationPurchased: false,
-    automaticProcessMeasurement: Boolean(
-      investmentsSnapshot.investments.automaticProcessMeasurement.installed,
-    ),
-    conditionMonitoring: Boolean(investmentsSnapshot.investments.conditionMonitoring.installed),
     totalCost: 0,
   }
 
@@ -213,19 +200,6 @@ function summarizeInvestmentsDecision(investmentsDecision, investmentsSnapshot) 
     } else if (type === investmentsSnapshot.investments.factoryExpansion.type) {
       result.expansions += quantity
       cost = quantity * toNumber(investmentsSnapshot.investments.factoryExpansion.unitCost)
-    } else if (type === investmentsSnapshot.investments.moldChangeAutomation.type) {
-      if (!result.setupAutomationPurchased) {
-        result.automationMachineCount = 1
-        result.setupAutomationInstalled = true
-        result.setupAutomationPurchased = true
-        cost = toNumber(investmentsSnapshot.investments.moldChangeAutomation.unitCost)
-      }
-    } else if (type === investmentsSnapshot.investments.automaticProcessMeasurement.type) {
-      result.automaticProcessMeasurement = true
-      cost = toNumber(investmentsSnapshot.investments.automaticProcessMeasurement.unitCost)
-    } else if (type === investmentsSnapshot.investments.conditionMonitoring.type) {
-      result.conditionMonitoring = true
-      cost = toNumber(investmentsSnapshot.investments.conditionMonitoring.unitCost)
     }
 
     result.totalCost += cost
@@ -357,10 +331,6 @@ export function buildFiveSSnapshotFromGameState(gameState, factorySettings) {
 function buildInvestmentsSnapshotFromGameState(gameState, factorySettings) {
   const settings = factorySettings ?? DEFAULT_FACTORY_SETTINGS
   const configuredInvestments = settings.investments ?? DEFAULT_FACTORY_SETTINGS.investments
-  const stateInvestments = gameState.investments ?? {}
-  const setupAutomationState = stateInvestments.setupAutomation ?? {}
-  const processMeasurementState = stateInvestments.automaticProcessMeasurement ?? {}
-  const conditionMonitoringState = stateInvestments.conditionMonitoring ?? {}
 
   return {
     round: toNonNegativeInt(gameState.round, 1),
@@ -381,30 +351,6 @@ function buildInvestmentsSnapshotFromGameState(gameState, factorySettings) {
       factoryExpansion: {
         type: configuredInvestments.factoryExpansion?.type || 'factory-expansion',
         unitCost: toNumber(configuredInvestments.factoryExpansion?.price, 1000000),
-      },
-      moldChangeAutomation: {
-        type: configuredInvestments.setupAutomation?.type || 'mold-change-automation',
-        unitCost: toNumber(configuredInvestments.setupAutomation?.price, 250000),
-        installed: Boolean(
-          setupAutomationState.installed ||
-            (Array.isArray(setupAutomationState.installedMachineIds) &&
-              setupAutomationState.installedMachineIds.length > 0),
-        ),
-        installedMachineIds: Array.isArray(setupAutomationState.installedMachineIds)
-          ? [...setupAutomationState.installedMachineIds]
-          : [],
-      },
-      automaticProcessMeasurement: {
-        type:
-          configuredInvestments.automaticProcessMeasurement?.type ||
-          'automatic-process-measurement',
-        unitCost: toNumber(configuredInvestments.automaticProcessMeasurement?.price, 250000),
-        installed: Boolean(processMeasurementState.installed),
-      },
-      conditionMonitoring: {
-        type: configuredInvestments.conditionMonitoring?.type || 'condition-monitoring',
-        unitCost: toNumber(configuredInvestments.conditionMonitoring?.price, 200000),
-        installed: Boolean(conditionMonitoringState.installed),
       },
     },
   }
@@ -497,9 +443,6 @@ function calculateDepartmentMetrics({
   methodHours,
   requestedProductionQuantity,
   batchSize,
-  setupAutomationInstalled,
-  conditionMonitoring,
-  automaticProcessMeasurement,
   settings,
 }) {
   const productionSettings = settings.production ?? DEFAULT_FACTORY_SETTINGS.production
@@ -541,12 +484,9 @@ function calculateDepartmentMetrics({
   })
 
   if (key === 'machining') {
-    const averageAutomationReductionMinutes = setupAutomationInstalled
-      ? toNumber(smedSettings.automationReductionMinutesPerMachine, 10)
-      : 0
     // Setup time comes from the existing SMED curve (project hours only, no 5S contribution -
     // 5S must not gain a free share of K_changeover); changeover count comes from the batch size.
-    const setupTimeHours = calculateSmedChangeoverHours(methodHours.smed, averageAutomationReductionMinutes, smedSettings)
+    const setupTimeHours = calculateSmedChangeoverHours(methodHours.smed, smedSettings)
 
     const {
       totalChangeovers,
@@ -562,13 +502,13 @@ function calculateDepartmentMetrics({
     })
 
     const kMachiningDeveloped = clamp(
-      develop('K_machining', developmentHours.K) + (conditionMonitoring ? 0.02 : 0),
+      develop('K_machining', developmentHours.K),
       0,
       1,
     )
     const nMachiningDeveloped = develop('N_machining', developmentHours.N)
     const lMachiningDeveloped = clamp(
-      develop('L_machining', developmentHours.L) + (automaticProcessMeasurement ? 0.02 : 0),
+      develop('L_machining', developmentHours.L),
       0,
       1,
     )
@@ -614,13 +554,13 @@ function calculateDepartmentMetrics({
 
   const suffix = key === 'assembly' ? 'assembly' : 'shipping'
   const kDeveloped = clamp(
-    develop(`K_${suffix}`, developmentHours.K) + (conditionMonitoring ? 0.02 : 0),
+    develop(`K_${suffix}`, developmentHours.K),
     0,
     1,
   )
   const nDeveloped = develop(`N_${suffix}`, developmentHours.N)
   const lDeveloped = clamp(
-    develop(`L_${suffix}`, developmentHours.L) + (automaticProcessMeasurement ? 0.02 : 0),
+    develop(`L_${suffix}`, developmentHours.L),
     0,
     1,
   )
@@ -790,9 +730,6 @@ function calculateScenario({
     methodHours: projects.mergedLevels.machining || {},
     requestedProductionQuantity,
     batchSize: machiningBatchSize,
-    setupAutomationInstalled: investments.setupAutomationInstalled,
-    conditionMonitoring: investments.conditionMonitoring,
-    automaticProcessMeasurement: investments.automaticProcessMeasurement,
     settings,
   })
 
@@ -802,9 +739,6 @@ function calculateScenario({
     staffing,
     fiveSEffectiveHours: fiveSHoursByDepartment.assembly,
     methodHours: projects.mergedLevels.assembly || {},
-    setupAutomationInstalled: investments.setupAutomationInstalled,
-    conditionMonitoring: investments.conditionMonitoring,
-    automaticProcessMeasurement: investments.automaticProcessMeasurement,
     settings,
   })
 
@@ -814,9 +748,6 @@ function calculateScenario({
     staffing,
     fiveSEffectiveHours: fiveSHoursByDepartment.shipping,
     methodHours: projects.mergedLevels.shipping || {},
-    setupAutomationInstalled: investments.setupAutomationInstalled,
-    conditionMonitoring: investments.conditionMonitoring,
-    automaticProcessMeasurement: investments.automaticProcessMeasurement,
     settings,
   })
 
@@ -916,16 +847,7 @@ function calculateScenario({
   const machineryBase = toNumber(balanceSheetSnapshot.assets.machinery)
   const buildingsBase = toNumber(balanceSheetSnapshot.assets.buildings)
   const machineryInvestments =
-    investments.newMachines * toNumber(investmentsSnapshot.investments.newMachine.unitCost) +
-    (investments.setupAutomationPurchased
-      ? toNumber(investmentsSnapshot.investments.moldChangeAutomation.unitCost)
-      : 0) +
-    (investments.automaticProcessMeasurement
-      ? toNumber(investmentsSnapshot.investments.automaticProcessMeasurement.unitCost)
-      : 0) +
-    (investments.conditionMonitoring
-      ? toNumber(investmentsSnapshot.investments.conditionMonitoring.unitCost)
-      : 0)
+    investments.newMachines * toNumber(investmentsSnapshot.investments.newMachine.unitCost)
   const buildingInvestments =
     investments.expansions * toNumber(investmentsSnapshot.investments.factoryExpansion.unitCost)
 
@@ -1047,9 +969,6 @@ function calculateScenario({
       machineCount,
       totalArea,
       expansions: investments.expansions,
-      setupAutomationInstalled: investments.setupAutomationInstalled,
-      automaticProcessMeasurement: investments.automaticProcessMeasurement,
-      conditionMonitoring: investments.conditionMonitoring,
       machineryBase,
       buildingsBase,
       machineryInvestments,
@@ -1275,17 +1194,6 @@ function buildClosingState(gameState, forecastScenario, normalizedInputs, factor
       officeAndSocialM2: gameState.factory?.officeAndSocialM2 ?? 0,
       expansionsCount:
         Number(gameState.factory?.expansionsCount ?? 0) + closingInputs.expansions,
-    },
-    investments: {
-      setupAutomation: {
-        installed: closingInputs.setupAutomationInstalled,
-      },
-      automaticProcessMeasurement: {
-        installed: closingInputs.automaticProcessMeasurement,
-      },
-      conditionMonitoring: {
-        installed: closingInputs.conditionMonitoring,
-      },
     },
     inventory: {
       // Physical closing stock (opening + actualProduction - deliveries), not the Lean minimum metric.

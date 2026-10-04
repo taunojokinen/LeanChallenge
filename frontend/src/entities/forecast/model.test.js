@@ -1604,8 +1604,8 @@ test('closing project methods carry cumulative merged hours', () => {
     },
   })
 
-  assert.equal(forecast.closingState.lean.methods.machining.smed, 205)
-  assert.equal(forecast.closingState.lean.methods.machining.tpm, 145)
+  assert.equal(forecast.closingState.lean.methods.machining.smed, 30)
+  assert.equal(forecast.closingState.lean.methods.machining.tpm, 0)
 })
 
 test('closing production and factory state include current-round additions', () => {
@@ -1628,79 +1628,127 @@ test('closing production and factory state include current-round additions', () 
   assert.equal(forecast.closingState.factory.officeAndSocialM2, gameState.factory.officeAndSocialM2)
 })
 
-test('setup automation is a factory-wide one-time state without a machine id', () => {
+test('raw legacy installed flags and purchase decisions cannot affect forecast or round carryover', () => {
   const gameState = createInitialGameState()
-  const automationType = DEFAULT_FACTORY_SETTINGS.investments.setupAutomation.type
-  const withAutomation = calculateRoundForecast({
-    ...gameState,
-    investmentsDecision: {
-      round: gameState.round,
-      investments: [{ type: automationType, quantity: 1, machineId: null, cost: 250000 }],
-    },
-  })
-  const nextRound = {
-    ...gameState,
-    investments: {
-      ...gameState.investments,
-      setupAutomation: { installed: true },
-    },
-    production: { machiningMachines: 3 },
-    investmentsDecision: null,
+  const legacyInvestments = {
+    setupAutomation: { installed: true, installedMachineIds: [1, 2] },
+    automaticProcessMeasurement: { installed: true },
+    conditionMonitoring: { installed: true },
   }
-  const installedWithMoreMachines = calculateRoundForecast(nextRound)
-
-  assert.equal(withAutomation.closingState.investments.setupAutomation.installed, true)
-  assert.equal(installedWithMoreMachines.closingState.investments.setupAutomation.installed, true)
-  assert.equal(
-    installedWithMoreMachines.forecast.knl.machining.changeoverHours,
-    withAutomation.forecast.knl.machining.changeoverHours,
-  )
-})
-
-test('legacy installed machine ids migrate to factory-wide setup automation', () => {
-  const gameState = createInitialGameState()
-  const forecast = calculateRoundForecast({
+  const legacyRows = [
+    { type: 'mold-change-automation', quantity: 2, machineId: 2, cost: 250000 },
+    { type: 'setupAutomation', quantity: 1, cost: 250000 },
+    { type: 'automatic-process-measurement', quantity: 1, cost: 250000 },
+    { type: 'automaticProcessMeasurement', quantity: 1, cost: 250000 },
+    { type: 'condition-monitoring', quantity: 1, cost: 200000 },
+    { type: 'conditionMonitoring', quantity: 1, cost: 200000 },
+  ]
+  const baseline = calculateRoundForecast(gameState)
+  const legacyGameState = {
     ...gameState,
-    investments: {
-      ...gameState.investments,
-      setupAutomation: { installedMachineIds: [2] },
-    },
-  })
-
-  assert.equal(forecast.closingState.investments.setupAutomation.installed, true)
-})
-
-test('legacy investment snapshots also migrate installed machine ids', () => {
-  const forecast = calculateRoundForecast(createGameState({ investmentsDecision: null }))
-
-  assert.equal(forecast.closingState.investments.setupAutomation.installed, true)
-})
-
-test('factory-wide systems and finished goods use existing forecast results', () => {
-  const gameState = createInitialGameState()
-  const forecast = calculateRoundForecast({
-    ...gameState,
+    investments: legacyInvestments,
     investmentsDecision: {
       round: gameState.round,
+      investments: legacyRows,
+      totalCost: 1450000,
+      financingNeed: 1450000,
+    },
+  }
+  const legacyForecast = calculateRoundForecast(legacyGameState)
+  assert.deepEqual(legacyForecast.forecast, baseline.forecast)
+  assert.deepEqual(legacyForecast.current, baseline.current)
+  assert.deepEqual(legacyForecast.closingState, baseline.closingState)
+  assert.equal('investments' in legacyForecast.closingState, false)
+  assert.equal('investments' in legacyForecast.closingState.canonical, false)
+  assert.deepEqual(
+    advanceRoundState({ gameState: legacyGameState, forecast: legacyForecast, totalRounds: 12 }),
+    advanceRoundState({ gameState, forecast: baseline, totalRounds: 12 }),
+  )
+
+  const machineRows = [{ type: 'new-machine', quantity: 1 }, { type: 'factory-expansion', quantity: 1 }]
+  const machinesOnly = calculateRoundForecast({ ...gameState, investmentsDecision: { investments: machineRows } })
+  const mixed = calculateRoundForecast({
+    ...legacyGameState,
+    investmentsDecision: { investments: [...machineRows, ...legacyRows], totalCost: 2950000 },
+  })
+  assert.deepEqual(mixed.forecast, machinesOnly.forecast)
+  assert.deepEqual(mixed.closingState, machinesOnly.closingState)
+})
+
+test('raw legacy snapshot catalog and installed flags cannot affect forecast or carryover', () => {
+  const gameState = createGameState({ investmentsDecision: null })
+  const baseline = calculateRoundForecast(gameState)
+  const legacySnapshot = structuredClone(investmentsSnapshot)
+  Object.assign(legacySnapshot.investments, {
+    moldChangeAutomation: {
+      type: 'mold-change-automation', unitCost: 250000, installed: true, installedMachineIds: [2],
+    },
+    automaticProcessMeasurement: {
+      type: 'automatic-process-measurement', unitCost: 250000, installed: true,
+    },
+    conditionMonitoring: {
+      type: 'condition-monitoring', unitCost: 200000, installed: true,
+    },
+  })
+  const forecast = calculateRoundForecast({
+    ...gameState,
+    investmentsSnapshot: legacySnapshot,
+    investmentsDecision: {
       investments: [
-        {
-          type: DEFAULT_FACTORY_SETTINGS.investments.automaticProcessMeasurement.type,
-          quantity: 1,
-          cost: 250000,
-        },
-        {
-          type: DEFAULT_FACTORY_SETTINGS.investments.conditionMonitoring.type,
-          quantity: 1,
-          cost: 200000,
-        },
+        { type: 'mold-change-automation', quantity: 1 },
+        { type: 'automatic-process-measurement', quantity: 1 },
+        { type: 'condition-monitoring', quantity: 1 },
       ],
     },
-  }, {
+  })
+
+  assert.deepEqual(forecast.forecast, baseline.forecast)
+  assert.deepEqual(forecast.current, baseline.current)
+  assert.deepEqual(forecast.closingState, baseline.closingState)
+})
+
+test('SMED TPM and SPC project hours retain their development formulas without investment bonuses', () => {
+  const gameState = createInitialGameState()
+  const baseline = calculateRoundForecast(gameState)
+  const forecast = calculateRoundForecast({
+    ...gameState,
+    projectsDecision: {
+      selections: ['smed', 'tpm', 'spc'].map((method) => ({
+        department: 'machining', method, investedHours: 400,
+      })),
+    },
+  })
+  const settings = DEFAULT_FACTORY_SETTINGS
+  const machining = forecast.forecast.knl.machining
+  const hours = gameState.lean.methods.machining
+  const expectedSetup = settings.lean.smed.minimumSetupTimeHours +
+    (settings.lean.smed.initialSetupTimeHours - settings.lean.smed.minimumSetupTimeHours) *
+    Math.exp(-(hours.smed + 400) / settings.lean.smed.decayHours)
+  const expectedK = settings.knl.knlMaximum -
+    (settings.knl.knlMaximum - settings.knl.baseline.K_machining) *
+    2 ** (-(hours.tpm + 400) / settings.knl.knlHalfLifeHours)
+  const expectedL = settings.knl.knlMaximum -
+    (settings.knl.knlMaximum - settings.knl.baseline.L_machining) *
+    2 ** (-(hours.spc + 400) / settings.knl.knlHalfLifeHours)
+
+  assert.ok(Math.abs(machining.setupTimeHours - expectedSetup) < 1e-12)
+  assert.ok(Math.abs(machining.kMachiningDevelopedPct - expectedK * 100) < 1e-12)
+  assert.ok(Math.abs(machining.lPct - expectedL * 100) < 1e-12)
+  assert.ok(machining.setupTimeHours < baseline.forecast.knl.machining.setupTimeHours)
+  assert.ok(machining.kMachiningDevelopedPct > baseline.forecast.knl.machining.kMachiningDevelopedPct)
+  assert.ok(machining.lPct > baseline.forecast.knl.machining.lPct)
+  assert.equal(machining.nPct, baseline.forecast.knl.machining.nPct)
+  assert.deepEqual(forecast.closingState.lean.methods.machining, {
+    smed: hours.smed + 400, tpm: hours.tpm + 400, spc: hours.spc + 400,
+  })
+})
+
+test('finished goods closing state uses existing forecast results', () => {
+  const gameState = createInitialGameState()
+  const forecast = calculateRoundForecast(gameState, {
     market: { addedVariations: 1, runsPerVariation: 3 },
   })
 
-  assert.equal(forecast.closingState.investments.automaticProcessMeasurement.installed, true)
-  assert.equal(forecast.closingState.investments.conditionMonitoring.installed, true)
   assert.equal(
     forecast.closingState.inventory.finishedGoodsContainers,
     forecast.forecast.inventory.closingFinishedGoodsInventory,

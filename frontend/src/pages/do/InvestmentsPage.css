@@ -66,18 +66,6 @@
   justify-content: start;
 }
 
-.investments-machine-list {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.investments-machine-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-3);
-  align-items: center;
-}
-
 .investments-summary {
   display: grid;
   gap: var(--space-4);

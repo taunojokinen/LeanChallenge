@@ -68,12 +68,12 @@ test('rounds -1 and 0 derive revenue, materials, FG and payables from canonical 
   const { finishedGoodsValuePerContainer, rawMaterialInventoryShare } = settings.inventory
   const { otherLiabilitiesRawMaterialShare } = settings.finance
 
-  assert.equal(roundMinusOne.incomeStatement.salesUnits, 174)
-  assert.equal(roundZero.incomeStatement.salesUnits, 179)
-  assert.equal(roundMinusOne.incomeStatement.revenue, 174 * referencePrice)
-  assert.equal(roundZero.incomeStatement.revenue, 179 * referencePrice)
-  assert.equal(roundMinusOne.incomeStatement.materials, 174 * materialCostPerContainer)
-  assert.equal(roundZero.incomeStatement.materials, 179 * materialCostPerContainer)
+  assert.equal(roundMinusOne.incomeStatement.salesUnits, 145)
+  assert.equal(roundZero.incomeStatement.salesUnits, 150)
+  assert.equal(roundMinusOne.incomeStatement.revenue, 145 * referencePrice)
+  assert.equal(roundZero.incomeStatement.revenue, 150 * referencePrice)
+  assert.equal(roundMinusOne.incomeStatement.materials, 145 * materialCostPerContainer)
+  assert.equal(roundZero.incomeStatement.materials, 150 * materialCostPerContainer)
   assert.equal(roundMinusOne.finance.finishedGoodsInventoryBookValue, 100 * finishedGoodsValuePerContainer)
   assert.equal(roundZero.finance.finishedGoodsInventoryBookValue, 100 * finishedGoodsValuePerContainer)
   assert.equal(roundMinusOne.incomeStatement.inventoryChange, 0)

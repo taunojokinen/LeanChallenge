@@ -60,6 +60,16 @@ test('renders three departments, twelve sliders, summary and save action without
   assert.match(html, /Tallenna ja jatka/)
 })
 
+test('a fresh new game renders all twelve method progressbars at zero percent', () => {
+  const html = renderToStaticMarkup(createElement(DevelopmentPage, { gameState: createInitialGameState() }))
+  const methodBars = [...html.matchAll(/<div class="development-page__method">[\s\S]*?role="progressbar"[^>]*>/g)]
+
+  assert.equal(methodBars.length, 12)
+  for (const [markup] of methodBars) {
+    assert.match(markup, /aria-valuetext="0%"/)
+  }
+})
+
 test('loads both stored decisions, displays cumulative forecast and dynamic own-inclusive maxima', () => {
   saveDevelopmentDecision({ round: 1, hours: normalizeDevelopmentHours({
     'machining:five-s': 100, 'assembly:method-development': 200,

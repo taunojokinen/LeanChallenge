@@ -25,33 +25,6 @@
       "unitCost": 1000000,
       "addedAreaM2": 1000,
       "depreciationRatePerRound": 0.025
-    },
-    "moldChangeAutomation": {
-      "type": "mold-change-automation",
-      "name": "Muotinvaihtoautomaatti",
-      "unitCost": 250000,
-      "requiredSmedLevel": 4,
-      "effect": "-10 min / vaihto konekohtaisesti",
-      "depreciationRatePerRound": 0.05,
-      "installedMachineIds": [2]
-    },
-    "automaticProcessMeasurement": {
-      "type": "automatic-process-measurement",
-      "name": "Automaattinen prosessimittaus",
-      "unitCost": 250000,
-      "requiredSpcLevel": 4,
-      "effect": "Laatu +2 %-yks. (myöhemmässä simulaatiossa)",
-      "depreciationRatePerRound": 0.05,
-      "installed": false
-    },
-    "conditionMonitoring": {
-      "type": "condition-monitoring",
-      "name": "Kunnonvalvontajärjestelmä",
-      "unitCost": 200000,
-      "requiredTpmLevel": 4,
-      "effect": "Käytettävyys +2 %-yks. (myöhemmässä simulaatiossa)",
-      "depreciationRatePerRound": 0.05,
-      "installed": false
     }
   }
 }

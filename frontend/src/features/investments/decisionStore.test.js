@@ -47,3 +47,19 @@ test('a decision saved for the previous round is not returned for the new round'
 
   assert.equal(loadInvestmentsDecision(6), null)
 })
+
+test('removed investments are discarded on both load and save', () => {
+  globalThis.window = { localStorage: createStorage() }
+  const investments = [
+    { type: 'new-machine', quantity: 2 },
+    { type: 'factory-expansion', quantity: 1 },
+    { type: 'mold-change-automation', quantity: 1 },
+    { type: 'automatic-process-measurement', quantity: 1 },
+    { type: 'condition-monitoring', quantity: 1 },
+  ]
+  window.localStorage.setItem('lean-challenge-investments-decision', JSON.stringify({ round: 1, investments }))
+  assert.deepEqual(loadInvestmentsDecision(1).investments.map((item) => item.type), ['new-machine', 'factory-expansion'])
+  saveInvestmentsDecision({ round: 1, investments })
+  assert.deepEqual(JSON.parse(window.localStorage.getItem('lean-challenge-investments-decision')).investments,
+    [{ type: 'new-machine', quantity: 2 }, { type: 'factory-expansion', quantity: 1 }])
+})

@@ -15,17 +15,19 @@ import {
 } from '../../features/investments/decisionStore.js'
 import './InvestmentsPage.css'
 
+const EMPTY_DRAFT_SELECTION = {
+  newMachineCount: 0,
+  expansionCount: 0,
+  setupAutomation: false,
+  automaticProcessMeasurement: false,
+  conditionMonitoring: false,
+}
+
 function InvestmentsPage({ round, gameState, factorySettings }) {
   const [snapshot, setSnapshot] = useState(null)
   const [projectsViewModel, setProjectsViewModel] = useState(null)
   const [savedDecision, setSavedDecision] = useState(null)
-  const [draftSelection, setDraftSelection] = useState({
-    newMachineCount: 0,
-    expansionCount: 0,
-    setupAutomation: false,
-    automaticProcessMeasurement: false,
-    conditionMonitoring: false,
-  })
+  const [draftSelection, setDraftSelection] = useState(EMPTY_DRAFT_SELECTION)
   const [statusMessage, setStatusMessage] = useState('')
 
   useEffect(() => {
@@ -50,10 +52,10 @@ function InvestmentsPage({ round, gameState, factorySettings }) {
       setSnapshot(investmentsData)
       setProjectsViewModel(projectsModel)
       setSavedDecision(investmentsDecision)
-
-      if (investmentsDecision) {
-        setDraftSelection(buildDraftSelectionFromDecision(investmentsDecision))
-      }
+      // A round with no stored decision yet must not inherit the previous round's draft.
+      setDraftSelection(
+        investmentsDecision ? buildDraftSelectionFromDecision(investmentsDecision) : EMPTY_DRAFT_SELECTION,
+      )
     }
 
     loadData()
@@ -83,6 +85,29 @@ function InvestmentsPage({ round, gameState, factorySettings }) {
       ...changes,
     }))
   }
+
+  // Auto-persist every valid draft change to the existing round-scoped decision store so
+  // selections made during this round survive page navigation. Gated on the same financing/space
+  // validity check as the explicit Save button so an invalid combination is never persisted.
+  // Depends only on draftSelection/round (not on viewModel, which changes identity every time we
+  // call setSavedDecision) to avoid an infinite save/recompute loop.
+  useEffect(() => {
+    if (!snapshot || !viewModel || !viewModel.financing.canFinance || viewModel.space.projected.freeArea < 0) {
+      return
+    }
+
+    const decision = {
+      round,
+      investments: viewModel.investmentRows,
+      totalCost: viewModel.totals.totalCost,
+      financingNeed: viewModel.financing.financingNeed,
+      savedAt: new Date().toISOString(),
+    }
+
+    saveInvestmentsDecision(decision)
+    setSavedDecision(decision)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftSelection, round, snapshot])
 
   const incrementMachine = () => {
     if (!viewModel || !viewModel.guards.canAddMachine) {

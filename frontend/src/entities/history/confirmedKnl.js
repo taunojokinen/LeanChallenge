@@ -24,6 +24,12 @@ function normalizeMetric(metric = {}) {
     ...normalized,
     knl: Number.isFinite(storedKnl) ? (Math.abs(storedKnl) <= 1 ? storedKnl * 100 : storedKnl) : derivedKnl,
     capacityContainers: toNumber(metric.capacityContainers),
+    kChangeoverPct: Number.isFinite(Number(metric.kChangeoverPct))
+      ? Number(metric.kChangeoverPct)
+      : undefined,
+    kAvailabilityPct: Number.isFinite(Number(metric.kAvailabilityPct ?? metric.kMachiningDevelopedPct))
+      ? Number(metric.kAvailabilityPct ?? metric.kMachiningDevelopedPct)
+      : normalized.kPct,
   }
 }
 
@@ -54,8 +60,32 @@ function normalizeEntry(entry) {
 function buildHistoricalBaseline(factorySettings) {
   const settings = factorySettings
   const historical = settings.history?.knl?.roundMinusOne ?? {}
-  const departments = normalizeDepartments(historical)
-  const factory = normalizeFactoryMetric(historical.factory, departments)
+  const historicalMachining = historical.machining ?? {}
+  const historicalForecast = calculateRoundForecast(
+    createInitialGameState(settings),
+    { market: { productionQuantity: toNumber(historicalMachining.productionQuantity) } },
+    settings,
+  )
+  const kChangeoverPct = historicalForecast.current.knl.machining.kChangeoverPct
+  const departments = normalizeDepartments({
+    machining: {
+      ...historicalMachining,
+      capacityContainers: historicalForecast.current.knl.machining.capacityContainers,
+      kChangeoverPct,
+      kAvailabilityPct: kChangeoverPct === 0
+        ? 0
+        : (toNumber(historicalMachining.kPct) / kChangeoverPct) * 100,
+    },
+    assembly: {
+      ...historical.assembly,
+      capacityContainers: historicalForecast.current.knl.assembly.capacityContainers,
+    },
+    shipping: {
+      ...historical.shipping,
+      capacityContainers: historicalForecast.current.knl.shipping.capacityContainers,
+    },
+  })
+  const factory = calculateFactoryKnl(departments)
 
   return {
     round: -1,
@@ -70,7 +100,13 @@ function buildRoundZeroBaseline(factorySettings) {
 
   return {
     round: 0,
-    departments: normalizeDepartments(initialForecast.current.knl),
+    departments: normalizeDepartments({
+      ...initialForecast.current.knl,
+      machining: {
+        ...initialForecast.current.knl.machining,
+        kAvailabilityPct: initialForecast.current.knl.machining.kMachiningDevelopedPct,
+      },
+    }),
     factory: normalizeFactoryMetric(initialForecast.current.factoryKnl, initialForecast.current.knl),
   }
 }

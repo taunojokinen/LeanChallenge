@@ -26,7 +26,7 @@
 
 .plan-income-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(120px, auto) minmax(120px, auto) minmax(84px, auto);
+  grid-template-columns: minmax(180px, 1fr) minmax(120px, auto) minmax(52px, auto) minmax(120px, auto) minmax(52px, auto) minmax(84px, auto);
   align-items: baseline;
   gap: var(--space-8);
   padding: var(--space-7) var(--space-9);
@@ -63,6 +63,14 @@
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   justify-self: end;
+}
+
+.plan-income-percentage {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  justify-self: end;
+  min-width: 3.25rem;
+  text-align: right;
 }
 
 .plan-income-delta {
@@ -130,6 +138,7 @@
   }
 
   .plan-income-value,
+  .plan-income-percentage,
   .plan-income-delta {
     justify-self: start;
     text-align: left;

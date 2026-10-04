@@ -48,6 +48,26 @@ function formatAmount(amount, unit) {
   return `${sign}${EURO_FORMATTER.format(Math.abs(amount))} €`
 }
 
+function formatPercentage(value) {
+  return value == null ? '-' : `${value.toFixed(1)} %`
+}
+
+function calculateCostPercentage(amount, comparisonRevenue) {
+  if (!Number.isFinite(comparisonRevenue) || comparisonRevenue === 0) {
+    return null
+  }
+
+  return (Math.abs(amount) / comparisonRevenue) * 100
+}
+
+function calculateSignedPercentage(amount, comparisonRevenue) {
+  if (!Number.isFinite(comparisonRevenue) || comparisonRevenue === 0) {
+    return null
+  }
+
+  return (amount / comparisonRevenue) * 100
+}
+
 function getDeltaDirection(deltaPct) {
   if (deltaPct > 0) {
     return 'up'
@@ -193,6 +213,8 @@ function buildComparisonRow({
   impactKind,
   kind = 'normal',
   isNegative = false,
+  currentPercentage = null,
+  previousPercentage = null,
 }) {
   const currentAmountText = formatAmount(currentAmount, unit)
 
@@ -204,6 +226,8 @@ function buildComparisonRow({
     currentAmount,
     currentAmountText,
     amountText: currentAmountText,
+    previousPercentageText: formatPercentage(previousPercentage),
+    currentPercentageText: formatPercentage(currentPercentage),
     deltaText: formatDelta(deltaPct),
     impact: getImpactClass(impactKind, deltaPct),
     kind,
@@ -222,6 +246,7 @@ export function buildIncomeStatementRows(snapshot) {
   const fixedCosts = rows.fixedCosts.amount
   const depreciation = rows.depreciation.amount
   const financingCosts = rows.financingCosts.amount
+  const comparisonRevenue = revenue - inventoryChange
 
   const grossMarginAmount = revenue + inventoryChange - materials - labor
   const resultAmount = rows.result
@@ -249,6 +274,7 @@ export function buildIncomeStatementRows(snapshot) {
   const previousFinancingCosts = previousRows
     ? Number(previousRows.financingCosts?.amount) || 0
     : derivePreviousAmount(financingCosts, rows.financingCosts.deltaPct)
+  const previousComparisonRevenue = previousRevenue - previousInventoryChange
 
   const previousGrossMargin = previousRevenue + previousInventoryChange - previousMaterials - previousLabor
   const previousResult = previousRows?.result
@@ -321,6 +347,8 @@ export function buildIncomeStatementRows(snapshot) {
       previousAmount: -previousMaterials,
       deltaPct: materialsDeltaPct,
       impactKind: 'cost',
+      currentPercentage: calculateCostPercentage(materials, comparisonRevenue),
+      previousPercentage: calculateCostPercentage(previousMaterials, previousComparisonRevenue),
     }),
     buildComparisonRow({
       key: 'labor',
@@ -330,6 +358,8 @@ export function buildIncomeStatementRows(snapshot) {
       previousAmount: -previousLabor,
       deltaPct: laborDeltaPct,
       impactKind: 'cost',
+      currentPercentage: calculateCostPercentage(labor, comparisonRevenue),
+      previousPercentage: calculateCostPercentage(previousLabor, previousComparisonRevenue),
     }),
     buildComparisonRow({
       key: 'grossMargin',
@@ -340,6 +370,8 @@ export function buildIncomeStatementRows(snapshot) {
       deltaPct: grossMarginDeltaPct,
       impactKind: 'revenue',
       kind: 'subtotal',
+      currentPercentage: calculateSignedPercentage(grossMarginAmount, comparisonRevenue),
+      previousPercentage: calculateSignedPercentage(previousGrossMargin, previousComparisonRevenue),
     }),
     buildComparisonRow({
       key: 'fixedCosts',
@@ -349,6 +381,8 @@ export function buildIncomeStatementRows(snapshot) {
       previousAmount: -previousFixedCosts,
       deltaPct: fixedCostsDeltaPct,
       impactKind: 'cost',
+      currentPercentage: calculateCostPercentage(fixedCosts, comparisonRevenue),
+      previousPercentage: calculateCostPercentage(previousFixedCosts, previousComparisonRevenue),
     }),
     buildComparisonRow({
       key: 'depreciation',
@@ -358,6 +392,8 @@ export function buildIncomeStatementRows(snapshot) {
       previousAmount: -previousDepreciation,
       deltaPct: depreciationDeltaPct,
       impactKind: 'cost',
+      currentPercentage: calculateCostPercentage(depreciation, comparisonRevenue),
+      previousPercentage: calculateCostPercentage(previousDepreciation, previousComparisonRevenue),
     }),
     buildComparisonRow({
       key: 'financingCosts',
@@ -367,6 +403,8 @@ export function buildIncomeStatementRows(snapshot) {
       previousAmount: -previousFinancingCosts,
       deltaPct: financingCostsDeltaPct,
       impactKind: 'cost',
+      currentPercentage: calculateCostPercentage(financingCosts, comparisonRevenue),
+      previousPercentage: calculateCostPercentage(previousFinancingCosts, previousComparisonRevenue),
     }),
     buildComparisonRow({
       key: 'result',
@@ -378,6 +416,8 @@ export function buildIncomeStatementRows(snapshot) {
       impactKind: 'revenue',
       kind: 'total',
       isNegative: resultAmount < 0,
+      currentPercentage: calculateSignedPercentage(resultAmount, comparisonRevenue),
+      previousPercentage: calculateSignedPercentage(previousResult, previousComparisonRevenue),
     }),
   ]
 }

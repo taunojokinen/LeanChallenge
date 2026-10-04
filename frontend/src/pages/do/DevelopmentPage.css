@@ -1,0 +1,100 @@
+.development-page {
+  display: grid;
+  gap: var(--space-7);
+  width: 100%;
+  min-width: 0;
+  color: var(--color-text-primary);
+}
+
+.development-page__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-7);
+}
+
+.development-page h1 {
+  margin: 0;
+  font-size: var(--font-size-3xl);
+}
+
+.development-page__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-10);
+  margin: 0;
+}
+
+.development-page__summary dt {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.development-page__summary dd {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.development-page__departments {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-8);
+}
+
+.development-page__department {
+  display: grid;
+  align-content: start;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.development-page__department h2 {
+  margin: 0;
+  padding-bottom: var(--space-4);
+  border-bottom: var(--border-width-regular) solid var(--color-border-soft);
+  font-size: var(--font-size-lg);
+}
+
+.development-page__method {
+  padding: var(--space-5);
+  min-width: 0;
+  border: var(--border-width-thin) solid var(--color-border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel-soft);
+}
+
+.development-page__warning {
+  margin: 0;
+  padding: var(--space-4);
+  border-left: var(--border-width-strong) solid var(--color-warning);
+  color: var(--color-text-secondary);
+}
+
+.development-page__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+}
+
+.development-page__footer p {
+  flex: 1 1 200px;
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.development-page__footer button {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 980px) {
+  .development-page__departments {
+    grid-template-columns: 1fr;
+  }
+}

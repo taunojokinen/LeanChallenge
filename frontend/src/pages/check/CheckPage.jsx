@@ -541,7 +541,7 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
       </div>
 
       <section className="check-actions" aria-label="CHECK-vaiheen navigointi">
-        <Button type="button" onClick={() => onNavigate('/do/5s')}>
+        <Button type="button" onClick={() => onNavigate('/plan/development')}>
           TAKAISIN DO:HON
         </Button>
         <Button type="button" onClick={() => onNavigate('/act')}>

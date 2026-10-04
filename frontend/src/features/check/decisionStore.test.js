@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import {
   loadCheckProductionDecision,
   saveCheckProductionDecision,
+  loadCheckStaffingDecision,
+  saveCheckStaffingDecision,
 } from './decisionStore.js'
 
 function createStorage() {
@@ -88,4 +90,32 @@ test('batchSize is optional and defaults to null when not provided', () => {
 
   assert.equal(loaded.batchSize, null)
   assert.equal(loaded.targetFinishedGoodsInventory, null)
+})
+
+// Regression for the "persist across navigation" task: CheckPage now auto-persists every field
+// edit (instead of only on the explicit "Tallenna" button), so a simulated sequence of keystrokes
+// without a final save must still be fully readable on remount.
+test('incremental auto-persisted production/batch/target edits are readable on a simulated remount', () => {
+  globalThis.window = { localStorage: createStorage() }
+
+  saveCheckProductionDecision({ round: 3, productionQuantity: 150, batchSize: 20, targetFinishedGoodsInventory: 0 })
+  saveCheckProductionDecision({ round: 3, productionQuantity: 150, batchSize: 15, targetFinishedGoodsInventory: 0 })
+  saveCheckProductionDecision({ round: 3, productionQuantity: 160, batchSize: 15, targetFinishedGoodsInventory: 40 })
+
+  const reloaded = loadCheckProductionDecision(3)
+
+  assert.equal(reloaded.productionQuantity, 160)
+  assert.equal(reloaded.batchSize, 15)
+  assert.equal(reloaded.targetFinishedGoodsInventory, 40)
+})
+
+test('incremental auto-persisted staffing edits are readable on a simulated remount', () => {
+  globalThis.window = { localStorage: createStorage() }
+
+  saveCheckStaffingDecision({ round: 3, staffing: { assembly: 30, shipping: 5 } })
+  saveCheckStaffingDecision({ round: 3, staffing: { assembly: 32, shipping: 6 } })
+
+  const reloaded = loadCheckStaffingDecision(3)
+
+  assert.deepEqual(reloaded.staffing, { assembly: 32, shipping: 6 })
 })

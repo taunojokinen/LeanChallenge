@@ -24,16 +24,12 @@ export const appRoutes = [
     pageKey: 'plan-balance-sheet',
   },
   {
+    path: '/plan/development',
+    pageKey: 'plan-development',
+  },
+  {
     path: '/do',
     pageKey: 'do',
-  },
-  {
-    path: '/do/5s',
-    pageKey: 'do-5s',
-  },
-  {
-    path: '/do/projects',
-    pageKey: 'do-projects',
   },
   {
     path: '/do/investments',

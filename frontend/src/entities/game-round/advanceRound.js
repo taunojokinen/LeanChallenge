@@ -63,27 +63,15 @@ export function advanceRoundState({ gameState, forecast, totalRounds, checkProdu
     history: appendHistory(gameState.history, historyEntry),
   }
 
-  // CHECK's next-round decisions are made during the round being confirmed (currentRound) and
-  // only take effect for nextGameState; they never touch this round's own forecast/actuals.
+  // CHECK's next-round batch-size decision is made during the round being confirmed
+  // (currentRound) and only takes effect for nextGameState; it never touches this round's own
+  // forecast/actuals. Planned production quantity is a marketing decision owned by ACT and is
+  // never read here, so a stale CHECK value can never carry into the next round's market state.
   if (!isGameComplete && checkProductionDecision && Number(checkProductionDecision.round) === currentRound) {
     const marketOverrides = {}
 
-    if (checkProductionDecision.productionQuantity != null) {
-      marketOverrides.productionQuantity = Math.max(
-        0,
-        Math.round(Number(checkProductionDecision.productionQuantity) || 0),
-      )
-    }
-
     if (checkProductionDecision.batchSize != null) {
       marketOverrides.batchSize = Math.max(0, Math.round(Number(checkProductionDecision.batchSize) || 0))
-    }
-
-    if (checkProductionDecision.targetFinishedGoodsInventory != null) {
-      marketOverrides.targetFinishedGoodsInventory = Math.max(
-        0,
-        Math.round(Number(checkProductionDecision.targetFinishedGoodsInventory) || 0),
-      )
     }
 
     if (Object.keys(marketOverrides).length > 0) {

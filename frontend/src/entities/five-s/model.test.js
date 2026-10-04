@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
 import { createInitialGameState } from '../factory-settings/initialGameState.js'
 import { buildFiveSSnapshotFromGameState } from '../forecast/model.js'
+import { buildDevelopmentViewModel, normalizeDevelopmentHours } from '../development/model.js'
 import fiveSSnapshotFixture from '../../mocks/fiveSSnapshot.json' with { type: 'json' }
 import {
   getFiveSLevel,
@@ -10,7 +11,6 @@ import {
   applyFiveSDecay,
   calculateNextFiveSState,
   isFocusBudgetValid,
-  buildFiveSViewModel,
 } from './model.js'
 
 test('5S level thresholds map to exact integer levels', () => {
@@ -66,29 +66,26 @@ test('five-s max hours override changes the cap', () => {
   assert.equal(state.nextLevel < 5, true)
 })
 
-// Regression: FiveSPage/view model must read canonical gameState, never the static mock fixture.
-function buildViewModelForGameState(gameState, decision = null, investedHours = { machining: 0, assembly: 0, shipping: 0 }) {
-  const snapshot = buildFiveSSnapshotFromGameState(gameState, DEFAULT_FACTORY_SETTINGS)
-  return buildFiveSViewModel(snapshot, decision, investedHours, DEFAULT_FACTORY_SETTINGS)
-}
-
 test('A) a new game reports 0h of current 5S in every department', () => {
-  const viewModel = buildViewModelForGameState(createInitialGameState())
-  const hoursByKey = Object.fromEntries(viewModel.departments.map((d) => [d.key, d.currentEffectiveHours]))
+  const snapshot = buildFiveSSnapshotFromGameState(createInitialGameState(), DEFAULT_FACTORY_SETTINGS)
+  const hoursByKey = Object.fromEntries(snapshot.departments.map((department) => [department.key, department.fiveSEffectiveHours]))
 
   assert.deepEqual(hoursByKey, { machining: 0, assembly: 0, shipping: 0 })
 })
 
 test('B) a new game reports level 0 in every department', () => {
-  const viewModel = buildViewModelForGameState(createInitialGameState())
-  const levelByKey = Object.fromEntries(viewModel.departments.map((d) => [d.key, d.currentLevel]))
+  const viewModel = buildDevelopmentViewModel(createInitialGameState(), normalizeDevelopmentHours())
+  const levelByKey = Object.fromEntries(viewModel.departments.map((department) => [
+    department.key,
+    department.methods.find((method) => method.key === `${department.key}:five-s`).currentLevel,
+  ]))
 
   assert.deepEqual(levelByKey, { machining: 0, assembly: 0, shipping: 0 })
 })
 
-test('C) the view model never reflects the mocks/fiveSSnapshot.json fixture values (569/747/417)', () => {
-  const viewModel = buildViewModelForGameState(createInitialGameState())
-  const hours = viewModel.departments.map((d) => d.currentEffectiveHours)
+test('C) the canonical snapshot never reflects the mocks/fiveSSnapshot.json fixture values (569/747/417)', () => {
+  const snapshot = buildFiveSSnapshotFromGameState(createInitialGameState(), DEFAULT_FACTORY_SETTINGS)
+  const hours = snapshot.departments.map((department) => department.fiveSEffectiveHours)
 
   assert.equal(hours.includes(569), false)
   assert.equal(hours.includes(747), false)
@@ -101,46 +98,22 @@ test('D) canonical machining effectiveHours=100 is reflected as the current valu
   const gameState = createInitialGameState()
   gameState.lean.fiveS.departments.machining.effectiveHours = 100
 
-  const viewModel = buildViewModelForGameState(gameState)
-  const machining = viewModel.departments.find((d) => d.key === 'machining')
+  const snapshot = buildFiveSSnapshotFromGameState(gameState, DEFAULT_FACTORY_SETTINGS)
+  const machining = snapshot.departments.find((department) => department.key === 'machining')
 
-  assert.equal(machining.currentEffectiveHours, 100)
+  assert.equal(machining.fiveSEffectiveHours, 100)
 })
 
 test('E) current/decision/preview are kept distinct: current 100h + this-round decision 50h -> preview 150h', () => {
   const gameState = createInitialGameState()
   gameState.lean.fiveS.departments.machining.effectiveHours = 100
 
-  const viewModel = buildViewModelForGameState(gameState, null, { machining: 50, assembly: 0, shipping: 0 })
-  const machining = viewModel.departments.find((d) => d.key === 'machining')
+  const hours = normalizeDevelopmentHours({ 'machining:five-s': 50 })
+  const viewModel = buildDevelopmentViewModel(gameState, hours)
+  const machining = viewModel.departments.find((department) => department.key === 'machining')
+    .methods.find((method) => method.key === 'machining:five-s')
 
-  assert.equal(machining.currentEffectiveHours, 100)
-  assert.equal(machining.investedHours, 50)
-  assert.equal(machining.nextEffectiveHours, 150)
-})
-
-test('F) the displayed level uses the same developmentLevel settings as the canonical model', () => {
-  const customSettings = {
-    ...structuredClone(DEFAULT_FACTORY_SETTINGS),
-    lean: {
-      ...structuredClone(DEFAULT_FACTORY_SETTINGS.lean),
-      developmentLevel: { baseHours: 10, multiplier: 2 },
-    },
-  }
-  const gameState = createInitialGameState()
-  gameState.lean.fiveS.departments.machining.effectiveHours = 10
-
-  const defaultLevel = buildViewModelForGameState(gameState).departments.find((d) => d.key === 'machining').currentLevel
-
-  const snapshot = buildFiveSSnapshotFromGameState(gameState, customSettings)
-  const customLevel = buildFiveSViewModel(
-    snapshot,
-    null,
-    { machining: 0, assembly: 0, shipping: 0 },
-    customSettings,
-  ).departments.find((d) => d.key === 'machining').currentLevel
-
-  // 10h is below the default baseHours (100) -> level 0, but exactly at the custom baseHours (10) -> level 1.
-  assert.equal(defaultLevel, 0)
-  assert.equal(customLevel, 1)
+  assert.equal(machining.currentHours, 100)
+  assert.equal(machining.value, 50)
+  assert.equal(machining.predictedHours, 150)
 })

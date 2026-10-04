@@ -6,8 +6,7 @@ import GamePlaceholderPage from '../pages/game/GamePlaceholderPage.jsx'
 import PlanCockpitPage from '../pages/plan/PlanCockpitPage.jsx'
 import PlanBalanceSheetPage from '../pages/plan/PlanBalanceSheetPage.jsx'
 import PlanIncomePage from '../pages/plan/PlanIncomePage.jsx'
-import FiveSPage from '../pages/do/FiveSPage.jsx'
-import ProjectsPage from '../pages/do/ProjectsPage.jsx'
+import DevelopmentPage from '../pages/do/DevelopmentPage.jsx'
 import InvestmentsPage from '../pages/do/InvestmentsPage.jsx'
 import CheckPage from '../pages/check/CheckPage.jsx'
 import ActPage from '../pages/act/ActPage.jsx'
@@ -33,10 +32,10 @@ function normalizePath(pathname, shouldReplace = false) {
 
   if (currentPath === '/do' || currentPath === '/do/') {
     if (shouldReplace) {
-      window.history.replaceState({}, '', '/do/5s')
+      window.history.replaceState({}, '', '/plan/development')
     }
 
-    return '/do/5s'
+    return '/plan/development'
   }
 
   return currentPath
@@ -46,8 +45,7 @@ const gamePhaseByPageKey = {
   'plan-cockpit': 'PLAN',
   'plan-income': 'PLAN',
   'plan-balance-sheet': 'PLAN',
-  'do-5s': 'DO',
-  'do-projects': 'DO',
+  'plan-development': 'PLAN',
   'do-investments': 'DO',
   do: 'DO',
   check: 'CHECK',
@@ -63,10 +61,6 @@ const placeholderContentByPageKey = {
   do: {
     title: 'DO',
     description: 'DO-vaiheen Lean-toimenpiteet toteutetaan seuraavassa vaiheessa.',
-  },
-  'do-projects': {
-    title: 'DO - Projektit',
-    description: 'Projektien näkymä toteutetaan seuraavassa vaiheessa.',
   },
   'do-investments': {
     title: 'DO - Investoinnit',
@@ -218,10 +212,12 @@ function App() {
             gameState={gameState}
             factorySettings={DEFAULT_FACTORY_SETTINGS}
           />
-        ) : pageKey === 'do-5s' ? (
-          <FiveSPage gameState={gameState} round={gameState.round} factorySettings={DEFAULT_FACTORY_SETTINGS} />
-        ) : pageKey === 'do-projects' ? (
-          <ProjectsPage round={gameState.round} />
+        ) : pageKey === 'plan-development' ? (
+          <DevelopmentPage
+            onNavigate={navigateTo}
+            gameState={gameState}
+            factorySettings={DEFAULT_FACTORY_SETTINGS}
+          />
         ) : pageKey === 'do-investments' ? (
           <InvestmentsPage
             round={gameState.round}

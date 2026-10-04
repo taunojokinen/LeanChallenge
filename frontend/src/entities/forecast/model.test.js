@@ -7,6 +7,7 @@ import balanceSheetSnapshot from '../../mocks/balanceSheetSnapshot.json' with { 
 import productionSnapshot from '../../mocks/productionSnapshot.json' with { type: 'json' }
 import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
 import { createInitialGameState } from '../factory-settings/initialGameState.js'
+import { advanceRoundState } from '../game-round/advanceRound.js'
 import {
   calculateAllowedNewVariations,
   calculateDemandPerVariation,
@@ -68,13 +69,13 @@ test('bottleneck equals the smallest department capacity', () => {
   assert.equal(forecast.forecast.plantCapacity, min)
 })
 
-test('deliveries preserve the default minimum finished-goods target', () => {
+test('by default (no inventory-supplement decision), deliveries equal production limited by demand', () => {
   const forecast = calculateRoundForecast(createGameState())
   const inventory = forecast.forecast.inventory
-  assert.equal(
-    forecast.forecast.deliveries,
-    Math.max(0, Math.min(forecast.forecast.demand, inventory.openingFinishedGoodsInventory + forecast.forecast.actualProduction - inventory.targetFinishedGoodsInventory)),
-  )
+
+  assert.equal(inventory.useFinishedGoodsInventoryForDeliveries, false)
+  assert.equal(inventory.inventorySales, 0)
+  assert.equal(forecast.forecast.deliveries, Math.min(forecast.forecast.demand, forecast.forecast.actualProduction))
 })
 
 test('capacity gap creates lost sales', () => {
@@ -1113,7 +1114,7 @@ test('capacity limits production regardless of demand', () => {
   assert.equal(forecast.forecast.actualProduction, forecast.forecast.plantCapacity)
 })
 
-test('opening inventory above the minimum buffer supplements this round\'s production', () => {
+test('opening inventory above the minimum buffer can supplement this round\'s production when the ACT decision opts in', () => {
   const customSettings = cloneSettings({
     market: {
       ...DEFAULT_FACTORY_SETTINGS.market,
@@ -1127,39 +1128,57 @@ test('opening inventory above the minimum buffer supplements this round\'s produ
 
   const forecast = calculateRoundForecast(
     gameState,
-    { market: { price: 25000, productionQuantity: 170, batchSize: 20, activeVariationCount: 10 } },
+    {
+      market: {
+        price: 25000,
+        productionQuantity: 170,
+        batchSize: 20,
+        activeVariationCount: 10,
+        useFinishedGoodsInventoryForDeliveries: true,
+      },
+    },
     customSettings,
   )
   const inv = forecast.forecast.inventory
 
   assert.equal(inv.minimumFinishedGoodsInventory, 10)
-  assert.equal(inv.availableFinishedGoodsInventory, 310)
+  assert.equal(inv.sellableOpeningFinishedGoodsInventory, 140)
+  assert.equal(inv.inventorySales, 40)
   assert.equal(forecast.forecast.actualProduction, 170)
   assert.equal(forecast.forecast.demand, 210)
   assert.equal(forecast.forecast.deliveries, 210)
   assert.equal(inv.closingFinishedGoodsInventory, 110)
 })
 
-test('the default target is the calculated minimum inventory buffer', () => {
-  const gameState = createInitialGameState()
-  gameState.inventory.finishedGoodsContainers = 150
-  gameState.production.machiningMachines = 10
-  gameState.staffing = { assembly: 200, shipping: 200 }
+test('the inventory-supplement decision toggles between physically unchanged and topped-up deliveries', () => {
+  function forecastWithSupplement(useFinishedGoodsInventoryForDeliveries) {
+    const gameState = createInitialGameState()
+    gameState.inventory.finishedGoodsContainers = 150
+    gameState.production.machiningMachines = 10
+    gameState.staffing = { assembly: 200, shipping: 200 }
 
-  const forecast = calculateRoundForecast(
-    gameState,
-    { market: { price: 25000, productionQuantity: 120, batchSize: 10 } },
-    DEFAULT_FACTORY_SETTINGS,
-  )
-  const inv = forecast.forecast.inventory
+    return calculateRoundForecast(
+      gameState,
+      { market: { price: 25000, productionQuantity: 120, batchSize: 10, useFinishedGoodsInventoryForDeliveries } },
+      DEFAULT_FACTORY_SETTINGS,
+    )
+  }
 
-  assert.equal(inv.minimumFinishedGoodsInventory, 10)
-  assert.equal(inv.targetFinishedGoodsInventory, 10)
-  assert.equal(inv.availableFinishedGoodsInventory, 260)
-  assert.equal(forecast.forecast.actualProduction, 120)
-  assert.equal(forecast.forecast.deliveries, 200)
-  assert.equal(forecast.forecast.lostSalesUnits, 0)
-  assert.equal(inv.closingFinishedGoodsInventory, 70)
+  const off = forecastWithSupplement(false)
+  assert.equal(off.forecast.inventory.minimumFinishedGoodsInventory, 10)
+  assert.equal(off.forecast.inventory.inventorySales, 0)
+  assert.equal(off.forecast.actualProduction, 120)
+  assert.equal(off.forecast.deliveries, 120)
+  assert.equal(off.forecast.lostSalesUnits, 80)
+  assert.equal(off.forecast.inventory.closingFinishedGoodsInventory, 150)
+
+  const on = forecastWithSupplement(true)
+  assert.equal(on.forecast.inventory.sellableOpeningFinishedGoodsInventory, 140)
+  assert.equal(on.forecast.inventory.inventorySales, 80)
+  assert.equal(on.forecast.actualProduction, 120)
+  assert.equal(on.forecast.deliveries, 200)
+  assert.equal(on.forecast.lostSalesUnits, 0)
+  assert.equal(on.forecast.inventory.closingFinishedGoodsInventory, 70)
 })
 
 test('production above demand builds physical inventory and drives inventoryChange from the physical balance', () => {
@@ -1175,7 +1194,8 @@ test('production above demand builds physical inventory and drives inventoryChan
   )
   const inv = forecast.forecast.inventory
 
-  assert.equal(inv.availableFinishedGoodsInventory, 310)
+  assert.equal(inv.sellableOpeningFinishedGoodsInventory, 90)
+  assert.equal(inv.inventorySales, 0)
   assert.equal(forecast.forecast.deliveries, 200)
   assert.equal(inv.closingFinishedGoodsInventory, 120)
   assert.equal(inv.inventoryChange, 400000)
@@ -1250,40 +1270,159 @@ test('production quantity below demand creates lost sales', () => {
   assert.equal(forecast.summary.lostSalesUnits > 0, true)
 })
 
-test('finished-goods target inventory controls deliveries and physical closing stock', () => {
+// Regression suite for the new finished-goods delivery decision (canonical formulas):
+// productionSales = min(demand, actualProduction); demandShortfall = max(0, demand - actualProduction)
+// sellableOpeningFinishedGoodsInventory = max(0, openingFG - selectedBatchSizeMinimumFinishedGoodsInventory)
+// inventorySales = useFinishedGoodsInventoryForDeliveries ? min(demandShortfall, sellable) : 0
+// deliveries = productionSales + inventorySales; closingFG = openingFG + actualProduction - deliveries
+function buildDeliveryScenario({
+  productionQuantity,
+  baseDemandPerVariation,
+  useFinishedGoodsInventoryForDeliveries = false,
+  batchSize = 20,
+  selectedBatchSize = 15,
+  activeVariationCount = 100,
+  machineCount = 10,
+}) {
   const customSettings = cloneSettings({
-    market: { ...DEFAULT_FACTORY_SETTINGS.market, baseDemandPerVariation: 10 },
+    market: { ...DEFAULT_FACTORY_SETTINGS.market, baseDemandPerVariation },
   })
+  const gameState = createInitialGameState()
+  gameState.inventory.finishedGoodsContainers = 100
+  gameState.production.machiningMachines = machineCount
+  gameState.staffing = { assembly: 200, shipping: 200 }
 
-  function forecastFor({ openingInventory, productionQuantity, targetFinishedGoodsInventory }) {
-    const gameState = createInitialGameState()
-    gameState.inventory.finishedGoodsContainers = openingInventory
-    gameState.production.machiningMachines = 10
-    gameState.staffing = { machining: 50, assembly: 200, shipping: 200 }
-
-    return calculateRoundForecast(gameState, {
+  return calculateRoundForecast(
+    gameState,
+    {
       market: {
         price: 25000,
-        activeVariationCount: 20,
-        batchSize: 10,
+        activeVariationCount,
         productionQuantity,
-        targetFinishedGoodsInventory,
+        batchSize,
+        selectedBatchSize,
+        useFinishedGoodsInventoryForDeliveries,
       },
-    }, customSettings)
-  }
+    },
+    customSettings,
+  )
+}
 
-  const caseA = forecastFor({ openingInventory: 50, productionQuantity: 180, targetFinishedGoodsInventory: 30 })
-  assert.equal(caseA.forecast.deliveries, 200)
-  assert.equal(caseA.forecast.inventory.closingFinishedGoodsInventory, 30)
+test('A) batch-size reduction releases inventory immediately, before advanceRound()', () => {
+  const forecast = buildDeliveryScenario({ productionQuantity: 180, baseDemandPerVariation: 2 })
+  const inv = forecast.forecast.inventory
 
-  const caseB = forecastFor({ openingInventory: 30, productionQuantity: 230, targetFinishedGoodsInventory: 60 })
-  assert.equal(caseB.forecast.deliveries, 200)
-  assert.equal(caseB.forecast.inventory.closingFinishedGoodsInventory, 60)
+  assert.equal(inv.minimumFinishedGoodsInventory, 100)
+  assert.equal(inv.selectedBatchSizeMinimumFinishedGoodsInventory, 75)
+  assert.equal(inv.sellableOpeningFinishedGoodsInventory, 25)
+})
 
-  const caseC = forecastFor({ openingInventory: 30, productionQuantity: 195, targetFinishedGoodsInventory: 60 })
-  assert.equal(caseC.forecast.deliveries, 165)
-  assert.equal(caseC.forecast.lostSalesUnits, 35)
-  assert.equal(caseC.forecast.inventory.closingFinishedGoodsInventory, 60)
+test('B) supplement OFF: opening inventory remains physically unchanged', () => {
+  const forecast = buildDeliveryScenario({
+    productionQuantity: 180,
+    baseDemandPerVariation: 2,
+    useFinishedGoodsInventoryForDeliveries: false,
+  })
+
+  assert.equal(forecast.forecast.demand, 200)
+  assert.equal(forecast.forecast.inventory.inventorySales, 0)
+  assert.equal(forecast.forecast.deliveries, 180)
+  assert.equal(forecast.forecast.inventory.closingFinishedGoodsInventory, 100)
+})
+
+test('C) supplement ON: shortfall is covered from sellable opening inventory', () => {
+  const forecast = buildDeliveryScenario({
+    productionQuantity: 180,
+    baseDemandPerVariation: 2,
+    useFinishedGoodsInventoryForDeliveries: true,
+  })
+
+  assert.equal(forecast.forecast.inventory.inventorySales, 20)
+  assert.equal(forecast.forecast.deliveries, 200)
+  assert.equal(forecast.forecast.inventory.closingFinishedGoodsInventory, 80)
+})
+
+test('D) inventory insufficient: sellable inventory caps inventorySales and deliveries', () => {
+  // demandPerVariation is rounded to an integer before multiplying by totalVariations, so use
+  // activeVariationCount=110/machineCount=11 (same minimum=100/75/sellable=25 as the other cases)
+  // to reach an exact demand of 220 with an integer baseDemandPerVariation of 2.
+  const forecast = buildDeliveryScenario({
+    productionQuantity: 180,
+    baseDemandPerVariation: 2,
+    activeVariationCount: 110,
+    machineCount: 11,
+    useFinishedGoodsInventoryForDeliveries: true,
+  })
+
+  assert.equal(forecast.forecast.demand, 220)
+  assert.equal(forecast.forecast.inventory.sellableOpeningFinishedGoodsInventory, 25)
+  assert.equal(forecast.forecast.inventory.inventorySales, 25)
+  assert.equal(forecast.forecast.deliveries, 205)
+  assert.equal(forecast.forecast.inventory.closingFinishedGoodsInventory, 75)
+})
+
+test('E) overproduction increases inventory and never triggers inventory sales', () => {
+  const forecast = buildDeliveryScenario({
+    productionQuantity: 210,
+    baseDemandPerVariation: 2,
+    useFinishedGoodsInventoryForDeliveries: true,
+  })
+
+  assert.equal(forecast.forecast.demand, 200)
+  assert.equal(forecast.forecast.inventory.inventorySales, 0)
+  assert.equal(forecast.forecast.deliveries, 200)
+  assert.equal(forecast.forecast.inventory.closingFinishedGoodsInventory, 110)
+})
+
+test('F) closing inventory never drops below the selected-batch minimum', () => {
+  const forecast = buildDeliveryScenario({
+    productionQuantity: 180,
+    baseDemandPerVariation: 2,
+    activeVariationCount: 110,
+    machineCount: 11,
+    useFinishedGoodsInventoryForDeliveries: true,
+  })
+
+  assert.equal(
+    forecast.forecast.inventory.closingFinishedGoodsInventory,
+    forecast.forecast.inventory.selectedBatchSizeMinimumFinishedGoodsInventory,
+  )
+  assert.equal(
+    forecast.forecast.inventory.closingFinishedGoodsInventory >=
+      forecast.forecast.inventory.selectedBatchSizeMinimumFinishedGoodsInventory,
+    true,
+  )
+})
+
+test('I) forecast -> advanceRound realization produces identical deliveries and closing FG', () => {
+  const gameState = createInitialGameState()
+  gameState.inventory.finishedGoodsContainers = 100
+  gameState.production.machiningMachines = 10
+  gameState.staffing = { assembly: 200, shipping: 200 }
+
+  const customSettings = cloneSettings({
+    market: { ...DEFAULT_FACTORY_SETTINGS.market, baseDemandPerVariation: 2 },
+  })
+
+  const forecast = calculateRoundForecast(
+    gameState,
+    {
+      market: {
+        price: 25000,
+        activeVariationCount: 100,
+        productionQuantity: 180,
+        batchSize: 20,
+        selectedBatchSize: 15,
+        useFinishedGoodsInventoryForDeliveries: true,
+      },
+    },
+    customSettings,
+  )
+
+  const { nextGameState, historyEntry } = advanceRoundState({ gameState, forecast, totalRounds: 12 })
+
+  assert.equal(historyEntry.production.deliveries, forecast.forecast.deliveries)
+  assert.equal(nextGameState.inventory.finishedGoodsContainers, forecast.forecast.inventory.closingFinishedGoodsInventory)
 })
 
 test('minimum finished-goods inventory is based on variations, batch size, and machine count', () => {
@@ -1301,18 +1440,6 @@ test('minimum finished-goods inventory is based on variations, batch size, and m
   assert.equal(minimumInventory(2, 10), 50)
   assert.equal(minimumInventory(2, 5), 25)
   assert.equal(minimumInventory(3, 10), 100 / 3)
-})
-
-test('requested finished-goods target cannot be lower than the calculated minimum', () => {
-  const gameState = createInitialGameState()
-  gameState.production.machiningMachines = 2
-
-  const forecast = calculateRoundForecast(gameState, {
-    market: { activeVariationCount: 20, batchSize: 10, targetFinishedGoodsInventory: 10 },
-  })
-
-  assert.equal(forecast.forecast.inventory.minimumFinishedGoodsInventory, 50)
-  assert.equal(forecast.forecast.inventory.targetFinishedGoodsInventory, 50)
 })
 
 test('ACT forecast uses saved CHECK staffing decision by default', () => {

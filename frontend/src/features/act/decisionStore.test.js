@@ -44,3 +44,33 @@ test('ACT no longer owns batchSize: loadActDecision ignores a legacy stored batc
   assert.equal(loaded.price, 25000)
   assert.equal(loaded.productionQuantity, 100)
 })
+
+// G: the ACT inventory-supplement decision persists across navigation within the same round.
+test('useFinishedGoodsInventoryForDeliveries persists across repeated loads within the same round', () => {
+  const storage = createStorage()
+  globalThis.window = { localStorage: storage }
+
+  saveActDecision({ round: 4, price: 25000, productionQuantity: 180, addedVariations: 0, useFinishedGoodsInventoryForDeliveries: true })
+
+  assert.equal(loadActDecision(4).useFinishedGoodsInventoryForDeliveries, true)
+  assert.equal(loadActDecision(4).useFinishedGoodsInventoryForDeliveries, true)
+})
+
+test('useFinishedGoodsInventoryForDeliveries defaults to false so inventory is never silently consumed', () => {
+  const storage = createStorage()
+  globalThis.window = { localStorage: storage }
+
+  saveActDecision({ round: 4, price: 25000, productionQuantity: 180, addedVariations: 0 })
+
+  assert.equal(loadActDecision(4).useFinishedGoodsInventoryForDeliveries, false)
+})
+
+// H: a genuine round change means no stored decision exists yet, so the flag resets to false.
+test('useFinishedGoodsInventoryForDeliveries does not carry over to a new round', () => {
+  const storage = createStorage()
+  globalThis.window = { localStorage: storage }
+
+  saveActDecision({ round: 4, price: 25000, productionQuantity: 180, addedVariations: 0, useFinishedGoodsInventoryForDeliveries: true })
+
+  assert.equal(loadActDecision(5), null)
+})

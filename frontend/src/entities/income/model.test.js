@@ -41,8 +41,8 @@ test('income history starts with canonical rounds -1 and 0', () => {
   assert.equal(view.round, 0)
   // Fresh-game 5S baseline is 0h (2026-09 fix), so machining is again the round-0 bottleneck.
   assert.equal(rows.find((row) => row.key === 'sales').currentAmount, 179)
-  assert.equal(result.currentAmount, -1588614.375)
-  assert.equal(financing.currentAmount, -36973.75)
+  assert.equal(result.currentAmount, -203862.6619140625)
+  assert.equal(financing.currentAmount, -45854.253710937504)
 })
 
 test('actual income API baseline pipeline preserves round zero values', async () => {
@@ -52,15 +52,53 @@ test('actual income API baseline pipeline preserves round zero values', async ()
   const values = Object.fromEntries(rows.map((row) => [row.key, row.currentAmount]))
 
   assert.equal(values.sales, 179)
-  assert.equal(values.revenue, 3062500)
-  assert.equal(values.inventoryChange, 25000)
+  assert.equal(values.revenue, 4475000)
+  assert.equal(values.inventoryChange, 0)
   assert.equal(values.materials, -2148000)
   assert.equal(values.labor, -1391250)
-  assert.equal(values.grossMargin, -451750)
+  assert.equal(values.grossMargin, 935750)
   assert.equal(values.fixedCosts, -1000000)
-  assert.equal(values.depreciation, -99890.625)
-  assert.equal(values.financingCosts, -36973.75)
-  assert.equal(values.result, -1588614.375)
+  assert.equal(values.depreciation, -93758.408203125)
+  assert.equal(values.financingCosts, -45854.253710937504)
+  assert.equal(values.result, -203862.6619140625)
+})
+
+test('income statement cost percentages use revenue minus inventory change as presentation basis', () => {
+  const rows = buildIncomeStatementRows({
+    rows: {
+      sales: { amount: 179 },
+      revenue: { amount: 4475000 },
+      inventoryChange: { amount: 0 },
+      materials: { amount: 2148000 },
+      labor: { amount: 1391250 },
+      fixedCosts: { amount: 1000000 },
+      depreciation: { amount: 93758.408203125 },
+      financingCosts: { amount: 45854.253710937504 },
+    },
+    previousRows: {
+      sales: { amount: 174 },
+      revenue: { amount: 4350000 },
+      inventoryChange: { amount: 0 },
+      materials: { amount: 2088000 },
+      labor: { amount: 1391250 },
+      fixedCosts: { amount: 1000000 },
+      depreciation: { amount: 96769.921875 },
+      financingCosts: { amount: 43766.546875 },
+    },
+  })
+
+  const materials = rows.find((row) => row.key === 'materials')
+  const revenue = rows.find((row) => row.key === 'revenue')
+  const grossMargin = rows.find((row) => row.key === 'grossMargin')
+  const result = rows.find((row) => row.key === 'result')
+
+  assert.equal(materials.currentPercentageText, '48.0 %')
+  assert.equal(materials.previousPercentageText, '48.0 %')
+  assert.equal(revenue.currentPercentageText, '-')
+  assert.equal(grossMargin.currentPercentageText, '20.9 %')
+  assert.equal(grossMargin.previousPercentageText, '20.0 %')
+  assert.equal(result.currentPercentageText, '-4.6 %')
+  assert.equal(result.previousPercentageText, '-6.2 %')
 })
 
 test('PLAN income forecast view exposes the same canonical output used by CHECK preview', () => {

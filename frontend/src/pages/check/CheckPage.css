@@ -88,23 +88,3 @@
 .check-input-row input {
   width: 100%;
 }
-
-.check-constraint {
-  padding: 0.5rem;
-  border-left: 4px solid;
-}
-
-.check-constraint-ok {
-  background: #ecfdf5;
-  border-color: #16a34a;
-}
-
-.check-constraint-warning {
-  background: #fefce8;
-  border-color: #ca8a04;
-}
-
-.check-constraint-error {
-  background: #fef2f2;
-  border-color: #dc2626;
-}

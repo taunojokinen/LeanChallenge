@@ -7,8 +7,7 @@ const planSubPages = [
 ]
 
 const doSubPages = [
-  { key: 'do-5s', label: '5S', path: '/do/5s' },
-  { key: 'do-projects', label: 'Projektit', path: '/do/projects' },
+  { key: 'plan-development', label: 'Kehitystyö', path: '/plan/development' },
   { key: 'do-investments', label: 'Investoinnit', path: '/do/investments' },
 ]
 
@@ -20,8 +19,8 @@ const mainPages = [
 ]
 
 function GameSidebar({ pageKey, onNavigate }) {
-  const isPlanSectionActive = pageKey.startsWith('plan-')
-  const isDoSectionActive = pageKey === 'do' || pageKey.startsWith('do-')
+  const isPlanSectionActive = planSubPages.some((page) => page.key === pageKey)
+  const isDoSectionActive = pageKey === 'do' || doSubPages.some((page) => page.key === pageKey)
 
   return (
     <aside className="game-sidebar" aria-label="Pelin sivunavigaatio">

@@ -58,8 +58,15 @@ function PlanIncomePage({ gameState, factorySettings = DEFAULT_FACTORY_SETTINGS 
 
       <div className="plan-income-table" role="table" aria-label="Kierroksen tuloslaskelma">
         <div className="plan-income-row plan-income-row-header" role="row">
-          {['Erä', `Kierros ${historyView.previousRound}`, `Kierros ${historyView.round}`, 'Muutos'].map((header) => (
-            <span key={header} className="plan-income-header-cell" role="columnheader">
+          {[
+            'Erä',
+            `Kierros ${historyView.previousRound}`,
+            '%',
+            `Kierros ${historyView.round}`,
+            '%',
+            'Muutos',
+          ].map((header, index) => (
+            <span key={`${header}-${index}`} className="plan-income-header-cell" role="columnheader">
               {header}
             </span>
           ))}
@@ -84,11 +91,17 @@ function PlanIncomePage({ gameState, factorySettings = DEFAULT_FACTORY_SETTINGS 
               >
                 {row.previousAmountText}
               </span>
+              <span className="plan-income-percentage" role="cell">
+                {row.previousPercentageText}
+              </span>
               <span
                 className={`plan-income-value plan-income-current-value ${currentIsNegative ? 'is-negative-result' : ''}`}
                 role="cell"
               >
                 {row.currentAmountText}
+              </span>
+              <span className="plan-income-percentage" role="cell">
+                {row.currentPercentageText}
               </span>
               <span className={`plan-income-delta is-${row.impact}`} role="cell">
                 {row.deltaText}

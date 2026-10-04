@@ -41,10 +41,9 @@ export const DEFAULT_FACTORY_SETTINGS = {
   history: {
     knl: {
       roundMinusOne: {
-        machining: { kPct: 89, nPct: 92, lPct: 77 },
-        assembly: { kPct: 83, nPct: 77, lPct: 78 },
-        shipping: { kPct: 79, nPct: 75, lPct: 76 },
-        factory: { kPct: 84, nPct: 82, lPct: 77 },
+        machining: { kPct: 77.9, nPct: 89.6, lPct: 74.2, productionQuantity: 174 },
+        assembly: { kPct: 77.3, nPct: 72.4, lPct: 74.6 },
+        shipping: { kPct: 76.2, nPct: 71.7, lPct: 74.0 },
       },
     },
   },
@@ -169,6 +168,7 @@ export const DEFAULT_FACTORY_SETTINGS = {
     finishedGoodsValuePerContainer: 20000,
     finishedGoodsSpacePerContainerM2: 15,
     productionRunsPerVariationDefault: 2,
+    rawMaterialInventoryShare: 0.4,
   },
 
   factory: {
@@ -315,7 +315,7 @@ export const DEFAULT_FACTORY_SETTINGS = {
     },
 
     inventory: {
-      finishedGoodsContainers: 82.25,
+      finishedGoodsContainers: 100,
     },
 
     finance: {

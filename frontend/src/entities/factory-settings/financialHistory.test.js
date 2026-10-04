@@ -39,7 +39,7 @@ test('initial game state keeps canonical gameplay opening anchors', () => {
   assert.equal(gameState.finance.rawMaterialInventoryBookValue, 500000)
 })
 
-test('default generated history uses effective production 124, 129, 134', () => {
+test('generated history uses canonical finished-goods valuation and inventory change', () => {
   const entries = generated()
 
   assert.deepEqual(entries.map((entry) => entry.round), [-2, -1, 0])
@@ -47,8 +47,8 @@ test('default generated history uses effective production 124, 129, 134', () => 
   assert.deepEqual(entries.map((entry) => entry.incomeStatement.labor), [1391250, 1391250, 1391250])
   assert.deepEqual(entries.map((entry) => entry.incomeStatement.materials), [1488000, 1548000, 1608000])
   assert.deepEqual(entries.map((entry) => entry.finance.rawMaterialInventoryBookValue), [595200, 619200, 643200])
-  assert.deepEqual(entries.map((entry) => entry.finance.finishedGoodsInventoryBookValue), [620000, 645000, 670000])
-  assert.deepEqual(entries.map((entry) => entry.incomeStatement.inventoryChange), [-1025000, 25000, 25000])
+  assert.deepEqual(entries.map((entry) => entry.finance.finishedGoodsInventoryBookValue), [2000000, 2000000, 2000000])
+  assert.deepEqual(entries.map((entry) => entry.incomeStatement.inventoryChange), [0, 0, 0])
 })
 
 test('teacher production setting derives all historical production quantities', () => {
@@ -59,13 +59,36 @@ test('teacher production setting derives all historical production quantities', 
   assert.deepEqual(generated(3).map((entry) => entry.incomeStatement.salesUnits), [0, 0, 3])
 })
 
-test('generated finished-goods values preserve decimal container precision', () => {
-  const entries = generated()
+test('rounds -1 and 0 derive revenue, materials, FG and payables from canonical settings', () => {
+  const entries = buildCanonicalFinancialHistory()
+  const [roundMinusTwo, roundMinusOne, roundZero] = entries
+  const settings = DEFAULT_FACTORY_SETTINGS
+  const { materialCostPerContainer } = settings.costs
+  const { referencePrice } = settings.market
+  const { finishedGoodsValuePerContainer, rawMaterialInventoryShare } = settings.inventory
+  const { otherLiabilitiesRawMaterialShare } = settings.finance
 
-  assert.equal(entries[0].finance.finishedGoodsInventoryBookValue, 620000)
-  assert.equal(entries[1].finance.finishedGoodsInventoryBookValue, 645000)
-  assert.equal(entries[2].finance.finishedGoodsInventoryBookValue, 670000)
-  assert.equal(entries[1].incomeStatement.inventoryChange, 25000)
+  assert.equal(roundMinusOne.incomeStatement.salesUnits, 174)
+  assert.equal(roundZero.incomeStatement.salesUnits, 179)
+  assert.equal(roundMinusOne.incomeStatement.revenue, 174 * referencePrice)
+  assert.equal(roundZero.incomeStatement.revenue, 179 * referencePrice)
+  assert.equal(roundMinusOne.incomeStatement.materials, 174 * materialCostPerContainer)
+  assert.equal(roundZero.incomeStatement.materials, 179 * materialCostPerContainer)
+  assert.equal(roundMinusOne.finance.finishedGoodsInventoryBookValue, 100 * finishedGoodsValuePerContainer)
+  assert.equal(roundZero.finance.finishedGoodsInventoryBookValue, 100 * finishedGoodsValuePerContainer)
+  assert.equal(roundMinusOne.incomeStatement.inventoryChange, 0)
+  assert.equal(roundZero.incomeStatement.inventoryChange, 0)
+
+  for (const entry of [roundMinusTwo, roundMinusOne, roundZero]) {
+    assert.equal(
+      entry.finance.rawMaterialInventoryBookValue,
+      Math.round(entry.incomeStatement.materials * rawMaterialInventoryShare),
+    )
+    assert.equal(
+      entry.finance.otherLiabilities,
+      Math.round(entry.incomeStatement.materials * otherLiabilitiesRawMaterialShare),
+    )
+  }
 })
 
 test('presentation baseline exposes only rounds -1 and 0 while retaining technical round -2', () => {
@@ -91,31 +114,29 @@ test('canonical generated entries reject missing required fields', () => {
   )
 })
 
-test('round-zero finance remains anchored while round-minus-one closes to the same anchor', () => {
-  const entries = generated()
-  const opening = createInitialGameState(DEFAULT_FACTORY_SETTINGS).finance
-  const roundMinusOne = entries[1]
-  const roundZero = entries[2]
+test('generated historical balance sheets are balanced without a balancing line', () => {
+  const entries = buildCanonicalFinancialHistory()
 
-  for (const field of ['cash', 'bankLoans', 'equity', 'machineryBookValue', 'buildingsBookValue']) {
-    assert.equal(roundZero.finance[field], opening[field])
-    assert.equal(roundMinusOne.finance[field], opening[field])
-  }
-
-  assert.equal(roundMinusOne.incomeStatement.labor, 1391250)
-  assert.equal(roundMinusOne.incomeStatement.materials, 1548000)
-  assert.equal(roundMinusOne.incomeStatement.inventoryChange, 25000)
+  entries.forEach((entry) => {
+    assert.equal(entry.finance.totalAssets, entry.finance.totalLiabilitiesAndEquity)
+  })
 })
 
-test('historical depreciation and interest use runtime opening values and rates', () => {
-  const entries = generated()
+test('historical depreciation and interest use the same opening-balance runtime rules', () => {
+  const entries = buildCanonicalFinancialHistory()
   const settings = DEFAULT_FACTORY_SETTINGS
-  const roundMinusOne = entries[1]
-  const roundZero = entries[2]
+  let openingFinance = createInitialGameState(settings).finance
   const roundRate = settings.finance.annualInterestRate * settings.game.monthsPerRound / 12
 
-  assert.equal(roundMinusOne.incomeStatement.depreciation, 26250 + 76875)
-  assert.ok(Math.abs(roundMinusOne.incomeStatement.financingCosts - 2957900 * roundRate) < 1e-9)
-  assert.equal(roundZero.incomeStatement.depreciation, 498750 * 0.05 + 2998125 * 0.025)
-  assert.ok(Math.abs(roundZero.incomeStatement.financingCosts - 2957900 * roundRate) < 1e-9)
+  entries.forEach((entry) => {
+    const expectedDepreciation =
+      openingFinance.machineryBookValue * settings.finance.machineryDepreciationPerRound +
+      openingFinance.buildingsBookValue * settings.finance.buildingDepreciationPerRound
+
+    assert.equal(entry.incomeStatement.depreciation, expectedDepreciation)
+    assert.ok(
+      Math.abs(entry.incomeStatement.financingCosts - openingFinance.bankLoans * roundRate) < 1e-9,
+    )
+    openingFinance = entry.finance
+  })
 })

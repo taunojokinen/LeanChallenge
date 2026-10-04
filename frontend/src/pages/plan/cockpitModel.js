@@ -6,11 +6,16 @@ const DEPARTMENT_LABELS = {
   shipping: 'Lähettämö',
 }
 
-const METRICS = [
-  { key: 'kPct', label: 'K' },
-  { key: 'nPct', label: 'N' },
-  { key: 'lPct', label: 'L' },
+const STANDARD_METRICS = [
+  { key: 'kAvailabilityPct', label: 'K - käytettävyys' },
+  { key: 'nPct', label: 'N - nopeus' },
+  { key: 'lPct', label: 'L - laatu' },
   { key: 'knl', label: 'KNL' },
+]
+
+const MACHINING_METRICS = [
+  { key: 'kChangeoverPct', label: 'K - vaihdot' },
+  ...STANDARD_METRICS,
 ]
 
 function toNumber(value, fallback = 0) {
@@ -42,9 +47,9 @@ export function formatChange(value) {
   }).replace('−', '-')} %`
 }
 
-function buildMetricComparison(current, previous, knlIsRatio = false) {
+function buildMetricComparison(current, previous, metrics, knlIsRatio = false) {
   return Object.fromEntries(
-    METRICS.map(({ key, label }) => [
+    metrics.map(({ key, label }) => [
       label,
       {
         key,
@@ -61,10 +66,16 @@ function buildMetricComparison(current, previous, knlIsRatio = false) {
 }
 
 function buildDepartmentCard(department, currentEntry, previousEntry) {
+  const metrics = department === 'machining' ? MACHINING_METRICS : STANDARD_METRICS
+
   return {
     key: department,
     name: DEPARTMENT_LABELS[department],
-    metrics: buildMetricComparison(currentEntry?.departments?.[department], previousEntry?.departments?.[department]),
+    metrics: buildMetricComparison(
+      currentEntry?.departments?.[department],
+      previousEntry?.departments?.[department],
+      metrics,
+    ),
   }
 }
 
@@ -85,7 +96,7 @@ export function buildConfirmedCockpitViewModel(gameState, factorySettings) {
       { label: 'Nopeus', value: currentFactory.nPct, change: calculateRelativeChange(currentFactory.nPct, previousFactory.nPct) },
       { label: 'Laatu', value: currentFactory.lPct, change: calculateRelativeChange(currentFactory.lPct, previousFactory.lPct) },
     ],
-    factory: buildMetricComparison(currentFactory, previousFactory, true),
+    factory: buildMetricComparison(currentFactory, previousFactory, STANDARD_METRICS, true),
     departments: Object.keys(DEPARTMENT_LABELS).map((department) => buildDepartmentCard(department, currentEntry, previousEntry)),
     round: gameState.round,
   }

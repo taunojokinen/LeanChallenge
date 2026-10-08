@@ -19,6 +19,43 @@
   padding: var(--space-9) var(--space-10);
 }
 
+.teacher-test-game-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #c7dff8;
+  border-left: 3px solid #1f6c9e;
+  border-radius: 6px;
+  background: #edf6ff;
+  color: #1b466b;
+  font-size: 0.75rem;
+}
+
+.teacher-test-game-banner strong {
+  white-space: nowrap;
+}
+
+.teacher-test-game-banner > span {
+  flex: 1;
+  color: #526a80;
+}
+
+.teacher-test-game-banner > div {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.teacher-test-game-action {
+  border: 1px solid #b7cde0;
+  border-radius: 5px;
+  padding: 0.35rem 0.55rem;
+  background: white;
+  color: #204d72;
+  font: inherit;
+  cursor: pointer;
+}
+
 .game-layout-content > * {
   width: 100%;
   max-width: none;
@@ -33,6 +70,20 @@
 
   .game-layout-content {
     padding: var(--space-7);
+  }
+
+  .teacher-test-game-banner {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .teacher-test-game-banner > span {
+    flex-basis: 100%;
+    order: 2;
+  }
+
+  .teacher-test-game-banner > div {
+    margin-left: auto;
   }
 
   .game-layout-content > * {

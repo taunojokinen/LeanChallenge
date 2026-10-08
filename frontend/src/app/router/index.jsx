@@ -8,6 +8,10 @@ export const appRoutes = [
     pageKey: 'login',
   },
   {
+    path: '/teacher/settings',
+    pageKey: 'teacher-settings',
+  },
+  {
     path: '/plan',
     pageKey: 'plan-root',
   },

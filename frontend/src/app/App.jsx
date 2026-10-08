@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import GameLayout from './layouts/GameLayout.jsx'
 import LandingPage from '../pages/landing/LandingPage.jsx'
 import LoginPage from '../pages/login/LoginPage.jsx'
+import TeacherSettingsPage from '../pages/teacher/TeacherSettingsPage.jsx'
 import GamePlaceholderPage from '../pages/game/GamePlaceholderPage.jsx'
 import PlanCockpitPage from '../pages/plan/PlanCockpitPage.jsx'
 import PlanBalanceSheetPage from '../pages/plan/PlanBalanceSheetPage.jsx'
@@ -18,6 +19,14 @@ import { buildGameHeaderKpis } from './headerKpis.js'
 import { advanceRoundState } from '../entities/game-round/advanceRound.js'
 import { resetGameDecisionStorage } from '../features/session/resetGameSession.js'
 import { loadCheckProductionDecision } from '../features/check/decisionStore.js'
+import {
+  TEACHER_TEST_GAME_MODE,
+  clearTeacherTestGameSession,
+  createTeacherTestGameSession,
+  isTeacherTestGamePath,
+  loadTeacherTestGameSession,
+  saveTeacherTestGameSession,
+} from '../features/session/teacherTestGameSession.js'
 
 function normalizePath(pathname, shouldReplace = false) {
   const currentPath = pathname || '/'
@@ -81,13 +90,26 @@ const placeholderContentByPageKey = {
 }
 
 function App() {
+  const [restoredTeacherSession] = useState(() => loadTeacherTestGameSession())
   const [pathname, setPathname] = useState(() => normalizePath(window.location.pathname, true))
-  const [gameState, setGameState] = useState(() => createInitialGameState(DEFAULT_FACTORY_SETTINGS))
+  const [lastGamePathname, setLastGamePathname] = useState(
+    () => restoredTeacherSession?.pathname ?? '/plan/cockpit',
+  )
+  const [gameMode, setGameMode] = useState(() => restoredTeacherSession?.mode ?? 'quest')
+  const [factorySettings, setFactorySettings] = useState(
+    () => restoredTeacherSession?.factorySettings ?? DEFAULT_FACTORY_SETTINGS,
+  )
+  const [initialGameState, setInitialGameState] = useState(
+    () => restoredTeacherSession?.initialGameState ?? createInitialGameState(DEFAULT_FACTORY_SETTINGS),
+  )
+  const [gameState, setGameState] = useState(
+    () => restoredTeacherSession?.gameState ?? createInitialGameState(DEFAULT_FACTORY_SETTINGS),
+  )
   const [roundStatus, setRoundStatus] = useState('')
 
   const baseForecast = useMemo(
-    () => calculateRoundForecast(gameState, {}, DEFAULT_FACTORY_SETTINGS),
-    [gameState],
+    () => calculateRoundForecast(gameState, {}, factorySettings),
+    [factorySettings, gameState],
   )
 
   const inventoryTurnover = useMemo(() => {
@@ -100,11 +122,36 @@ function App() {
     return deliveries / averageInventory
   }, [baseForecast])
 
-  const gameHeaderKpis = useMemo(() => buildGameHeaderKpis(gameState, DEFAULT_FACTORY_SETTINGS), [gameState])
+  const gameHeaderKpis = useMemo(
+    () => buildGameHeaderKpis(gameState, factorySettings),
+    [factorySettings, gameState],
+  )
+
+  useEffect(() => {
+    if (gameMode !== TEACHER_TEST_GAME_MODE) {
+      clearTeacherTestGameSession()
+      return
+    }
+
+    try {
+      saveTeacherTestGameSession(createTeacherTestGameSession({
+        factorySettings,
+        initialGameState,
+        gameState,
+        pathname: isTeacherTestGamePath(pathname) ? pathname : lastGamePathname,
+      }))
+    } catch (error) {
+      console.error('Testipelin session tallennus epäonnistui.', error)
+    }
+  }, [factorySettings, gameMode, gameState, initialGameState, lastGamePathname, pathname])
 
   useEffect(() => {
     const handlePopState = () => {
-      setPathname(normalizePath(window.location.pathname, true))
+      const nextPathname = normalizePath(window.location.pathname, true)
+      setPathname(nextPathname)
+      if (isTeacherTestGamePath(nextPathname)) {
+        setLastGamePathname(nextPathname)
+      }
     }
 
     window.addEventListener('popstate', handlePopState)
@@ -129,6 +176,9 @@ function App() {
 
     window.history.pushState({}, '', normalizedPath)
     setPathname(normalizedPath)
+    if (isTeacherTestGamePath(normalizedPath)) {
+      setLastGamePathname(normalizedPath)
+    }
   }
 
   const handleAdvanceRound = (forecast) => {
@@ -136,7 +186,7 @@ function App() {
     const result = advanceRoundState({
       gameState,
       forecast,
-      totalRounds: DEFAULT_FACTORY_SETTINGS.game.totalRounds,
+      totalRounds: factorySettings.game.totalRounds,
       checkProductionDecision,
     })
 
@@ -157,27 +207,50 @@ function App() {
     return result
   }
 
-  const resetGameSession = () => {
+  const startNewGameSession = (mode, settings, destination = '/plan/cockpit') => {
+    const sessionSettings = structuredClone(settings)
+    const startState = createInitialGameState(sessionSettings)
     resetGameDecisionStorage()
-    setGameState(createInitialGameState(DEFAULT_FACTORY_SETTINGS))
+    clearTeacherTestGameSession()
+    setGameMode(mode)
+    setFactorySettings(sessionSettings)
+    setInitialGameState(startState)
+    setGameState(structuredClone(startState))
     setRoundStatus('')
+    navigateTo(destination)
   }
 
   const handleLogout = () => {
-    resetGameSession()
-    navigateTo('/login')
+    startNewGameSession('quest', DEFAULT_FACTORY_SETTINGS, '/login')
   }
 
-  const handleLoginSuccess = () => {
-    resetGameSession()
-    navigateTo('/plan/cockpit')
+  const handleStartQuest = () => {
+    startNewGameSession('quest', DEFAULT_FACTORY_SETTINGS)
+  }
+
+  const handleStartTeacherTest = (settingsSnapshot) => {
+    startNewGameSession(TEACHER_TEST_GAME_MODE, settingsSnapshot)
+  }
+
+  const handleRestartGame = () => {
+    startNewGameSession(gameMode, factorySettings)
   }
 
   if (pageKey === 'login') {
     return (
       <LoginPage
         onBackToLanding={() => navigateTo('/')}
-        onLoginSuccess={handleLoginSuccess}
+        onStartQuest={handleStartQuest}
+        onOpenTeacherSettings={() => navigateTo('/teacher/settings')}
+      />
+    )
+  }
+
+  if (pageKey === 'teacher-settings') {
+    return (
+      <TeacherSettingsPage
+        onBackToLogin={() => navigateTo('/login')}
+        onStartTestGame={handleStartTeacherTest}
       />
     )
   }
@@ -189,53 +262,56 @@ function App() {
     return (
       <GameLayout
         round={gameState.round}
-        totalRounds={DEFAULT_FACTORY_SETTINGS.game.totalRounds}
+        totalRounds={factorySettings.game.totalRounds}
         phase={phase}
         kpis={gameHeaderKpis}
         pageKey={pageKey}
         userName="Pelaaja"
         onLogout={handleLogout}
         onNavigate={navigateTo}
+        gameMode={gameMode}
+        onReturnToTeacherSettings={() => navigateTo('/teacher/settings')}
+        onRestartGame={handleRestartGame}
       >
         {pageKey === 'plan-cockpit' ? (
           <PlanCockpitPage
             onNavigate={navigateTo}
             round={gameState.round}
-            totalRounds={DEFAULT_FACTORY_SETTINGS.game.totalRounds}
+            totalRounds={factorySettings.game.totalRounds}
             gameState={gameState}
-            factorySettings={DEFAULT_FACTORY_SETTINGS}
+            factorySettings={factorySettings}
           />
         ) : pageKey === 'plan-balance-sheet' ? (
           <PlanBalanceSheetPage inventoryTurnover={inventoryTurnover} gameState={gameState} />
         ) : pageKey === 'plan-income' ? (
           <PlanIncomePage
             gameState={gameState}
-            factorySettings={DEFAULT_FACTORY_SETTINGS}
+            factorySettings={factorySettings}
           />
         ) : pageKey === 'plan-development' ? (
           <DevelopmentPage
             onNavigate={navigateTo}
             gameState={gameState}
-            factorySettings={DEFAULT_FACTORY_SETTINGS}
+            factorySettings={factorySettings}
           />
         ) : pageKey === 'do-investments' ? (
           <InvestmentsPage
             onNavigate={navigateTo}
             round={gameState.round}
             gameState={gameState}
-            factorySettings={DEFAULT_FACTORY_SETTINGS}
+            factorySettings={factorySettings}
           />
         ) : pageKey === 'check' ? (
           <CheckPage
             onNavigate={navigateTo}
             gameState={gameState}
-            factorySettings={DEFAULT_FACTORY_SETTINGS}
+            factorySettings={factorySettings}
           />
         ) : pageKey === 'act' ? (
           <ActPage
             onNavigate={navigateTo}
             gameState={gameState}
-            factorySettings={DEFAULT_FACTORY_SETTINGS}
+            factorySettings={factorySettings}
             onAdvanceRound={handleAdvanceRound}
             statusMessage={roundStatus}
           />

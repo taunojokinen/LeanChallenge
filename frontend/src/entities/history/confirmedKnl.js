@@ -57,45 +57,8 @@ function normalizeEntry(entry) {
   }
 }
 
-function buildHistoricalBaseline(factorySettings) {
-  const settings = factorySettings
-  const historical = settings.history?.knl?.roundMinusOne ?? {}
-  const historicalMachining = historical.machining ?? {}
-  const historicalForecast = calculateRoundForecast(
-    createInitialGameState(settings),
-    { market: { productionQuantity: toNumber(historicalMachining.productionQuantity) } },
-    settings,
-  )
-  const kChangeoverPct = historicalForecast.current.knl.machining.kChangeoverPct
-  const departments = normalizeDepartments({
-    machining: {
-      ...historicalMachining,
-      capacityContainers: historicalForecast.current.knl.machining.capacityContainers,
-      kChangeoverPct,
-      kAvailabilityPct: kChangeoverPct === 0
-        ? 0
-        : (toNumber(historicalMachining.kPct) / kChangeoverPct) * 100,
-    },
-    assembly: {
-      ...historical.assembly,
-      capacityContainers: historicalForecast.current.knl.assembly.capacityContainers,
-    },
-    shipping: {
-      ...historical.shipping,
-      capacityContainers: historicalForecast.current.knl.shipping.capacityContainers,
-    },
-  })
-  const factory = calculateFactoryKnl(departments)
-
-  return {
-    round: -1,
-    departments,
-    factory,
-  }
-}
-
 function buildRoundZeroBaseline(factorySettings) {
-  const initialState = createInitialGameState(factorySettings)
+  const initialState = createInitialGameState(factorySettings, { historySeed: 0 })
   const initialForecast = calculateRoundForecast(initialState, {}, factorySettings)
 
   return {
@@ -111,12 +74,43 @@ function buildRoundZeroBaseline(factorySettings) {
   }
 }
 
+export function buildInitialKnlHistory(gameState, factorySettings = DEFAULT_FACTORY_SETTINGS) {
+  const roundZero = buildRoundZeroBaseline(factorySettings)
+  // Legacy sessions without a seed use a stable seed, never a new draw on reads.
+  let seed = toNumber(gameState?.historySeed) >>> 0
+  const perturb = (value) => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+    // Four factors at +/-0.2% bound even the inverse KNL change below 0.81%.
+    return Math.min(100, Math.max(0, value * (1 + (seed / 2 ** 32 * 2 - 1) * 0.002)))
+  }
+  const departments = Object.fromEntries(KNL_DEPARTMENTS.map((department) => {
+    const original = roundZero.departments[department]
+    const kAvailabilityPct = perturb(original.kAvailabilityPct)
+    const kChangeoverPct = department === 'machining' ? perturb(original.kChangeoverPct) : undefined
+    const kPct = department === 'machining'
+      ? kAvailabilityPct * kChangeoverPct / 100
+      : kAvailabilityPct
+    const metrics = {
+      ...original,
+      kAvailabilityPct,
+      kChangeoverPct,
+      kPct,
+      nPct: perturb(original.nPct),
+      lPct: perturb(original.lPct),
+    }
+    metrics.knl = calculateKnlFromMetrics(metrics).knl * 100
+    return [department, metrics]
+  }))
+
+  return [
+    { round: -1, departments, factory: calculateFactoryKnl(departments) },
+    roundZero,
+  ]
+}
+
 export function selectConfirmedKnlRounds(gameState, factorySettings) {
   const settings = factorySettings ?? DEFAULT_FACTORY_SETTINGS
-  const baselineEntries = [
-    buildHistoricalBaseline(settings),
-    buildRoundZeroBaseline(settings),
-  ]
+  const baselineEntries = buildInitialKnlHistory(gameState, settings)
   const runtimeEntries = Array.isArray(gameState?.history)
     ? gameState.history.map(normalizeEntry)
     : []

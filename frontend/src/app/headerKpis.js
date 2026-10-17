@@ -3,9 +3,9 @@ import {
   buildCanonicalFinancialHistory,
   normalizeFinancialHistoryEntry,
 } from '../entities/factory-settings/financialHistory.js'
-import { calculateDemandPerVariation } from '../entities/forecast/model.js'
 import { selectConfirmedKnlRounds } from '../entities/history/confirmedKnl.js'
 import { selectLatestConfirmedRounds } from '../entities/history/confirmedRounds.js'
+import { relativePercentChange } from '../entities/history/relativeChange.js'
 
 const headerKpiMap = {
   oee: 'KNL',
@@ -15,14 +15,15 @@ const headerKpiMap = {
   inventoryTurnover: 'Varaston kiertonopeus',
 }
 
-function formatSignedPercent(delta) {
-  const value = Number(delta) || 0
+function formatSignedChange(delta, unit = ' %') {
+  if (delta == null || !Number.isFinite(delta)) return '—'
+  const value = delta
   const sign = value > 0 ? '+' : ''
 
   return `${sign}${value.toLocaleString('fi-FI', {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
-  })} %`
+  }).replace('−', '-')}${unit}`
 }
 
 function formatCurrency(value) {
@@ -37,9 +38,20 @@ function formatKnl(value) {
   return `${Math.round((Number(value) || 0) * 100).toLocaleString('fi-FI')} %`
 }
 
-function toNumber(value, fallback = 0) {
-  const numeric = Number(value)
-  return Number.isFinite(numeric) ? numeric : fallback
+function inventoryTurnover(entry) {
+  const inventory = entry?.inventory?.finishedGoodsContainers
+  const deliveries = entry?.production?.deliveries
+  if (inventory == null || deliveries == null
+    || !Number.isFinite(Number(inventory)) || !Number.isFinite(Number(deliveries))
+    || Number(inventory) <= 0) return null
+  return Number(deliveries) / Number(inventory)
+}
+
+function incomeChange(current, previous, field) {
+  return relativePercentChange(
+    current?.incomeStatement?.[field],
+    previous?.incomeStatement?.[field],
+  )
 }
 
 export function buildGameHeaderKpis(gameState, factorySettings = DEFAULT_FACTORY_SETTINGS) {
@@ -48,56 +60,54 @@ export function buildGameHeaderKpis(gameState, factorySettings = DEFAULT_FACTORY
   const selected = selectLatestConfirmedRounds({
     baselineEntries,
     runtimeEntries: gameState.history,
-    count: 1,
+    count: 2,
   })
-  const currentEntry = normalizeFinancialHistoryEntry(selected[0] ?? baselineEntries[1])
+  const [previous, current] = selected
+  const currentEntry = normalizeFinancialHistoryEntry(current)
   const currentIncome = currentEntry.incomeStatement
   const resultAmount = currentIncome.result
 
-  const salesAmount = currentIncome.salesUnits
-  const inventoryContainers = Math.max(1, toNumber(gameState.inventory?.finishedGoodsContainers, 1))
-  const inventoryTurnover = salesAmount / inventoryContainers
-  const demandPerVariation = calculateDemandPerVariation(
-    gameState.market?.price,
-    settings,
-  )
-  const demand = demandPerVariation * Math.max(0, toNumber(gameState.market?.activeVariations, 0))
-  const production = Math.min(demand, salesAmount)
-  const [, latestConfirmed] = selectConfirmedKnlRounds(gameState, settings)
+  const production = current?.production?.actualProduction
+  const currentTurnover = inventoryTurnover(current)
+  const previousTurnover = inventoryTurnover(previous)
+  const [previousKnl, latestConfirmed] = selectConfirmedKnlRounds(gameState, settings)
 
   return [
     {
       key: 'oee',
       label: headerKpiMap.oee,
       value: formatKnl(latestConfirmed?.factory?.knl),
-      delta: formatSignedPercent(0),
+      delta: formatSignedChange(relativePercentChange(latestConfirmed?.factory?.knl, previousKnl?.factory?.knl)),
     },
     {
       key: 'production',
       label: headerKpiMap.production,
-      value: formatContainers(production),
-      delta: formatSignedPercent(0),
+      value: production == null ? '—' : formatContainers(production),
+      delta: formatSignedChange(relativePercentChange(production, previous?.production?.actualProduction)),
     },
     {
       key: 'revenue',
       label: headerKpiMap.revenue,
       value: formatCurrency(currentIncome.revenue),
-      delta: formatSignedPercent(0),
+      delta: formatSignedChange(incomeChange(current, previous, 'revenue')),
     },
     {
       key: 'result',
       label: headerKpiMap.result,
       value: formatCurrency(resultAmount),
-      delta: formatSignedPercent(0),
+      delta: formatSignedChange(incomeChange(current, previous, 'result')),
     },
     {
       key: 'inventoryTurnover',
       label: headerKpiMap.inventoryTurnover,
-      value: `${inventoryTurnover.toLocaleString('fi-FI', {
+      value: currentTurnover == null ? '—' : `${currentTurnover.toLocaleString('fi-FI', {
         minimumFractionDigits: 1,
         maximumFractionDigits: 1,
       })}x`,
-      delta: '+0.0',
+      delta: formatSignedChange(
+        currentTurnover == null || previousTurnover == null ? null : currentTurnover - previousTurnover,
+        'x',
+      ),
     },
   ]
 }

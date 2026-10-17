@@ -175,7 +175,7 @@ export function buildCanonicalFinancialHistory(
   factorySettings = DEFAULT_FACTORY_SETTINGS,
 ) {
   const settings = factorySettings ?? gameState?.factorySettings ?? DEFAULT_FACTORY_SETTINGS
-  let historicalState = createInitialGameState(settings)
+  let historicalState = createInitialGameState(settings, { historySeed: 0 })
   const configuredProduction = Math.max(
     0,
     Math.round(Number(settings.production?.initialProductionQuantity) || 0),
@@ -219,6 +219,11 @@ export function buildCanonicalFinancialHistory(
       },
       forecast.closingState.finance,
     )
+    entry.production = {
+      actualProduction: forecast.forecast.actualProduction,
+      deliveries: forecast.forecast.deliveries,
+    }
+    entry.inventory = { ...forecast.closingState.canonical.inventory }
     entries.push(assertCanonicalFinancialHistoryEntry(entry))
     historicalState = forecast.closingState
   }

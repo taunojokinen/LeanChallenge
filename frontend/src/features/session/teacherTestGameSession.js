@@ -1,6 +1,7 @@
 export const TEACHER_TEST_GAME_MODE = 'teacher-test'
 export const TEACHER_TEST_SESSION_STORAGE_KEY = 'lean-challenge-teacher-test-session-v1'
 export const TEACHER_TEST_SESSION_VERSION = 1
+export const QUEST_SESSION_STORAGE_KEY = 'lean-challenge-quest-session-v1'
 
 const PHASE_BY_PATH = {
   '/plan/cockpit': 'PLAN',
@@ -26,9 +27,9 @@ function resolveStorage(storage) {
   }
 }
 
-function isSessionShapeValid(session) {
+function isSessionShapeValid(session, mode = TEACHER_TEST_GAME_MODE) {
   return session?.version === TEACHER_TEST_SESSION_VERSION
-    && session.mode === TEACHER_TEST_GAME_MODE
+    && session.mode === mode
     && session.factorySettings && typeof session.factorySettings === 'object'
     && session.initialGameState && typeof session.initialGameState === 'object'
     && session.gameState && typeof session.gameState === 'object'
@@ -36,17 +37,17 @@ function isSessionShapeValid(session) {
     && typeof session.pathname === 'string'
 }
 
-export function createTeacherTestGameSession({
+function createGameSession({
   factorySettings,
   initialGameState,
   gameState = initialGameState,
   pathname = '/plan/cockpit',
-}) {
+}, mode) {
   const normalizedPathname = pathname === '/plan' ? '/plan/cockpit' : pathname
 
   return {
     version: TEACHER_TEST_SESSION_VERSION,
-    mode: TEACHER_TEST_GAME_MODE,
+    mode,
     factorySettings: structuredClone(factorySettings),
     initialGameState: structuredClone(initialGameState),
     gameState: structuredClone(gameState),
@@ -57,8 +58,8 @@ export function createTeacherTestGameSession({
   }
 }
 
-export function saveTeacherTestGameSession(session, storage) {
-  if (!isSessionShapeValid(session)) {
+function saveGameSession(session, storage, mode, key) {
+  if (!isSessionShapeValid(session, mode)) {
     throw new Error('Opettajan testipelin sessio ei ole kelvollinen.')
   }
 
@@ -73,31 +74,60 @@ export function saveTeacherTestGameSession(session, storage) {
     round: session.gameState.round,
     savedAt: new Date().toISOString(),
   }
-  targetStorage.setItem(TEACHER_TEST_SESSION_STORAGE_KEY, JSON.stringify(storedSession))
+  targetStorage.setItem(key, JSON.stringify(storedSession))
   return storedSession
 }
 
-export function loadTeacherTestGameSession(storage) {
+function loadGameSession(storage, mode, key) {
   const targetStorage = resolveStorage(storage)
   if (!targetStorage) {
     return null
   }
 
   try {
-    const serializedSession = targetStorage.getItem(TEACHER_TEST_SESSION_STORAGE_KEY)
+    const serializedSession = targetStorage.getItem(key)
     if (!serializedSession) {
       return null
     }
 
     const session = JSON.parse(serializedSession)
-    if (!isSessionShapeValid(session)) {
+    if (!isSessionShapeValid(session, mode)) {
       return null
     }
 
     return structuredClone(session)
-  } catch {
+  } catch (error) {
+    console.error('Pelisession palauttaminen epäonnistui.', error)
     return null
   }
+}
+
+export function saveTeacherTestGameSession(session, storage) {
+  return saveGameSession(session, storage, TEACHER_TEST_GAME_MODE, TEACHER_TEST_SESSION_STORAGE_KEY)
+}
+
+export function createTeacherTestGameSession(options) {
+  return createGameSession(options, TEACHER_TEST_GAME_MODE)
+}
+
+export function loadTeacherTestGameSession(storage) {
+  return loadGameSession(storage, TEACHER_TEST_GAME_MODE, TEACHER_TEST_SESSION_STORAGE_KEY)
+}
+
+export function createQuestGameSession(options) {
+  return createGameSession(options, 'quest')
+}
+
+export function saveQuestGameSession(session, storage) {
+  return saveGameSession(session, storage, 'quest', QUEST_SESSION_STORAGE_KEY)
+}
+
+export function loadQuestGameSession(storage) {
+  return loadGameSession(storage, 'quest', QUEST_SESSION_STORAGE_KEY)
+}
+
+export function clearQuestGameSession(storage) {
+  resolveStorage(storage)?.removeItem(QUEST_SESSION_STORAGE_KEY)
 }
 
 export function clearTeacherTestGameSession(storage) {

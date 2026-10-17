@@ -26,6 +26,10 @@ import {
   isTeacherTestGamePath,
   loadTeacherTestGameSession,
   saveTeacherTestGameSession,
+  clearQuestGameSession,
+  createQuestGameSession,
+  loadQuestGameSession,
+  saveQuestGameSession,
 } from '../features/session/teacherTestGameSession.js'
 
 function normalizePath(pathname, shouldReplace = false) {
@@ -90,20 +94,20 @@ const placeholderContentByPageKey = {
 }
 
 function App() {
-  const [restoredTeacherSession] = useState(() => loadTeacherTestGameSession())
+  const [restoredSession] = useState(() => loadTeacherTestGameSession() ?? loadQuestGameSession())
   const [pathname, setPathname] = useState(() => normalizePath(window.location.pathname, true))
   const [lastGamePathname, setLastGamePathname] = useState(
-    () => restoredTeacherSession?.pathname ?? '/plan/cockpit',
+    () => restoredSession?.pathname ?? '/plan/cockpit',
   )
-  const [gameMode, setGameMode] = useState(() => restoredTeacherSession?.mode ?? 'quest')
+  const [gameMode, setGameMode] = useState(() => restoredSession?.mode ?? 'quest')
   const [factorySettings, setFactorySettings] = useState(
-    () => restoredTeacherSession?.factorySettings ?? DEFAULT_FACTORY_SETTINGS,
+    () => restoredSession?.factorySettings ?? DEFAULT_FACTORY_SETTINGS,
   )
   const [initialGameState, setInitialGameState] = useState(
-    () => restoredTeacherSession?.initialGameState ?? createInitialGameState(DEFAULT_FACTORY_SETTINGS),
+    () => restoredSession?.initialGameState ?? createInitialGameState(DEFAULT_FACTORY_SETTINGS),
   )
   const [gameState, setGameState] = useState(
-    () => restoredTeacherSession?.gameState ?? createInitialGameState(DEFAULT_FACTORY_SETTINGS),
+    () => restoredSession?.gameState ?? structuredClone(initialGameState),
   )
   const [roundStatus, setRoundStatus] = useState('')
 
@@ -128,20 +132,19 @@ function App() {
   )
 
   useEffect(() => {
-    if (gameMode !== TEACHER_TEST_GAME_MODE) {
-      clearTeacherTestGameSession()
-      return
-    }
-
     try {
-      saveTeacherTestGameSession(createTeacherTestGameSession({
+      const createSession = gameMode === TEACHER_TEST_GAME_MODE
+        ? createTeacherTestGameSession : createQuestGameSession
+      const saveSession = gameMode === TEACHER_TEST_GAME_MODE
+        ? saveTeacherTestGameSession : saveQuestGameSession
+      saveSession(createSession({
         factorySettings,
         initialGameState,
         gameState,
         pathname: isTeacherTestGamePath(pathname) ? pathname : lastGamePathname,
       }))
     } catch (error) {
-      console.error('Testipelin session tallennus epäonnistui.', error)
+      console.error('Pelisession tallennus epäonnistui.', error)
     }
   }, [factorySettings, gameMode, gameState, initialGameState, lastGamePathname, pathname])
 
@@ -212,6 +215,7 @@ function App() {
     const startState = createInitialGameState(sessionSettings)
     resetGameDecisionStorage()
     clearTeacherTestGameSession()
+    clearQuestGameSession()
     setGameMode(mode)
     setFactorySettings(sessionSettings)
     setInitialGameState(startState)

@@ -1,7 +1,10 @@
 import { calculateNextFiveSState } from '../five-s/model.js'
-import { canFinanceInvestment } from '../investments/model.js'
 import { calculateFinancingStructure } from '../factory-settings/financingStructure.js'
 import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
+import {
+  calculateFactorySpace,
+  calculateMinimumFinishedGoodsContainers,
+} from '../factory-space/model.js'
 import { buildCanonicalCarryoverState } from './carryover.js'
 import { calculateFactoryKnl } from './factoryKnl.js'
 import { calculateKNL } from './knl.js'
@@ -21,16 +24,12 @@ const PRICE_REFERENCE = 25000
 const DEMAND_REFERENCE_PER_VARIATION = 10
 const PRICE_ELASTICITY = -4
 
-const STAFF_COST_PER_ROUND = 12500
 const MATERIAL_COST_PER_SOLD_CONTAINER = 10000
-const FIXED_COST_PER_ROUND = 750000
 
 const MACHINERY_DEPRECIATION_PER_ROUND = 0.05
 const BUILDING_DEPRECIATION_PER_ROUND = 0.025
 
 const FINISHED_GOODS_VALUE_PER_CONTAINER = 20000
-const FINISHED_GOODS_AREA_PER_CONTAINER = 15
-const ASSEMBLY_AREA_PER_WORKER = 25
 const RAW_MATERIAL_INVENTORY_SHARE = 0.4
 
 const MIN_COMPONENT_PCT = 0
@@ -396,9 +395,46 @@ function buildBalanceSheetSnapshotFromGameState(gameState) {
 }
 
 function resolveForecastSnapshotInputs(gameState, factorySettings) {
+  const currentInvestmentsSnapshot = buildInvestmentsSnapshotFromGameState(gameState, factorySettings)
+  const storedInvestmentsSnapshot = gameState.investmentsSnapshot
+  const storedFactory = storedInvestmentsSnapshot?.factory ?? {}
+
   return {
-    investmentsSnapshot:
-      gameState.investmentsSnapshot || buildInvestmentsSnapshotFromGameState(gameState, factorySettings),
+    investmentsSnapshot: storedInvestmentsSnapshot
+      ? {
+          ...storedInvestmentsSnapshot,
+          round: currentInvestmentsSnapshot.round,
+          factory: {
+            totalAreaM2: toNonNegativeInt(
+              gameState.factory?.totalAreaM2 ?? storedFactory.totalAreaM2 ?? currentInvestmentsSnapshot.factory.totalAreaM2,
+            ),
+            officeAndSocialM2: toNonNegativeInt(
+              gameState.factory?.officeAndSocialM2 ?? storedFactory.officeAndSocialM2
+                ?? currentInvestmentsSnapshot.factory.officeAndSocialM2,
+            ),
+            machiningMachineCount: toNonNegativeInt(
+              gameState.production?.machiningMachines ?? storedFactory.machiningMachineCount
+                ?? currentInvestmentsSnapshot.factory.machiningMachineCount,
+            ),
+            assemblyWorkers: toNonNegativeInt(
+              gameState.staffing?.assembly ?? storedFactory.assemblyWorkers
+                ?? currentInvestmentsSnapshot.factory.assemblyWorkers,
+            ),
+            shippingWorkers: toNonNegativeInt(
+              gameState.staffing?.shipping ?? storedFactory.shippingWorkers
+                ?? currentInvestmentsSnapshot.factory.shippingWorkers,
+            ),
+            dispatchM2: toNonNegativeInt(
+              gameState.factory?.dispatchM2 ?? storedFactory.dispatchM2
+                ?? currentInvestmentsSnapshot.factory.dispatchM2,
+            ),
+            finishedGoodsContainers: Math.max(0, toNumber(
+              gameState.inventory?.finishedGoodsContainers ?? storedFactory.finishedGoodsContainers
+                ?? currentInvestmentsSnapshot.factory.finishedGoodsContainers,
+            )),
+          },
+        }
+      : currentInvestmentsSnapshot,
     projectsSnapshot:
       gameState.projectsSnapshot || buildProjectsSnapshotFromGameState(gameState, factorySettings),
     fiveSSnapshot: gameState.fiveSSnapshot || buildFiveSSnapshotFromGameState(gameState, factorySettings),
@@ -620,8 +656,6 @@ function calculateScenario({
   const settings = factorySettings ?? DEFAULT_FACTORY_SETTINGS
   const leanSettings = settings.lean ?? DEFAULT_FACTORY_SETTINGS.lean
   const fiveSSettings = leanSettings.fiveS ?? DEFAULT_FACTORY_SETTINGS.lean.fiveS
-  const smedSettings = leanSettings.smed ?? DEFAULT_FACTORY_SETTINGS.lean.smed
-  const tpmSettings = leanSettings.tpm ?? DEFAULT_FACTORY_SETTINGS.lean.tpm
   const qualitySettings = leanSettings.quality ?? DEFAULT_FACTORY_SETTINGS.lean.quality
   const performanceSettings = leanSettings.performance ?? DEFAULT_FACTORY_SETTINGS.lean.performance
   const inventorySettings = settings.inventory ?? DEFAULT_FACTORY_SETTINGS.inventory
@@ -655,9 +689,7 @@ function calculateScenario({
   )
   const fiveSContributionDivisor = Math.max(1, toNumber(fiveSSettings.contributionDivisor, 3))
   const qualityMaxPct = normalizePercentValue(qualitySettings.maxPct, MAX_COMPONENT_PCT)
-  const performanceMaxPct = normalizePercentValue(performanceSettings.maxPerformance, MAX_COMPONENT_PCT)
   const defaultLearningBasePct = toNumber(performanceSettings.defaultBasePct, 70)
-  const machiningBasePct = normalizePercentValue(performanceSettings.machiningBasePct, 90)
   const learningCurveHours = toNumber(qualitySettings.curveHours, 1200)
 
   const fiveSHoursByDepartment = {
@@ -780,9 +812,11 @@ function calculateScenario({
   const unusedCapacity = Math.max(0, plantCapacity - actualProduction)
 
   // The batch-size-driven quantity is a minimum operational/Lean buffer, not the physical stock level.
-  const minimumFinishedGoodsInventory = machineCount > 0
-    ? (totalVariations * machiningBatchSize) / (2 * machineCount)
-    : 0
+  const minimumFinishedGoodsInventory = calculateMinimumFinishedGoodsContainers({
+    variations: totalVariations,
+    batchSize: machiningBatchSize,
+    machineCount,
+  })
   // The next-round batch size selected in CHECK immediately changes how much of THIS round's
   // opening FG inventory is structurally required versus sellable - capacity/K formulas are
   // untouched and keep using the current round's own active machiningBatchSize above.
@@ -790,9 +824,11 @@ function calculateScenario({
     ? toNumber(market.selectedBatchSize, machiningBatchSize)
     : machiningBatchSize
   const selectedBatchSize = clamp(Math.round(requestedSelectedBatchSize), minBatchSize, maxBatchSize)
-  const selectedBatchSizeMinimumFinishedGoodsInventory = machineCount > 0
-    ? (totalVariations * selectedBatchSize) / (2 * machineCount)
-    : 0
+  const selectedBatchSizeMinimumFinishedGoodsInventory = calculateMinimumFinishedGoodsContainers({
+    variations: totalVariations,
+    batchSize: selectedBatchSize,
+    machineCount,
+  })
   const baseFinishedGoodsContainers = toNumber(investmentsSnapshot.factory.finishedGoodsContainers)
   const openingFinishedGoodsInventory = baseFinishedGoodsContainers
   const sellableOpeningFinishedGoodsInventory = Math.max(
@@ -819,16 +855,27 @@ function calculateScenario({
   const finishedGoodsValue =
     closingFinishedGoodsInventory *
     toNumber(inventorySettings.finishedGoodsValuePerContainer, FINISHED_GOODS_VALUE_PER_CONTAINER)
-  const finishedGoodsArea =
-    minimumFinishedGoodsInventory *
-    toNumber(inventorySettings.finishedGoodsSpacePerContainerM2, FINISHED_GOODS_AREA_PER_CONTAINER)
-
-  const machineArea = machineCount * toNumber(factorySettingsSection.machineSpaceM2, 250)
-  const assemblyArea = staffing.assembly * toNumber(factorySettingsSection.workerSpaceM2, 25)
-  const dispatchArea = toNonNegativeInt(investmentsSnapshot.factory.dispatchM2)
-  const officeArea = toNonNegativeInt(investmentsSnapshot.factory.officeAndSocialM2)
-  const usedArea = machineArea + assemblyArea + dispatchArea + officeArea + finishedGoodsArea
-  const freeFactorySpace = totalArea - usedArea
+  const requiredFinishedGoodsContainers = Math.max(
+    applyDoDecisions ? closingFinishedGoodsInventory : openingFinishedGoodsInventory,
+    minimumFinishedGoodsInventory,
+  )
+  const space = calculateFactorySpace({
+    totalAreaM2: totalArea,
+    machineCount,
+    assemblyWorkers: staffing.assembly,
+    dispatchM2: investmentsSnapshot.factory.dispatchM2,
+    officeAndSocialM2: investmentsSnapshot.factory.officeAndSocialM2,
+    finishedGoodsContainers: requiredFinishedGoodsContainers,
+  }, settings)
+  const {
+    machiningArea: machineArea,
+    assemblyArea,
+    shippingArea: dispatchArea,
+    officeArea,
+    finishedGoodsArea,
+    totalUsed: usedArea,
+    freeArea: freeFactorySpace,
+  } = space
 
   const revenue = deliveries * toNumber(market.price, PRICE_REFERENCE)
   const materials = actualProduction * toNumber(
@@ -858,21 +905,6 @@ function calculateScenario({
     (buildingsBase + buildingInvestments) *
     toNumber(settings.finance.buildingDepreciationPerRound, BUILDING_DEPRECIATION_PER_ROUND)
   const depreciation = machineryDepreciation + buildingDepreciation
-
-  const financing = canFinanceInvestment(
-    investments.totalCost,
-    {
-    cashBalance: toNumber(balanceSheetSnapshot.assets.cash),
-    bankLoanDebt: toNumber(balanceSheetSnapshot.liabilities.bankLoans),
-    equity:
-      toNumber(balanceSheetSnapshot.assets.machinery) +
-      toNumber(balanceSheetSnapshot.assets.buildings) +
-      toNumber(balanceSheetSnapshot.assets.cash) +
-      toNumber(balanceSheetSnapshot.assets.inventory) -
-      toNumber(balanceSheetSnapshot.liabilities.bankLoans),
-    },
-    toNumber(settings.finance.maxDebtToEquity, 2),
-  )
 
   const openingInterestBearingDebt = toNumber(
     balanceSheetSnapshot.liabilities?.bankLoans,
@@ -940,11 +972,14 @@ function calculateScenario({
       inventoryChange,
     },
     space: {
+      ...space,
       totalArea,
       machineArea,
       assemblyArea,
       dispatchArea,
       officeArea,
+      finishedGoodsArea,
+      finishedGoodsContainers: requiredFinishedGoodsContainers,
       usedArea,
       freeFactorySpace,
     },

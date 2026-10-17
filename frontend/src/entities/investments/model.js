@@ -1,9 +1,20 @@
+import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
+import {
+  calculateFactorySpace,
+  calculateMinimumFinishedGoodsContainers,
+} from '../factory-space/model.js'
+
 const EURO_FORMATTER = new Intl.NumberFormat('fi-FI', {
   maximumFractionDigits: 0,
 })
 
 const MACHINERY_DEPRECIATION_RATE_PER_ROUND = 0.05
 const BUILDINGS_DEPRECIATION_RATE_PER_ROUND = 0.025
+
+function toNumber(value, fallback = 0) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : fallback
+}
 
 function formatCurrency(value) {
   return `${EURO_FORMATTER.format(Math.round(value))} €`
@@ -21,27 +32,20 @@ export function calculateRoundDepreciation(value, rate) {
   return Math.round((Number(value) || 0) * (Number(rate) || 0))
 }
 
-export function calculateFactorySpaceUsage(factoryState) {
-  const machiningArea = (factoryState.machiningMachineCount || 0) * 250
-  const assemblyArea = (factoryState.assemblyWorkers || 0) * 25
-  const dispatchArea = factoryState.dispatchM2 || 0
-  const finishedGoodsArea = (factoryState.finishedGoodsContainers || 0) * 15
-  const officeAndSocialArea = factoryState.officeAndSocialM2 || 0
-  const totalUsed = machiningArea + assemblyArea + dispatchArea + finishedGoodsArea + officeAndSocialArea
-
-  return {
-    machiningArea,
-    assemblyArea,
-    dispatchArea,
-    finishedGoodsArea,
-    officeAndSocialArea,
-    totalUsed,
-    freeArea: (factoryState.totalAreaM2 || 0) - totalUsed,
-  }
+export function calculateFactorySpaceUsage(factoryState, factorySettings = DEFAULT_FACTORY_SETTINGS) {
+  return calculateFactorySpace({
+    totalAreaM2: factoryState.totalAreaM2,
+    machineCount: factoryState.machiningMachineCount,
+    assemblyWorkers: factoryState.assemblyWorkers,
+    dispatchM2: factoryState.dispatchM2,
+    officeAndSocialM2: factoryState.officeAndSocialM2,
+    finishedGoodsContainers: factoryState.finishedGoodsContainers,
+    minimumFinishedGoodsContainers: factoryState.minimumFinishedGoodsContainers,
+  }, factorySettings)
 }
 
-export function applyFactoryExpansion(totalAreaM2, expansionCount) {
-  return Number(totalAreaM2) + Number(expansionCount) * 1000
+export function applyFactoryExpansion(totalAreaM2, expansionCount, expansionAreaM2 = 1000) {
+  return Number(totalAreaM2) + Number(expansionCount) * Number(expansionAreaM2)
 }
 
 export function applyNewMachineCount(machineCount, purchasedMachineCount) {
@@ -143,16 +147,40 @@ function calculateSelectionDepreciation(investmentRows, snapshot) {
 }
 
 export function buildInvestmentsViewModel({ snapshot, gameState, factorySettings, draftSelection }) {
+  const settings = factorySettings ?? DEFAULT_FACTORY_SETTINGS
+  const factorySettingsSection = settings.factory ?? DEFAULT_FACTORY_SETTINGS.factory
+  const variationCount = gameState.market?.activeVariations ?? settings.initialState?.market?.activeVariations
+  const batchSize = gameState.market?.batchSize ?? settings.production?.initialBatchSize
+  const currentFactory = {
+    totalAreaM2: gameState.factory?.totalAreaM2,
+    machiningMachineCount: gameState.production?.machiningMachines,
+    assemblyWorkers: gameState.staffing?.assembly,
+    shippingWorkers: gameState.staffing?.shipping,
+    dispatchM2: gameState.factory?.dispatchM2,
+    officeAndSocialM2: gameState.factory?.officeAndSocialM2,
+    finishedGoodsContainers: gameState.inventory?.finishedGoodsContainers,
+    minimumFinishedGoodsContainers: calculateMinimumFinishedGoodsContainers({
+      variations: variationCount,
+      batchSize,
+      machineCount: gameState.production?.machiningMachines,
+    }),
+  }
   const selectionState = parseDraftToSelectionState(draftSelection)
-  const newTotalArea = applyFactoryExpansion(snapshot.factory.totalAreaM2, selectionState.expansionCount)
-  const newMachineCount = applyNewMachineCount(snapshot.factory.machiningMachineCount, selectionState.newMachineCount)
+  const expansionAreaM2 = toNumber(factorySettingsSection.factoryExpansionM2, 1000)
+  const newTotalArea = applyFactoryExpansion(currentFactory.totalAreaM2, selectionState.expansionCount, expansionAreaM2)
+  const newMachineCount = applyNewMachineCount(currentFactory.machiningMachineCount, selectionState.newMachineCount)
 
-  const baseSpace = calculateFactorySpaceUsage(snapshot.factory)
+  const baseSpace = calculateFactorySpaceUsage(currentFactory, settings)
   const projectedSpace = calculateFactorySpaceUsage({
-    ...snapshot.factory,
+    ...currentFactory,
     totalAreaM2: newTotalArea,
     machiningMachineCount: newMachineCount,
-  })
+    minimumFinishedGoodsContainers: calculateMinimumFinishedGoodsContainers({
+      variations: variationCount,
+      batchSize,
+      machineCount: newMachineCount,
+    }),
+  }, settings)
 
   const financialState = {
     cashBalance: gameState.finance.cash,
@@ -160,17 +188,31 @@ export function buildInvestmentsViewModel({ snapshot, gameState, factorySettings
     equity: gameState.finance.equity,
   }
 
-  const investmentRows = buildInvestmentRows(selectionState, snapshot)
+  const investmentCatalog = {
+    ...snapshot,
+    investments: {
+      ...snapshot.investments,
+      newMachine: {
+        ...snapshot.investments.newMachine,
+        unitCost: toNumber(settings.investments?.newMachine?.price, snapshot.investments.newMachine.unitCost),
+      },
+      factoryExpansion: {
+        ...snapshot.investments.factoryExpansion,
+        unitCost: toNumber(settings.investments?.factoryExpansion?.price, snapshot.investments.factoryExpansion.unitCost),
+      },
+    },
+  }
+  const investmentRows = buildInvestmentRows(selectionState, investmentCatalog)
   const totalCost = investmentRows.reduce((sum, item) => sum + item.cost, 0)
   const financeOptions = {
-    targetCash: factorySettings.finance.targetCash,
-    maxDebtToEquity: factorySettings.finance.maxDebtToEquity,
+    targetCash: settings.finance.targetCash,
+    maxDebtToEquity: settings.finance.maxDebtToEquity,
   }
   const financing = canFinanceInvestment(totalCost, financialState, financeOptions)
-  const depreciationPerRound = calculateSelectionDepreciation(investmentRows, snapshot)
+  const depreciationPerRound = calculateSelectionDepreciation(investmentRows, investmentCatalog)
 
   const canAddMachineBySpace = projectedSpace.freeArea >= 0
-  const oneMachineCost = snapshot.investments.newMachine.unitCost
+  const oneMachineCost = investmentCatalog.investments.newMachine.unitCost
   const plusOneMachineFinancing = canFinanceInvestment(
     totalCost + oneMachineCost,
     financialState,
@@ -179,7 +221,7 @@ export function buildInvestmentsViewModel({ snapshot, gameState, factorySettings
   const canAddMachine = canAddMachineBySpace && plusOneMachineFinancing.canFinance
 
   const plusOneExpansionFinancing = canFinanceInvestment(
-    totalCost + snapshot.investments.factoryExpansion.unitCost,
+    totalCost + investmentCatalog.investments.factoryExpansion.unitCost,
     financialState,
     financeOptions,
   )
@@ -187,16 +229,47 @@ export function buildInvestmentsViewModel({ snapshot, gameState, factorySettings
   const addedPersonnel = getAdditionalPersonnelFromMachines(selectionState.newMachineCount)
 
   return {
-    round: snapshot.round,
+    round: gameState.round,
     selectionState,
     machineCountAfterSelection,
     addedPersonnel,
     space: {
       base: baseSpace,
       projected: projectedSpace,
-      totalAreaText: formatArea(newTotalArea),
-      usedAreaText: formatArea(projectedSpace.totalUsed),
-      freeAreaText: formatArea(projectedSpace.freeArea),
+      totalAreaText: formatArea(baseSpace.totalArea),
+      usedAreaText: formatArea(baseSpace.totalUsed),
+      freeAreaText: formatArea(baseSpace.freeArea),
+      baseText: {
+        totalArea: formatArea(baseSpace.totalArea),
+        usedArea: formatArea(baseSpace.totalUsed),
+        freeArea: formatArea(baseSpace.freeArea),
+      },
+      projectedText: {
+        totalArea: formatArea(projectedSpace.totalArea),
+        usedArea: formatArea(projectedSpace.totalUsed),
+        freeArea: formatArea(projectedSpace.freeArea),
+      },
+      investmentSpaceChange: projectedSpace.freeArea - baseSpace.freeArea,
+      investmentSpaceChangeText: `${projectedSpace.freeArea - baseSpace.freeArea > 0 ? '+' : ''}${formatArea(projectedSpace.freeArea - baseSpace.freeArea)}`,
+      breakdown: [
+        { key: 'machiningArea', label: 'Koneistus' },
+        { key: 'assemblyArea', label: 'Kokoonpano' },
+        { key: 'shippingArea', label: 'Lähettämö' },
+        { key: 'officeAndSocialArea', label: 'Toimistot ja muut kiinteät tilat' },
+        { key: 'finishedGoodsArea', label: 'Valmistuotevarasto' },
+      ].map((row) => ({
+        ...row,
+        currentArea: baseSpace[row.key],
+        projectedArea: projectedSpace[row.key],
+        currentAreaText: formatArea(baseSpace[row.key]),
+        projectedAreaText: formatArea(projectedSpace[row.key]),
+      })),
+      usedCurrent: baseSpace.totalUsed,
+      freeCurrent: baseSpace.freeArea,
+      totalCurrent: baseSpace.totalArea,
+      usedProjected: projectedSpace.totalUsed,
+      freeProjected: projectedSpace.freeArea,
+      totalProjected: projectedSpace.totalArea,
     },
     financing: {
       ...financing,

@@ -40,8 +40,8 @@ test('income history starts with canonical rounds -1 and 0', () => {
   assert.equal(view.previousRound, -1)
   assert.equal(view.round, 0)
   assert.equal(rows.find((row) => row.key === 'sales').currentAmount, 150)
-  assert.ok(Math.abs(result.currentAmount - (-590787.0056640625)) < 1e-8)
-  assert.ok(Math.abs(financing.currentAmount - (-55778.597460937504)) < 1e-8)
+  assert.ok(Math.abs(result.currentAmount - (-859890.5212890625)) < 1e-8)
+  assert.ok(Math.abs(financing.currentAmount - (-62382.113085937504)) < 1e-8)
 })
 
 test('actual income API baseline pipeline preserves round zero values', async () => {
@@ -54,12 +54,12 @@ test('actual income API baseline pipeline preserves round zero values', async ()
   assert.equal(values.revenue, 3750000)
   assert.equal(values.inventoryChange, 0)
   assert.equal(values.materials, -1800000)
-  assert.equal(values.labor, -1391250)
-  assert.equal(values.grossMargin, 558750)
+  assert.equal(values.labor, -1653750)
+  assert.equal(values.grossMargin, 296250)
   assert.equal(values.fixedCosts, -1000000)
   assert.equal(values.depreciation, -93758.408203125)
-  assert.ok(Math.abs(values.financingCosts - (-55778.597460937504)) < 1e-8)
-  assert.ok(Math.abs(values.result - (-590787.0056640625)) < 1e-8)
+  assert.ok(Math.abs(values.financingCosts - (-62382.113085937504)) < 1e-8)
+  assert.ok(Math.abs(values.result - (-859890.5212890625)) < 1e-8)
 })
 
 test('income statement cost percentages use revenue minus inventory change as presentation basis', () => {
@@ -130,7 +130,7 @@ test('PLAN income forecast view exposes the same canonical output used by CHECK 
 
   assert.equal(checkPreview.forecast.actualProduction, planForecast.forecast.actualProduction)
   assert.equal(checkPreview.forecast.deliveries, planForecast.forecast.deliveries)
-  assert.equal(nextGameState.production.machiningMachines, 3)
+  assert.equal(nextGameState.production.machiningMachines, 5)
   assert.equal(nextGameState.production.machiningMachines, planForecast.closingState.production.machiningMachines)
   assert.equal(
     checkPreview.forecast.inventory.openingFinishedGoodsInventory,
@@ -225,4 +225,3 @@ test('PLAN/Tulos with gameState.round=3 compares confirmed rounds 1 and 2, not 2
   assert.equal(rows.find((row) => row.key === 'result').previousAmount, 111)
   assert.equal(rows.find((row) => row.key === 'sales').previousAmount, 210)
 })
-

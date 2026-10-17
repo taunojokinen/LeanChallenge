@@ -160,12 +160,18 @@ test('shipping staffing affects shipping capacity', () => {
 })
 
 test('machining staffing equals 5 x machines', () => {
-  const forecast = calculateRoundForecast(createGameState())
-  const machineCount =
-    investmentsSnapshot.factory.machiningMachineCount +
-    forecast.forecast.investments.newMachines
+  const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+  gameState.investmentsDecision = {
+    round: gameState.round,
+    investments: [{ type: 'new-machine', quantity: 1 }],
+  }
+  const forecast = calculateRoundForecast(gameState)
+  const machineCount = gameState.production.machiningMachines + forecast.forecast.investments.newMachines
 
+  assert.equal(gameState.production.machiningMachines, 4)
+  assert.equal(forecast.forecast.investments.newMachines, 1)
   assert.equal(forecast.forecast.staffing.machining, machineCount * 5)
+  assert.equal(forecast.forecast.space.machiningArea, 1250)
 })
 
 test('staffing can be zero', () => {
@@ -384,7 +390,7 @@ test('machining otherDowntimeRate override no longer affects K (removed in the 2
 
 // Reference scenarios for batch size -> changeovers -> availability -> KNL -> capacity.
 // Uses a zero SMED/5S baseline (no prior lean investment) so setupTimeHours equals the
-// canonical initialSetupTimeHours (10h) exactly, isolating the batch-size effect being tested.
+// canonical initialSetupTimeHours (40h) exactly, isolating the batch-size effect being tested.
 function createZeroLeanMachiningGameState(machineCount) {
   const gameState = createInitialGameState()
   gameState.lean.methods.machining = { smed: 0, tpm: 0, spc: 0 }
@@ -408,34 +414,34 @@ function approx(actual, expected, tolerance = 0.05) {
   assert.equal(Math.abs(actual - expected) <= tolerance, true, `expected ${actual} to be within ${tolerance} of ${expected}`)
 }
 
-test('scenario A: production 200, batchSize 20, 2 machines gives ~72.3% K', () => {
-  const forecast = runBatchScenario(20)
+test('scenario A: production 200, batchSize 20, 4 machines gives ~68.7% K', () => {
+  const forecast = runBatchScenario(20, 4)
   const m = forecast.forecast.knl.machining
 
   assert.equal(m.totalChangeovers, 10)
-  assert.equal(m.changeoversPerMachine, 5)
-  assert.equal(m.changeoverHoursPerMachine, 50)
-  approx(m.kPct, 72.346, 0.01)
-})
-
-test('scenario B: production 200, batchSize 10, 2 machines gives ~68.7% K', () => {
-  const forecast = runBatchScenario(10)
-  const m = forecast.forecast.knl.machining
-
-  assert.equal(m.totalChangeovers, 20)
-  assert.equal(m.changeoversPerMachine, 10)
+  assert.equal(m.changeoversPerMachine, 2.5)
   assert.equal(m.changeoverHoursPerMachine, 100)
   approx(m.kPct, 68.692, 0.01)
 })
 
-test('scenario C: production 200, batchSize 5, 2 machines gives ~61.4% K', () => {
-  const forecast = runBatchScenario(5)
+test('scenario B: production 200, batchSize 10, 4 machines gives ~61.4% K', () => {
+  const forecast = runBatchScenario(10, 4)
+  const m = forecast.forecast.knl.machining
+
+  assert.equal(m.totalChangeovers, 20)
+  assert.equal(m.changeoversPerMachine, 5)
+  assert.equal(m.changeoverHoursPerMachine, 200)
+  approx(m.kPct, 61.385, 0.01)
+})
+
+test('scenario C: production 200, batchSize 5, 4 machines gives ~46.8% K', () => {
+  const forecast = runBatchScenario(5, 4)
   const m = forecast.forecast.knl.machining
 
   assert.equal(m.totalChangeovers, 40)
-  assert.equal(m.changeoversPerMachine, 20)
-  assert.equal(m.changeoverHoursPerMachine, 200)
-  approx(m.kPct, 61.385, 0.01)
+  assert.equal(m.changeoversPerMachine, 10)
+  assert.equal(m.changeoverHoursPerMachine, 400)
+  approx(m.kPct, 46.769, 0.01)
 })
 
 test('scenario D: a third machine keeps total changeovers the same but shares them across more machines', () => {
@@ -446,7 +452,7 @@ test('scenario D: a third machine keeps total changeovers the same but shares th
 
   assert.equal(threeMetrics.totalChangeovers, twoMetrics.totalChangeovers)
   approx(threeMetrics.changeoversPerMachine, 10 / 3, 0.001)
-  approx(threeMetrics.changeoverHoursPerMachine, (10 / 3) * 10, 0.01)
+  approx(threeMetrics.changeoverHoursPerMachine, (10 / 3) * 40, 0.01)
   assert.equal(threeMetrics.kPct > twoMetrics.kPct, true)
 })
 
@@ -1034,13 +1040,13 @@ test('current round forecast uses only gameState.market.batchSize (no ACT-style 
   assert.equal(forecastQ20.decisions.market.batchSize, 20)
   assert.equal(
     forecastQ20.forecast.inventory.minimumFinishedGoodsInventory,
-    (totalVariations * 20) / (2 * 2),
+    (totalVariations * 20) / (2 * 4),
   )
 
   assert.equal(forecastQ5.decisions.market.batchSize, 5)
   assert.equal(
     forecastQ5.forecast.inventory.minimumFinishedGoodsInventory,
-    (totalVariations * 5) / (2 * 2),
+    (totalVariations * 5) / (2 * 4),
   )
 
   assert.equal(
@@ -1489,20 +1495,13 @@ test('same forecast function provides deterministic ACT preview values', () => {
   assert.equal(previewOne.summary.productionQuantity, previewTwo.summary.productionQuantity)
 })
 
-test('baseline capacities are in expected scale with 6h/90h/10h norm times', () => {
-  const forecast = calculateRoundForecast(
-    createGameState({
-      fiveSDecision: null,
-      projectsDecision: null,
-      investmentsDecision: null,
-      marketDecision: {
-        price: 25000,
-        runsPerVariation: 2,
-      },
-    }),
-  )
+test('baseline capacities use 12h/90h/10h norms and four starting machines', () => {
+  const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+  const forecast = calculateRoundForecast(gameState, {
+    market: { price: 25000, runsPerVariation: 2 },
+  })
 
-  const machiningIdeal = (2 * 1040) / 6
+  const machiningIdeal = (4 * 1040) / 12
   const assemblyIdeal = (25 * 1040) / 90
   const shippingIdeal = (5 * 1040) / 10
 
@@ -1559,7 +1558,7 @@ test('closing staffing uses CHECK assembly and shipping plus derived machining s
   )
 
   assert.deepEqual(forecast.closingState.staffing, {
-    machining: 15,
+    machining: 25,
     assembly: 31,
     shipping: 8,
   })
@@ -1621,7 +1620,7 @@ test('closing production and factory state include current-round additions', () 
     },
   })
 
-  assert.equal(forecast.closingState.production.machiningMachines, 3)
+  assert.equal(forecast.closingState.production.machiningMachines, 5)
   assert.equal(forecast.closingState.factory.totalAreaM2, 5000)
   assert.equal(forecast.closingState.factory.expansionsCount, 1)
   assert.equal(forecast.closingState.factory.dispatchM2, gameState.factory.dispatchM2)

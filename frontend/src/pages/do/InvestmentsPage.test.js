@@ -148,12 +148,29 @@ test('renders only machine and expansion cards with no project reads or render-t
   assert.match(html, /Uusi tuotantokone/)
   assert.match(html, /Tehdaslaajennus/)
   assert.match(html, /Tallenna ja jatka/)
+  assert.match(html, /Mistä tehdastilan käyttö muodostuu\?/)
+  assert.match(html, /Toimistot ja muut kiinteät tilat/)
+  assert.match(html, /20 % vuodessa menojäännöksestä \(5 % \/ pelikierros\)/)
+  assert.match(html, /10 % vuodessa menojäännöksestä \(2,5 % \/ pelikierros\)/)
   assert.doesNotMatch(html, /SMED|SPC|TPM|automaatio|prosessimittaus|Kunnonvalvonta/)
+})
+
+test('space detail renders before and after investment values without horizontal-scroll markup', async () => {
+  const state = createInitialGameState()
+  const tree = await loadPage(pageProps({ gameState: state }))
+  const html = renderToStaticMarkup(tree)
+  assert.match(html, /Nykytila/)
+  assert.match(html, /Ennuste investointien jälkeen/)
+  assert.match(html, /Valmistuotevarasto/)
+  assert.match(html, /Vapaa tehdastila ennen investointeja/)
+  assert.doesNotMatch(html, /overflow-x:\s*auto/)
 })
 
 test('save succeeds before navigating to check with the current machine selection', async () => {
   const events = []
-  const props = pageProps({ onNavigate: (path) => {
+  const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+  gameState.factory.totalAreaM2 = 5000
+  const props = pageProps({ gameState, onNavigate: (path) => {
     assert.equal(JSON.parse(window.localStorage.getItem(STORAGE_KEY)).investments[0].quantity, 1)
     events.push(path)
   } })
@@ -186,7 +203,9 @@ test('explicit save failure displays a message and never navigates, and retry su
 })
 
 test('valid counter edits auto-persist through remounts and a new round clears the draft', async () => {
-  const props = pageProps()
+  const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+  gameState.factory.totalAreaM2 = 5000
+  const props = pageProps({ gameState })
   let tree = await loadPage(props)
   action(tree, '+').onClick()
   tree = hooks.render(InvestmentsPage, props)
@@ -225,7 +244,9 @@ test('expansion controls preserve price, financing limits and removal persistenc
 })
 
 test('auto-persist storage failures remain caught and the unsaved selection is visible', async () => {
-  const props = pageProps()
+  const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+  gameState.factory.totalAreaM2 = 5000
+  const props = pageProps({ gameState })
   let tree = await loadPage(props)
   window.localStorage.setItem = () => { throw new Error('Quota exceeded') }
   assert.doesNotThrow(() => action(tree, '+').onClick())

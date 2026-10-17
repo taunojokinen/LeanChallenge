@@ -77,6 +77,86 @@ KNL:
 
 KNL = Käytettävyys × Nopeus × Laatu
 
+### Cockpitin lähtöhistoria ja yläpalkki
+
+Kierros 0 lasketaan pelimoottorilla pelin omasta tehdasasetusten snapshotista.
+Kierros −1 johdetaan tästä yhteisellä `buildInitialKnlHistory`-funktiolla.
+Pelin alussa arvotaan kerran `crypto.getRandomValues`-siemen (`gameState.historySeed`).
+Quest ja opettajan testipeli tallentavat siemenen, asetussnapshotin ja pelitilan
+sessionStorageen. Päivitys ja PDCA-vaiheen vaihtaminen eivät arvo historiaa uudelleen.
+Uusi peli vaihtaa siemenen; vanha siemenetön sessio käyttää vakaata siementä 0.
+
+K-, N- ja L-osatekijöiden suhteellinen vaihtelu on ±0,2 %, ja arvot rajataan
+välille 0–100 %. Koneistuksessa vaihdot ja käytettävyys kerrotaan edelleen
+keskenään K-tekijäksi. KNL lasketaan tekijöiden tulona, ei erillisellä arvonnalla.
+Neljän tekijän pahin poikkeama on alle 0,81 % myös käänteisessä vertailussa.
+Tehtaan aggregointi säilyttää kierroksen 0 kapasiteettipainot, joten sama raja
+pätee myös tehtaan KNL:ään.
+
+Yläpalkki vertaa kahta viimeistä vahvistettua kierrosta (aluksi −1 ja 0).
+KNL käyttää samaa historiaa kuin Cockpit. Tuotantomäärä on kierroksen
+`actualProduction`, liikevaihto ja tulos ovat kierroksen tuloslaskelmasta.
+Lähtökierrosten taloustiedot tulevat yhteisestä laskennallisesta taloushistoriasta,
+myöhemmät tiedot vahvistetusta pelihistoriasta.
+Varaston kiertonopeus on kierroksen toimitukset jaettuna saman kierroksen
+fyysisellä loppuvarastolla; sen muutos esitetään absoluuttisena, esimerkiksi `+0,2x`.
+Muut muutokset ovat `(nykyinen − edellinen) / abs(edellinen) * 100`.
+Puuttuva tai ei-äärellinen vertailuarvo ja nollanimittäjä tuottavat merkin `—`.
+Negatiivisten tulosten vertailussa käytetään edellisen tuloksen itseisarvoa.
+
+Validointi: `node --test`, muutettujen JavaScript/JSX-tiedostojen ESLint ja
+`npm run build`.
+
+### Tehdastilan laskenta ja investoinnit
+
+Investoinnit ja tuotantoennuste käyttävät samaa `calculateFactorySpace`-funktiota.
+Käytetty tila muodostuu koneiden tilasta, kokoonpanon työntekijöiden tilasta,
+lähettämön kiinteästä tilasta, toimistoista ja valmistuotevarastosta.
+Varaston pinta-ala käyttää fyysisen määrän ja eräkoon vaatiman minimivaraston
+suurempaa arvoa; niitä ei lasketa yhteen, koska minimivarasto on osa fyysistä
+varastoa. Käytettyyn tilaan lisätään jokainen erä vain kerran.
+
+Investointinäkymän nykytila lasketaan aktiivisesta pelitilasta ja kyseisen pelin
+asetussnapshotista, ei katalogin tehdasesimerkkiriveistä. Ennusteeseen lisätään
+valitut koneet ja laajennukset kerran. CHECK erottaa nykytilan ja DO-investointien
+jälkeisen ennusteen omiksi sarakkeikseen. Tehdastilan yhteenveto näyttää näiden
+tilojen osastokohtaiset ja yhteiset pinta-alat.
+
+### Opettajan asetukset ja uusien pelien lähtöarvot
+
+Opettaja voi rajata muuttuvia asetuksia seuraavien sallittujen minimien ja
+maksimien välille:
+
+| Asetus | Minimi | Maksimi |
+|---|---:|---:|
+| Kiinteät kustannukset | 400 000 €/neljännesvuosi | 1 000 000 €/neljännesvuosi |
+| Oma pääoma | 2 000 000 € | 4 000 000 € |
+| Asetusaika | 40 h | 80 h |
+| Alkueräkoko | 10 kpl | 20 kpl |
+| Tehtaan kokonaispinta-ala | 4 000 m² | 5 000 m² |
+| KNL-puoliintumisaika | 300 kehitystuntia | 600 kehitystuntia |
+| Hyvän laadun raja | 75 % | 80 % |
+| Erinomaisen laadun raja | 80 % | 85 % |
+
+Jokainen uusi Quest- ja opettajan testipeli alkaa neljällä koneella,
+12 tunnin koneistusajalla yksikköä kohti ja 20 tuotevariaatiolla. Opettaja ei
+voi muuttaa näitä lähtöarvoja, mutta pelaaja voi edelleen hankkia koneita
+investoinneilla pelin aikana. Muuttuvien asetusten testipeli saa oman
+asetussnapshotin, joten suosikkiasetusten myöhempi muuttaminen ei muuta jo
+aloitettua peliä.
+
+Opettajan asetusten tallennusversio 4 tuo vanhat version 2 ja 3 suosikit uusiin
+rajoihin: version 2 kiinteät kustannukset muunnetaan vuositasolta
+neljännesvuositasolle, arvot rajataan sallittuun vaihteluväliin ja asetukset
+pyöristetään käytössä oleviin askeliin. Poistetut kone-, koneistusaika- ja
+variaatioasetukset ohitetaan. Virheellinen tai tuntematon asetustallenne
+palautuu turvallisiin oletuksiin. Jo käynnissä olevien pelien snapshotteja ei
+muuteta.
+
+Poistojen per kierros -laskenta pysyy ennallaan: koneille 5 % ja
+tehdaslaajennuksille 2,5 % menojäännöksestä. Tehdasasetuksissa pelikierros on
+kolme kuukautta; Investoinnit-näkymä ilmoittaa vastaavat vuositasot 20 % ja 10 %.
+
 ---
 
 # 4. Pelin rakenne
@@ -374,21 +454,17 @@ Investoinnit ovat vaihtoehto Lean-kehittämiselle.
 
 Pelin tulee kuitenkin ohjata ymmärtämään, ettei uuden kapasiteetin ostaminen ole automaattisesti paras ratkaisu.
 
-Investointikohteita on kolme.
+Investointikohteita ovat uusi tuotantokone ja tehdaslaajennus.
 
 ## Tehdaslaajennus
 
-Alkutilanteessa:
-
-Tehtaan pinta-ala = 2000 m²
-
 Laajennusyksikkö:
 
-500 m²
+1 000 m²
 
 Hinta:
 
-1 000 000 € / 500 m²
+1 000 000 € / 1 000 m²
 
 Investointi voidaan rahoittaa:
 - kassasta
@@ -396,13 +472,11 @@ Investointi voidaan rahoittaa:
 
 ## Uusi tuotantokone
 
-Alkutilanteessa koneita on:
-
-2 kpl
+Uusi peli alkaa neljällä koneella. Opettaja ei voi muuttaa lähtömäärää.
 
 Uuden koneen hinta:
 
-250 000 € / kone
+500 000 € / kone
 
 Koneita voidaan ostaa rajattomasti, jos tuotantotilaa on riittävästi.
 
@@ -410,47 +484,29 @@ Yhden koneen tilavaatimus:
 
 250 m²
 
-## Tuotannonvaihtoautomaatti
-
-Koneistuskoneeseen voidaan hankkia tuotannonvaihtoautomaatti.
-
-Hinta:
-
-150 000 € / kone
-
-Vaikutus:
-
-tuotannonvaihtoaika pienenee
-→ asetusaika pienenee
-→ käytettävyys kasvaa
-→ kapasiteetti kasvaa
-
----
+## ---
 
 # 12. Tehtaan tilankäyttö
 
-Tehtaan kokonaispinta-ala alkutilanteessa:
-
-2000 m²
+Tehtaan kokonaispinta-ala on uudessa pelissä oletuksena 4 000 m². Opettajan
+asetuksissa sen rajat ovat 4 000–5 000 m².
 
 Kiinteät tilat:
 
-Sosiaali- ja toimistotilat:
-200 m²
+Toimistot ja sosiaalitilat: 200 m²
 
-Lähettämö:
-250 m²
+Lähettämö: 250 m²
 
 Muuttuvat tilavaatimukset:
 
-Kone:
-250 m² / kone
+Koneistus: 250 m² / kone
 
 Kokoonpano:
 25 m² / työntekijä
 
-Valmistuotevarasto:
-50 m² / toimittamaton toimituserä
+Valmistuotevarasto: 15 m² / fyysinen tuote. Minimitasona käytetään lisäksi
+eräkoon perusteella laskettua varastoa; sitä ei lasketa fyysisen varaston päälle
+toisena erillisenä varastona.
 
 Investointi voidaan toteuttaa vain, jos tarvittava tila on käytettävissä.
 

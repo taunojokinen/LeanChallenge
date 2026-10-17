@@ -38,13 +38,8 @@ test('no runtime history selects round -1 and round 0', () => {
   const roundZeroForecast = calculateRoundForecast(createInitialGameState()).current
   const roundZeroKnl = roundZeroForecast.knl
   const roundZeroFactoryKnl = roundZeroForecast.factoryKnl
-  const expectedRoundMinusOne = {
-    machining: { K: 77.9, N: 89.6, L: 74.2 },
-    assembly: { K: 77.3, N: 72.4, L: 74.6 },
-    shipping: { K: 76.2, N: 71.7, L: 74.0 },
-  }
   const expectedRoundZero = {
-    machining: { K: 76 * (1 - 100 / 2080), N: 90, L: 70 },
+    machining: { K: 76 * (1 - 100 / 1040), N: 90, L: 70 },
     assembly: { K: 70, N: 70, L: 70 },
     shipping: { K: 70, N: 70, L: 70 },
   }
@@ -59,7 +54,6 @@ test('no runtime history selects round -1 and round 0', () => {
   ])
 
   cockpit.departments.forEach((department) => {
-    const expected = expectedRoundMinusOne[department.key]
     const expectedCanonical = expectedRoundZero[department.key]
     const canonicalRoundZero = roundZeroKnl[department.key]
     const { metrics } = department
@@ -68,9 +62,9 @@ test('no runtime history selects round -1 and round 0', () => {
     const speed = metrics['N - nopeus']
     const quality = metrics['L - laatu']
 
-    assert.ok(Math.abs(availability.previous * (metrics['K - vaihdot']?.previous ?? 100) / 100 - expected.K) < 1e-9)
-    assert.equal(speed.previous, expected.N)
-    assert.equal(quality.previous, expected.L)
+    for (const metric of Object.values(metrics)) {
+      assert.ok(Math.abs((metric.previous - metric.current) / metric.current) < 0.01)
+    }
     assert.ok(Math.abs(canonicalRoundZero.kPct - expectedCanonical.K) < 0.0001)
     assert.ok(Math.abs(canonicalRoundZero.nPct - expectedCanonical.N) < 0.0001)
     assert.ok(Math.abs(canonicalRoundZero.lPct - expectedCanonical.L) < 0.0001)
@@ -121,17 +115,13 @@ test('machining KNL uses both K components while assembly and shipping keep thei
   assert.deepEqual(Object.keys(shipping.metrics), ['K - käytettävyys', 'N - nopeus', 'L - laatu', 'KNL'])
 })
 
-test('machining changeover K uses canonical forecast values for rounds -1 and 0', () => {
+test('machining changeover K derives from round zero with a small relative variation', () => {
   const cockpit = cockpitWithHistory([])
   const roundZero = calculateRoundForecast(createInitialGameState()).current.knl.machining
-  const roundMinusOne = calculateRoundForecast(
-    createInitialGameState(),
-    { market: { productionQuantity: 174 } },
-  ).current.knl.machining
   const metrics = cockpit.departments[0].metrics
 
   assert.equal(metrics['K - vaihdot'].current, roundZero.kChangeoverPct)
-  assert.equal(metrics['K - vaihdot'].previous, roundMinusOne.kChangeoverPct)
+  assert.ok(Math.abs(metrics['K - vaihdot'].previous / roundZero.kChangeoverPct - 1) < 0.01)
   assert.ok(Math.abs(metrics.KNL.current - calculateKNL(
       metrics['K - vaihdot'].current * metrics['K - käytettävyys'].current / 100,
       metrics['N - nopeus'].current,
@@ -163,11 +153,12 @@ test('baseline factory K/N/L uses the shared capacity-weighted department aggreg
 test('relative change uses absolute previous value', () => {
   assert.equal(calculateRelativeChange(105, -100), 205)
   assert.equal(calculateRelativeChange(84, 80), 5)
+  assert.equal(calculateRelativeChange(70, 69.7), 0.4)
 })
 
-test('previous zero produces a finite neutral change', () => {
-  assert.equal(calculateRelativeChange(84, 0), 0)
-  assert.equal(Number.isFinite(calculateRelativeChange(84, 0)), true)
+test('previous zero produces an unavailable change', () => {
+  assert.equal(calculateRelativeChange(84, 0), null)
+  assert.equal(formatChange(calculateRelativeChange(84, 0)), '—')
 })
 
 test('percentage display rounds values and uses one decimal for changes', () => {

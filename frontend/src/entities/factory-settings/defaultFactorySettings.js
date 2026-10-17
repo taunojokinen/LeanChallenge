@@ -26,7 +26,7 @@ export const DEFAULT_FACTORY_SETTINGS = {
     maxBatchSize: 20,
     departments: {
       machining: {
-        normHoursPerContainer: 6,
+        normHoursPerContainer: 12,
         otherDowntimeRate: 0.24,
       },
       assembly: {
@@ -110,7 +110,7 @@ export const DEFAULT_FACTORY_SETTINGS = {
       maxEffectiveHours: 700,
     },
     smed: {
-      initialSetupTimeHours: 10,
+      initialSetupTimeHours: 40,
       minimumSetupTimeHours: 0.5,
       decayHours: 450,
       baseSetupCurveHours: 450,
@@ -207,7 +207,7 @@ export const DEFAULT_FACTORY_SETTINGS = {
     },
 
     production: {
-      machiningMachines: 2,
+      machiningMachines: 4,
     },
 
     staffing: {

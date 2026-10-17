@@ -13,8 +13,8 @@ test('new game starts from round 1 canonical state', () => {
 
   assert.equal(gameState.round, 1)
   assert.equal(gameState.market.activeVariations, 20)
-  assert.equal(gameState.production.machiningMachines, 2)
-  assert.equal(gameState.staffing.machining, 10)
+  assert.equal(gameState.production.machiningMachines, 4)
+  assert.equal(gameState.staffing.machining, 20)
   assert.equal(gameState.staffing.assembly, 38)
   assert.equal(gameState.staffing.shipping, 5)
   assert.equal(gameState.factory.totalAreaM2, 4000)
@@ -43,7 +43,7 @@ test('CHECK forecast can be created from round 1 game state', () => {
 
   assert.equal(forecast.round, 1)
   assert.equal(forecast.decisions.market.activeVariationCount, 20)
-  assert.equal(forecast.forecast.staffing.machining, 10)
+  assert.equal(forecast.forecast.staffing.machining, 20)
   assert.equal(forecast.forecast.staffing.assembly, 26)
   assert.equal(forecast.forecast.staffing.shipping, 6)
   assertFinite(forecast.summary.demand, 'check demand')

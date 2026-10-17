@@ -340,7 +340,7 @@ test('next round forecast uses the CHECK-decided batchSize for changeovers, K, a
   assert.equal(nextRoundForecast.forecast.knl.machining.batchSize, 5)
   assert.equal(
     nextRoundForecast.forecast.inventory.minimumFinishedGoodsInventory,
-    (nextRoundForecast.decisions.market.totalVariations * 5) / (2 * 2),
+    (nextRoundForecast.decisions.market.totalVariations * 5) / (2 * 4),
   )
 })
 
@@ -418,12 +418,12 @@ test('preview A: current minimumFG stays on current batchSize while preview uses
   assert.equal(currentForecast.decisions.market.batchSize, 5)
   assert.equal(
     currentForecast.forecast.inventory.minimumFinishedGoodsInventory,
-    (currentForecast.decisions.market.totalVariations * 5) / (2 * 2),
+    (currentForecast.decisions.market.totalVariations * 5) / (2 * 4),
   )
   assert.equal(preview.decisions.market.batchSize, 10)
   assert.equal(
     preview.forecast.inventory.minimumFinishedGoodsInventory,
-    (preview.decisions.market.totalVariations * 10) / (2 * 2),
+    (preview.decisions.market.totalVariations * 10) / (2 * 4),
   )
 })
 
@@ -729,6 +729,7 @@ test('D: planned production is capped at the canonical capacity resolved from th
 
 test('E/F: confirming ACT realizes the planning round with the canonical actualProduction and batch size', () => {
   const gameState = createInitialGameState()
+  gameState.finance.equity = 4000000
   const baseline = calculateRoundForecast(gameState, {}, DEFAULT_FACTORY_SETTINGS)
   const selectedBatchSize = Math.max(
     DEFAULT_FACTORY_SETTINGS.production.minBatchSize,
@@ -762,5 +763,4 @@ test('E/F: confirming ACT realizes the planning round with the canonical actualP
   assert.equal(realizedGameState.market.batchSize, selectedBatchSize)
   assert.equal(realizedGameState.round, 2)
 })
-
 

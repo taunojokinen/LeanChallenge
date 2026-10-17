@@ -10,10 +10,11 @@ function toNonNegativeInt(value, fallback = 0) {
   return Math.max(0, Math.round(numeric))
 }
 
-export function createInitialGameState(factorySettings = DEFAULT_FACTORY_SETTINGS) {
+export function createInitialGameState(factorySettings = DEFAULT_FACTORY_SETTINGS, { historySeed } = {}) {
   const settings = factorySettings ?? DEFAULT_FACTORY_SETTINGS
   const initialState = settings.initialState ?? DEFAULT_FACTORY_SETTINGS.initialState
   const nextState = structuredClone(initialState)
+  nextState.historySeed = historySeed ?? globalThis.crypto.getRandomValues(new Uint32Array(1))[0]
 
   const workersPerMachine = toNonNegativeInt(settings.production?.workersPerMachine, 5)
   const machineCount = toNonNegativeInt(nextState.production?.machiningMachines, 0)

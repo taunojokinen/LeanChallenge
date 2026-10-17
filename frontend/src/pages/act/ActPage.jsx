@@ -46,75 +46,78 @@ function toNonNegativeInteger(value, fallback = 0) {
   return Math.round(numericValue)
 }
 
-function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statusMessage: roundStatusMessage }) {
-  const [decisionGameState, setDecisionGameState] = useState(null)
-  const [price, setPrice] = useState(25000)
-  const [productionQuantity, setProductionQuantity] = useState(0)
-  const [addedVariations, setAddedVariations] = useState(0)
-  const [useFinishedGoodsInventoryForDeliveries, setUseFinishedGoodsInventoryForDeliveries] = useState(false)
-  // Read-only: batch size is CHECK's production decision for THIS planning round - it already
-  // drives capacity/K_changeover and the minimum-FG calculation identically; ACT never edits it.
-  const [batchSize, setBatchSize] = useState(null)
-
-  useEffect(() => {
-    if (!gameState) {
-      return
+function createInitialActState(gameState, factorySettings) {
+  if (!gameState) {
+    return {
+      decisionGameState: null,
+      price: 25000,
+      productionQuantity: 0,
+      addedVariations: 0,
+      useFinishedGoodsInventoryForDeliveries: false,
+      batchSize: null,
     }
+  }
 
-    const round = gameState.round
-    const fiveSDecision = loadFiveSDecision(round)
-    const projectsDecision = loadProjectsDecision(round)
-    const investmentsDecision = loadInvestmentsDecision(round)
-    const checkStaffingDecision = loadCheckStaffingDecision(round)
-    const checkProductionDecision = loadCheckProductionDecision(round)
-    const actDecision = loadActDecision(round)
+  const round = gameState.round
+  const fiveSDecision = loadFiveSDecision(round)
+  const projectsDecision = loadProjectsDecision(round)
+  const investmentsDecision = loadInvestmentsDecision(round)
+  const checkStaffingDecision = loadCheckStaffingDecision(round)
+  const checkProductionDecision = loadCheckProductionDecision(round)
+  const actDecision = loadActDecision(round)
 
-    const nextGameState = {
-      ...gameState,
-      fiveSDecision,
-      projectsDecision,
-      investmentsDecision,
-      checkStaffingDecision,
-    }
+  const decisionGameState = {
+    ...gameState,
+    fiveSDecision,
+    projectsDecision,
+    investmentsDecision,
+    checkStaffingDecision,
+  }
+  const price = actDecision?.price ?? gameState.market?.price ?? 25000
+  const addedVariations = actDecision?.addedVariations ?? 0
+  const batchSize =
+    checkProductionDecision?.batchSize ??
+    gameState.market?.batchSize ??
+    factorySettings?.production?.initialBatchSize ??
+    20
+  const baseForecast = calculateRoundForecast(
+    decisionGameState,
+    { market: { price, addedVariations, batchSize } },
+    factorySettings,
+  )
 
-    const initialPrice = actDecision?.price ?? gameState.market?.price ?? 25000
-    const initialAddedVariations = actDecision?.addedVariations ?? 0
-    const initialBatchSize =
-      checkProductionDecision?.batchSize ??
-      gameState.market?.batchSize ??
-      factorySettings?.production?.initialBatchSize ??
-      20
-    const baseForecast = calculateRoundForecast(
-      nextGameState,
-      {
-        market: {
-          price: initialPrice,
-          addedVariations: initialAddedVariations,
-          batchSize: initialBatchSize,
-        },
-      },
-      factorySettings,
-    )
-
-    const initialProductionQuantity =
+  return {
+    decisionGameState,
+    price,
+    productionQuantity:
       actDecision?.productionQuantity ??
       gameState.market?.productionQuantity ??
-      Math.min(baseForecast.summary.demand, baseForecast.summary.plantCapacity)
+      Math.min(baseForecast.summary.demand, baseForecast.summary.plantCapacity),
+    addedVariations,
+    useFinishedGoodsInventoryForDeliveries: actDecision?.useFinishedGoodsInventoryForDeliveries ?? false,
+    batchSize,
+  }
+}
 
-    setPrice(initialPrice)
-    setAddedVariations(initialAddedVariations)
-    setProductionQuantity(initialProductionQuantity)
-    setBatchSize(initialBatchSize)
-    setUseFinishedGoodsInventoryForDeliveries(actDecision?.useFinishedGoodsInventoryForDeliveries ?? false)
-    setDecisionGameState(nextGameState)
-  }, [factorySettings, gameState])
+function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statusMessage: roundStatusMessage }) {
+  const [initialActState] = useState(() => createInitialActState(gameState, factorySettings))
+  const [decisionGameState] = useState(initialActState.decisionGameState)
+  const [price, setPrice] = useState(initialActState.price)
+  const [productionQuantity, setProductionQuantity] = useState(initialActState.productionQuantity)
+  const [addedVariations, setAddedVariations] = useState(initialActState.addedVariations)
+  const [useFinishedGoodsInventoryForDeliveries, setUseFinishedGoodsInventoryForDeliveries] = useState(
+    initialActState.useFinishedGoodsInventoryForDeliveries,
+  )
+  // Read-only: batch size is CHECK's production decision for THIS planning round - it already
+  // drives capacity/K_changeover and the minimum-FG calculation identically; ACT never edits it.
+  const [batchSize] = useState(initialActState.batchSize)
 
   const forecast = useMemo(() => {
     if (!decisionGameState) {
       return null
     }
 
-    return calculateRoundForecast(decisionGameState, {
+    const overrides = {
       market: {
         price,
         addedVariations,
@@ -122,7 +125,16 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
         batchSize,
         useFinishedGoodsInventoryForDeliveries,
       },
-    }, factorySettings)
+    }
+    const requestedForecast = calculateRoundForecast(decisionGameState, overrides, factorySettings)
+    const clampedQuantity = Math.min(productionQuantity, requestedForecast.summary.plantCapacity)
+
+    return clampedQuantity === productionQuantity
+      ? requestedForecast
+      : calculateRoundForecast(decisionGameState, {
+          ...overrides,
+          market: { ...overrides.market, productionQuantity: clampedQuantity },
+        }, factorySettings)
   }, [
     addedVariations,
     decisionGameState,
@@ -133,6 +145,10 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
     useFinishedGoodsInventoryForDeliveries,
   ])
 
+  const effectiveProductionQuantity = forecast
+    ? Math.min(productionQuantity, forecast.summary.plantCapacity)
+    : productionQuantity
+
   useEffect(() => {
     if (!forecast) {
       return
@@ -140,7 +156,6 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
 
     if (productionQuantity > forecast.summary.plantCapacity) {
       const clampedQuantity = forecast.summary.plantCapacity
-      setProductionQuantity(clampedQuantity)
 
       if (decisionGameState) {
         saveActDecision({
@@ -175,7 +190,7 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
     setPrice(nextPrice)
     updateAndPersist({
       price: nextPrice,
-      productionQuantity,
+      productionQuantity: effectiveProductionQuantity,
       addedVariations,
       useFinishedGoodsInventoryForDeliveries,
     })
@@ -202,7 +217,7 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
     setAddedVariations(nextAddedVariations)
     updateAndPersist({
       price,
-      productionQuantity,
+      productionQuantity: effectiveProductionQuantity,
       addedVariations: nextAddedVariations,
       useFinishedGoodsInventoryForDeliveries,
     })
@@ -212,7 +227,7 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
     setUseFinishedGoodsInventoryForDeliveries(nextValue)
     updateAndPersist({
       price,
-      productionQuantity,
+      productionQuantity: effectiveProductionQuantity,
       addedVariations,
       useFinishedGoodsInventoryForDeliveries: nextValue,
     })
@@ -229,7 +244,7 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
         market: {
           price,
           addedVariations,
-          productionQuantity,
+          productionQuantity: effectiveProductionQuantity,
           batchSize,
           useFinishedGoodsInventoryForDeliveries,
         },
@@ -348,7 +363,7 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
                 min="0"
                 max={forecast.summary.plantCapacity}
                 step="1"
-                value={productionQuantity}
+                value={effectiveProductionQuantity}
                 onChange={(event) => handleProductionQuantityChange(event.target.value)}
               />
             </label>

@@ -18,7 +18,7 @@ const goalOptions = [
 
 function PlanPage() {
   const [snapshot, setSnapshot] = useState(null)
-  const [selectedGoals, setSelectedGoals] = useState([])
+  const [selectedGoals, setSelectedGoals] = useState(() => loadPlanGoals())
   const [transitionMessage, setTransitionMessage] = useState('')
 
   useEffect(() => {
@@ -37,10 +37,6 @@ function PlanPage() {
     return () => {
       isMounted = false
     }
-  }, [])
-
-  useEffect(() => {
-    setSelectedGoals(loadPlanGoals())
   }, [])
 
   const remainingGoalOptions = useMemo(

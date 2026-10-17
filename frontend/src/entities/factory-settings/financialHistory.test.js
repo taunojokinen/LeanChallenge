@@ -44,7 +44,7 @@ test('generated history uses canonical finished-goods valuation and inventory ch
 
   assert.deepEqual(entries.map((entry) => entry.round), [-2, -1, 0])
   assert.deepEqual(entries.map((entry) => entry.incomeStatement.salesUnits), [124, 129, 134])
-  assert.deepEqual(entries.map((entry) => entry.incomeStatement.labor), [1391250, 1391250, 1391250])
+  assert.deepEqual(entries.map((entry) => entry.incomeStatement.labor), [1653750, 1653750, 1653750])
   assert.deepEqual(entries.map((entry) => entry.incomeStatement.materials), [1488000, 1548000, 1608000])
   assert.deepEqual(entries.map((entry) => entry.finance.rawMaterialInventoryBookValue), [595200, 619200, 643200])
   assert.deepEqual(entries.map((entry) => entry.finance.finishedGoodsInventoryBookValue), [2000000, 2000000, 2000000])

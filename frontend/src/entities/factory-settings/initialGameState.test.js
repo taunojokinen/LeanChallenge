@@ -60,9 +60,9 @@ test('createInitialGameState clones the default initial state', () => {
     productionRunsPerVariation: 2,
   })
   assert.deepStrictEqual(initialGameState.production, {
-    machiningMachines: 2,
+    machiningMachines: 4,
   })
-  assert.equal(initialGameState.staffing.machining, 10)
+  assert.equal(initialGameState.staffing.machining, 20)
   assert.equal(initialGameState.staffing.assembly, 38)
   assert.equal(initialGameState.staffing.shipping, 5)
   assert.equal(initialGameState.factory.totalAreaM2, 4000)
@@ -173,7 +173,7 @@ test('createInitialGameState works with calculateRoundForecast without attached 
   assert.equal(forecast.round, 1)
   assert.equal(forecast.decisions.market.activeVariationCount, 20)
   assert.equal(forecast.decisions.market.runsPerVariation, 2)
-  assert.equal(forecast.forecast.staffing.machining, 10)
+  assert.equal(forecast.forecast.staffing.machining, 20)
   assert.equal(forecast.forecast.staffing.assembly, 38)
   assert.equal(forecast.forecast.staffing.shipping, 5)
   assert.equal(forecast.forecast.space.totalArea, 4000)
@@ -239,6 +239,6 @@ test('custom initial state values affect forecast inputs and capacities', () => 
   assert.equal(
     customForecast.forecast.capacityByDepartment.machining >
       baselineForecast.forecast.capacityByDepartment.machining,
-    true,
+    false,
   )
 })

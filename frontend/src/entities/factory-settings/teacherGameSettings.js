@@ -1,7 +1,10 @@
 import { DEFAULT_FACTORY_SETTINGS } from './defaultFactorySettings.js'
 
 export const TEACHER_SETTINGS_STORAGE_KEY = 'lean-challenge-teacher-settings-v1'
-export const TEACHER_SETTINGS_VERSION = 3
+export const TEACHER_SETTINGS_VERSION = 4
+const LEGACY_SETTING_STEPS = {
+  equity: 25000,
+}
 
 export const TEACHER_SETTING_GROUPS = [
   { id: 'result', label: 'Tulos' },
@@ -18,10 +21,10 @@ export const TEACHER_SETTING_DEFINITIONS = [
     label: 'Kiinteät kustannukset / neljännesvuosi',
     unit: '€/neljännesvuosi',
     step: 12500,
-    min: 0,
-    max: 5000000,
-    easy: 500000,
-    hard: 2000000,
+    min: 400000,
+    max: 1000000,
+    easy: 400000,
+    hard: 1000000,
     displayScale: 0.25,
     snapshotScale: 4,
     paths: [['costs', 'annualFixedCosts']],
@@ -32,26 +35,13 @@ export const TEACHER_SETTING_DEFINITIONS = [
     group: 'balance',
     label: 'Oma pääoma',
     unit: '€',
-    step: 25000,
-    min: 0,
-    max: 10000000,
-    easy: 3073975,
-    hard: 1073975,
+    step: 25,
+    min: 2000000,
+    max: 4000000,
+    easy: 2000000,
+    hard: 4000000,
     paths: [['initialState', 'finance', 'equity']],
     help: 'Suurempi oma pääoma kasvattaa rahoituspuskuria ja investointien velkavaraa.',
-  },
-  {
-    id: 'machineCount',
-    group: 'production',
-    label: 'Koneiden lukumäärä',
-    unit: 'kpl',
-    step: 1,
-    min: 1,
-    max: 10,
-    easy: 4,
-    hard: 1,
-    paths: [['initialState', 'production', 'machiningMachines']],
-    help: 'Lisäkone kasvattaa koneistuskapasiteettia ja samalla koneistuksen henkilöstöä.',
   },
   {
     id: 'newMachinePrice',
@@ -67,28 +57,15 @@ export const TEACHER_SETTING_DEFINITIONS = [
     help: 'Matalampi hinta helpottaa myöhempien koneinvestointien rahoittamista.',
   },
   {
-    id: 'machiningTimePerUnit',
-    group: 'production',
-    label: 'Koneistusaika / yksikkö',
-    unit: 'h/yksikkö',
-    step: 0.5,
-    min: 0.5,
-    max: 24,
-    easy: 4,
-    hard: 8,
-    paths: [['production', 'departments', 'machining', 'normHoursPerContainer']],
-    help: 'Pienempi yksikköaika kasvattaa koneistuskapasiteettia. Koneiden ja työntekijöiden käytettävissä oleva aika pysyy 1 040 tunnissa kierroksessa.',
-  },
-  {
     id: 'initialSetupTimeHours',
     group: 'production',
     label: 'Asetusaika',
     unit: 'h',
     step: 0.5,
-    min: 0.5,
-    max: 40,
-    easy: 5,
-    hard: 20,
+    min: 40,
+    max: 80,
+    easy: 40,
+    hard: 80,
     paths: [['lean', 'smed', 'initialSetupTimeHours']],
     help: 'Lyhyempi lähtöasetusaika pienentää vaihtojen menetystä; SMED laskee sitä edelleen normaalilla käyrällä.',
   },
@@ -98,7 +75,7 @@ export const TEACHER_SETTING_DEFINITIONS = [
     label: 'Alkueräkoko',
     unit: 'kpl',
     step: 1,
-    min: 1,
+    min: 10,
     max: 20,
     easy: 10,
     hard: 20,
@@ -111,10 +88,10 @@ export const TEACHER_SETTING_DEFINITIONS = [
     label: 'Tehtaan kokonaispinta-ala',
     unit: 'm²',
     step: 100,
-    min: 0,
-    max: 20000,
-    easy: 6000,
-    hard: 2500,
+    min: 4000,
+    max: 5000,
+    easy: 4000,
+    hard: 5000,
     paths: [['initialState', 'factory', 'totalAreaM2']],
     help: 'Suurempi pinta-ala helpottaa koneiden, henkilöstön ja varaston mahduttamista.',
   },
@@ -124,25 +101,12 @@ export const TEACHER_SETTING_DEFINITIONS = [
     label: 'KNL-kehityksen puoliintumisaika',
     unit: 'kehitystuntia',
     step: 25,
-    min: 25,
-    max: 2000,
-    easy: 200,
-    hard: 800,
+    min: 300,
+    max: 600,
+    easy: 300,
+    hard: 600,
     paths: [['knl', 'knlHalfLifeHours']],
     help: 'Pienempi arvo nopeuttaa kaikkien yhdeksän tavallisen K/N/L-arvon kehitystä kehitystuntia kohti.',
-  },
-  {
-    id: 'initialVariations',
-    group: 'market',
-    label: 'Tuotevariaatiot alussa',
-    unit: 'kpl',
-    step: 1,
-    min: 1,
-    max: 100,
-    easy: 15,
-    hard: 25,
-    paths: [['initialState', 'market', 'activeVariations']],
-    help: 'Jokainen variaatio kasvattaa kysyntää ja vaikuttaa tuotannon sekä varaston kuormaan.',
   },
   {
     id: 'goodQualityThreshold',
@@ -150,10 +114,10 @@ export const TEACHER_SETTING_DEFINITIONS = [
     label: 'Hyvän laadun raja',
     unit: '%',
     step: 1,
-    min: 1,
-    max: 95,
+    min: 75,
+    max: 80,
     displayScale: 100,
-    easy: 70,
+    easy: 75,
     hard: 80,
     paths: [['variationRules', 'minimumQualityForZeroAdditionalVariations']],
     help: 'Tällä laadulla avautuu mahdollisuus yhteen lisävariaatioon.',
@@ -164,13 +128,40 @@ export const TEACHER_SETTING_DEFINITIONS = [
     label: 'Erinomaisen laadun raja',
     unit: '%',
     step: 1,
-    min: 1,
-    max: 95,
+    min: 80,
+    max: 85,
     displayScale: 100,
-    easy: 75,
-    hard: 90,
+    easy: 80,
+    hard: 85,
     paths: [['variationRules', 'oneVariationMinQuality']],
     help: 'Tällä laadulla avautuu mahdollisuus kahteen lisävariaatioon. Nykyisen pelimallin laatu yltää enintään 95 prosenttiin.',
+  },
+]
+
+export const TEACHER_FIXED_STARTING_VALUES = [
+  {
+    id: 'machineCount',
+    label: 'Koneiden lukumäärä',
+    unit: 'kpl',
+    value: DEFAULT_FACTORY_SETTINGS.initialState.production.machiningMachines,
+    path: ['initialState', 'production', 'machiningMachines'],
+    help: 'Lähtömäärä on kiinteä. Koneita voi hankkia lisää pelin aikana investoinneilla.',
+  },
+  {
+    id: 'machiningTimePerUnit',
+    label: 'Koneistusaika / yksikkö',
+    unit: 'h/yksikkö',
+    value: DEFAULT_FACTORY_SETTINGS.production.departments.machining.normHoursPerContainer,
+    path: ['production', 'departments', 'machining', 'normHoursPerContainer'],
+    help: 'Koneistusaika vaikuttaa suoraan koneistuksen kapasiteettiin.',
+  },
+  {
+    id: 'initialVariations',
+    label: 'Tuotevariaatiot alussa',
+    unit: 'kpl',
+    value: DEFAULT_FACTORY_SETTINGS.initialState.market.activeVariations,
+    path: ['initialState', 'market', 'activeVariations'],
+    help: 'Kaikki uudet pelit alkavat tällä variaatiomäärällä.',
   },
 ]
 
@@ -252,7 +243,7 @@ export function validateTeacherPreferences(preferences) {
     for (const field of ['easy', 'hard']) {
       const value = preference[field]
       if (!Number.isFinite(value)) {
-        errors.push({ id: definition.id, message: `${definition.label}: ${field === 'easy' ? 'Helppo' : 'Vaikea'}-arvon tulee olla numero.` })
+        errors.push({ id: definition.id, message: `${definition.label}: ${field === 'easy' ? 'Minimi' : 'Maksimi'}arvon tulee olla numero.` })
         continue
       }
       if (value < definition.min || value > definition.max) {
@@ -266,7 +257,7 @@ export function validateTeacherPreferences(preferences) {
 
     if (Number.isFinite(preference.easy) && Number.isFinite(preference.hard)) {
       if (preference.easy === preference.hard) {
-        errors.push({ id: definition.id, message: `${definition.label}: Helppo- ja Vaikea-arvojen tulee olla eri suuruiset.` })
+        errors.push({ id: definition.id, message: `${definition.label}: Minimi- ja Maksimiarvojen tulee olla eri suuruiset.` })
       }
       if (getTeacherSliderStepCount(definition.id, preferences) == null) {
         errors.push({ id: definition.id, message: `${definition.label}: rajojen eron tulee jakautua tasan askelväleihin.` })
@@ -280,9 +271,9 @@ export function validateTeacherPreferences(preferences) {
   })
 
   const qualityParameters = [
-    ['Helppo', 'easy'],
+    ['Minimi', 'easy'],
     ['Pelin arvo', 'selected'],
-    ['Vaikea', 'hard'],
+    ['Maksimi', 'hard'],
   ]
   qualityParameters.forEach(([label, field]) => {
     const good = field === 'selected'
@@ -292,10 +283,10 @@ export function validateTeacherPreferences(preferences) {
       ? getTeacherSelectedValue('excellentQualityThreshold', preferences)
       : preferences.excellentQualityThreshold?.[field]
 
-    if (Number.isFinite(good) && Number.isFinite(excellent) && good >= excellent) {
+    if (Number.isFinite(good) && Number.isFinite(excellent) && good > excellent) {
       errors.push({
         id: 'qualityThresholds',
-        message: `${label}: hyvän laadun rajan tulee olla erinomaisen laadun rajaa pienempi.`,
+        message: `${label}: hyvän laadun raja ei saa ylittää erinomaisen laadun rajaa.`,
       })
     }
   })
@@ -319,6 +310,13 @@ export function buildFactorySettingsSnapshot(preferences, factorySettings = DEFA
       })
       target[path.at(-1)] = selectedValue
     })
+  })
+  TEACHER_FIXED_STARTING_VALUES.forEach(({ path, value }) => {
+    let target = snapshot
+    path.slice(0, -1).forEach((key) => {
+      target = target[key]
+    })
+    target[path.at(-1)] = value
   })
 
   return snapshot
@@ -392,11 +390,65 @@ function migrateV2Preferences(preferences) {
     easy: migrated.annualFixedCosts.easy / 4,
     hard: migrated.annualFixedCosts.hard / 4,
   }
-  if (!migrated.machiningTimePerUnit) {
-    migrated.machiningTimePerUnit = createDefaultTeacherPreferences().machiningTimePerUnit
+  return migrated
+}
+
+function snapToSettingStep(value, definition, anchor) {
+  const steppedValue = anchor + Math.round((value - anchor) / definition.step) * definition.step
+  return Math.min(definition.max, Math.max(definition.min, steppedValue))
+}
+
+function migrateLegacyPreferences(preferences) {
+  if (!preferences || typeof preferences !== 'object') {
+    return createDefaultTeacherPreferences()
   }
 
-  return validateTeacherPreferences(migrated).valid ? migrated : null
+  const migrated = createDefaultTeacherPreferences()
+  TEACHER_SETTING_DEFINITIONS.forEach((definition) => {
+    const oldPreference = preferences[definition.id]
+    if (!oldPreference || typeof oldPreference !== 'object') {
+      return
+    }
+
+    const defaultValue = readTeacherSettingDefault(definition)
+    const oldStart = Number(oldPreference.easy)
+    const oldEnd = Number(oldPreference.hard)
+    if (!Number.isFinite(oldStart) || !Number.isFinite(oldEnd)) {
+      return
+    }
+
+    const oldMinimum = Math.min(oldStart, oldEnd)
+    const oldMaximum = Math.max(oldStart, oldEnd)
+    const minimum = snapToSettingStep(oldMinimum, definition, defaultValue)
+    const maximum = snapToSettingStep(oldMaximum, definition, defaultValue)
+    if (minimum >= maximum) {
+      return
+    }
+
+    const oldStep = LEGACY_SETTING_STEPS[definition.id] ?? definition.step
+    const oldSteps = Math.abs((oldEnd - oldStart) / oldStep)
+    const oldPosition = oldPreference.position
+    const oldValue = Number.isInteger(oldPosition) && oldSteps >= 0
+      ? oldStart + Math.sign(oldEnd - oldStart) * oldStep
+        * Math.min(Math.max(oldPosition, 0), Math.round(oldSteps))
+      : defaultValue
+    const selectedValue = snapToSettingStep(
+      Math.min(maximum, Math.max(minimum, oldValue)),
+      definition,
+      defaultValue,
+    )
+    const steps = Math.round((maximum - minimum) / definition.step)
+
+    migrated[definition.id] = {
+      easy: minimum,
+      hard: maximum,
+      position: Math.min(steps, Math.max(0, Math.round((selectedValue - minimum) / definition.step))),
+    }
+  })
+
+  return validateTeacherPreferences(migrated).valid
+    ? migrated
+    : createDefaultTeacherPreferences()
 }
 
 function storePreferencesRecord(storage, version, preferences, savedAt) {
@@ -420,9 +472,11 @@ export function loadTeacherPreferences(storage) {
     }
 
     const record = JSON.parse(storedValue)
-    if (record?.version === 2) {
-      const migratedPreferences = migrateV2Preferences(record.preferences)
-      const preferences = migratedPreferences ?? createDefaultTeacherPreferences()
+    if (record?.version === 2 || record?.version === 3) {
+      const legacyPreferences = record.version === 2
+        ? migrateV2Preferences(record.preferences)
+        : record.preferences
+      const preferences = migrateLegacyPreferences(legacyPreferences)
       storePreferencesRecord(targetStorage, TEACHER_SETTINGS_VERSION, preferences)
       return preferences
     }

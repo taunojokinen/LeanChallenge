@@ -320,6 +320,50 @@
   background: #fff7f7;
 }
 
+.teacher-fixed-start-values {
+  margin: 0.65rem 0.75rem 0.75rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid #e4eaf0;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.teacher-fixed-start-values h3 {
+  margin: 0 0 0.5rem;
+  color: #334e68;
+  font-size: 0.72rem;
+}
+
+.teacher-fixed-start-values dl {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+}
+
+.teacher-fixed-start-values dl > div {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) auto;
+  gap: 0.2rem 0.7rem;
+  font-size: 0.7rem;
+}
+
+.teacher-fixed-start-values dt {
+  color: #4d6074;
+}
+
+.teacher-fixed-start-values dd {
+  margin: 0;
+  color: #253a50;
+  font-weight: var(--font-weight-semibold);
+}
+
+.teacher-fixed-start-values small {
+  grid-column: 1 / -1;
+  color: #6d7d8c;
+  font-size: 0.64rem;
+  line-height: 1.35;
+}
+
 .teacher-settings-summary {
   position: sticky;
   top: 0.75rem;

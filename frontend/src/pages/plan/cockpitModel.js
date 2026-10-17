@@ -1,4 +1,5 @@
 import { selectConfirmedKnlRounds } from '../../entities/history/confirmedKnl.js'
+import { relativePercentChange } from '../../entities/history/relativeChange.js'
 
 const DEPARTMENT_LABELS = {
   machining: 'Koneistus',
@@ -24,14 +25,8 @@ function toNumber(value, fallback = 0) {
 }
 
 export function calculateRelativeChange(currentValue, previousValue) {
-  const current = toNumber(currentValue)
-  const previous = toNumber(previousValue)
-
-  if (previous === 0) {
-    return 0
-  }
-
-  return Number((((current - previous) / Math.abs(previous)) * 100).toFixed(1))
+  const change = relativePercentChange(currentValue, previousValue)
+  return change == null ? null : Number(change.toFixed(1))
 }
 
 export function formatPercent(value) {
@@ -39,6 +34,7 @@ export function formatPercent(value) {
 }
 
 export function formatChange(value) {
+  if (value == null) return '—'
   const numeric = toNumber(value)
   const sign = numeric > 0 ? '+' : ''
   return `${sign}${numeric.toLocaleString('fi-FI', {

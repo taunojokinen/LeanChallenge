@@ -17,6 +17,12 @@ const EMPTY_DRAFT_SELECTION = {
   expansionCount: 0,
 }
 
+function formatSpaceChange(value) {
+  const rounded = Math.round(Number(value) || 0)
+  const sign = rounded > 0 ? '+' : rounded < 0 ? '−' : ''
+  return `${sign}${Math.abs(rounded).toLocaleString('fi-FI')} m²`
+}
+
 function InvestmentsPage({ round, gameState, factorySettings, onNavigate }) {
   const [snapshot, setSnapshot] = useState(null)
   const [savedDecision, setSavedDecision] = useState(null)
@@ -196,13 +202,87 @@ function InvestmentsPage({ round, gameState, factorySettings, onNavigate }) {
         </Card>
         <Card>
           <article className="investments-kpi-card">
-            <small>Tehdastila käytössä / vapaana</small>
+            <small>Nykyinen tehdastila käytössä / vapaana</small>
             <strong>
               {viewModel.space.usedAreaText} / {viewModel.space.freeAreaText}
             </strong>
           </article>
         </Card>
       </section>
+
+      <details className="investments-space-breakdown">
+        <summary>Mistä tehdastilan käyttö muodostuu?</summary>
+        <p>
+          Tehtaan kokonaispinta-ala jakautuu tuotannon, toimistojen ja varaston käyttämiin
+          tiloihin sekä vapaaseen tilaan. Uudet tuotantokoneet lisäävät tilantarvetta ja
+          tehdaslaajennukset kasvattavat käytettävissä olevaa kokonaispinta-alaa.
+          Varastotilan tarve muuttuu varastomäärän mukaan.
+        </p>
+        <div className="investments-space-table-wrap">
+          <table className="investments-space-table">
+            <thead>
+              <tr>
+                <th scope="col">Tilankäyttö</th>
+                <th scope="col">Nykytila</th>
+                <th scope="col">Ennuste investointien jälkeen</th>
+              </tr>
+            </thead>
+            <tbody>
+              {viewModel.space.breakdown.map((row) => (
+                <tr key={row.key}>
+                  <th scope="row">{row.label}</th>
+                  <td>{row.currentAreaText}</td>
+                  <td>{row.projectedAreaText}</td>
+                </tr>
+              ))}
+              <tr>
+                <th scope="row">Käytetty tehdastila yhteensä</th>
+                <td>{viewModel.space.baseText.usedArea}</td>
+                <td>{viewModel.space.projectedText.usedArea}</td>
+              </tr>
+              <tr>
+                <th scope="row">Vapaa tehdastila</th>
+                <td>{viewModel.space.baseText.freeArea}</td>
+                <td>{viewModel.space.projectedText.freeArea}</td>
+              </tr>
+              <tr>
+                <th scope="row">Tehtaan kokonaispinta-ala</th>
+                <td>{viewModel.space.baseText.totalArea}</td>
+                <td>{viewModel.space.projectedText.totalArea}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div className="investments-space-impact" aria-live="polite">
+          <p>
+            Vapaa tehdastila ennen investointeja:{' '}
+            <strong>{viewModel.space.baseText.freeArea}</strong>
+          </p>
+          {viewModel.selectionState.newMachineCount > 0 ? (
+            <p>
+              Uusien koneiden tilantarve:{' '}
+              <strong>{formatSpaceChange(viewModel.space.projected.machiningArea - viewModel.space.base.machiningArea)}</strong>
+            </p>
+          ) : null}
+          {viewModel.selectionState.expansionCount > 0 ? (
+            <p>
+              Tehdaslaajennusten lisätila:{' '}
+              <strong>{formatSpaceChange(viewModel.space.projected.totalArea - viewModel.space.base.totalArea)}</strong>
+            </p>
+          ) : null}
+          <p>
+            Tilamuutos yhteensä:{' '}
+            <strong>{viewModel.space.investmentSpaceChangeText}</strong>
+          </p>
+          <p>
+            Ennustettu vapaa tehdastila investointien jälkeen:{' '}
+            <strong>{viewModel.space.projectedText.freeArea}</strong>
+          </p>
+          {viewModel.space.projected.freeArea < 0 ? (
+            <p role="alert">Valittujen investointien jälkeen tehdastila ei riitä.</p>
+          ) : null}
+        </div>
+      </details>
 
       <section className="investments-catalog" aria-label="Investointikatalogi">
         <Card>
@@ -211,7 +291,7 @@ function InvestmentsPage({ round, gameState, factorySettings, onNavigate }) {
             <p>Hinta: 500 000 € / kone</p>
             <p>Tilantarve: 250 m² / kone</p>
             <p>Vaikutus: +1 040 h kapasiteettia ja +5 henkilöä / kone</p>
-            <p>Poisto: 5 % / kierros menojäännöksestä</p>
+            <p>Poisto: 20 % vuodessa menojäännöksestä (5 % / pelikierros).</p>
             {viewModel.space.projected.freeArea < 0 ? (
               <small>Ei mahdollista - vapaata tehdastilaa ei ole riittävästi.</small>
             ) : null}
@@ -235,7 +315,7 @@ function InvestmentsPage({ round, gameState, factorySettings, onNavigate }) {
             <h2>Tehdaslaajennus</h2>
             <p>Hinta: 1 000 000 €</p>
             <p>Lisätila: +1 000 m²</p>
-            <p>Poisto: 2,5 % / kierros menojäännöksestä</p>
+            <p>Poisto: 10 % vuodessa menojäännöksestä (2,5 % / pelikierros).</p>
             <div className="investments-counter">
               <Button type="button" onClick={decrementExpansion}>
                 -

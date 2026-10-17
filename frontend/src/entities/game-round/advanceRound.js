@@ -26,6 +26,7 @@ function buildHistoryEntry(currentRound, forecast, canonical) {
       demand: production.demand,
       lostSalesUnits: production.lostSalesUnits,
     },
+    inventory: { ...canonical.inventory },
     knl: Object.fromEntries(
       Object.entries(production.knl ?? {}).map(([department, metrics]) => [department, { ...metrics }]),
     ),
@@ -59,6 +60,7 @@ export function advanceRoundState({ gameState, forecast, totalRounds, checkProdu
   const nextRound = isGameComplete ? currentRound : currentRound + 1
   const nextGameState = {
     ...canonical,
+    historySeed: gameState.historySeed,
     round: nextRound,
     history: appendHistory(gameState.history, historyEntry),
   }
@@ -90,4 +92,3 @@ export function advanceRoundState({ gameState, forecast, totalRounds, checkProdu
     isGameComplete,
   }
 }
-

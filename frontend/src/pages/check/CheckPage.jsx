@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import Button from '../../shared/ui/Button/Button.jsx'
 import Card from '../../shared/ui/Card/Card.jsx'
 import { calculateRoundForecast } from '../../entities/forecast/model.js'
@@ -71,15 +71,14 @@ function DecisionList({ items, emptyLabel }) {
 }
 
 function CheckPage({ onNavigate, gameState, factorySettings }) {
-  const [decisionGameState, setDecisionGameState] = useState(null)
-  const [staffing, setStaffing] = useState({ assembly: 0, shipping: 0 })
+  const [staffingDraft, setStaffingDraft] = useState(null)
+  const [batchSizeDraft, setBatchSizeDraft] = useState(null)
   const [statusMessage, setStatusMessage] = useState('')
-  const [batchSize, setBatchSize] = useState(20)
   const [productionStatusMessage, setProductionStatusMessage] = useState('')
 
-  useEffect(() => {
+  const decisionData = useMemo(() => {
     if (!gameState) {
-      return
+      return null
     }
 
     const round = gameState.round
@@ -110,10 +109,23 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
       factorySettings?.production?.initialBatchSize ??
       20
 
-    setStaffing(nextStaffing)
-    setBatchSize(initialBatchSize)
-    setDecisionGameState(nextGameState)
+    return {
+      gameState: nextGameState,
+      staffing: nextStaffing,
+      batchSize: initialBatchSize,
+    }
   }, [factorySettings, gameState])
+
+  const decisionGameState = decisionData?.gameState ?? null
+  const decisionRound = decisionGameState ? decisionGameState.round : null
+  const staffing = useMemo(() => (
+    staffingDraft?.round === decisionRound
+      ? staffingDraft.values
+      : decisionData?.staffing ?? { assembly: 0, shipping: 0 }
+  ), [decisionData, decisionRound, staffingDraft])
+  const batchSize = batchSizeDraft?.round === decisionRound
+    ? batchSizeDraft.value
+    : decisionData?.batchSize ?? 20
 
   const forecast = useMemo(() => {
     if (!decisionGameState) {
@@ -188,7 +200,7 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
       [key]: Math.max(0, (Number(staffing[key]) || 0) + delta),
     }
 
-    setStaffing(nextStaffing)
+    setStaffingDraft({ round: decisionGameState.round, values: nextStaffing })
     persistStaffing(nextStaffing)
   }
 
@@ -207,7 +219,7 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
     const requestedValue = toNonNegativeInteger(rawValue, batchSize)
     const nextBatchSize = Math.min(maxBatchSize, Math.max(minBatchSize, requestedValue))
 
-    setBatchSize(nextBatchSize)
+    setBatchSizeDraft({ round: decisionGameState.round, value: nextBatchSize })
     persistBatchSizeDecision(nextBatchSize)
   }
 
@@ -291,7 +303,8 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
             <p>Liikevaihto: {formatCurrency(forecast.summary.revenue)}</p>
             <p>Tulos: {formatCurrency(forecast.summary.result)}</p>
             <p>Valmistuotevarasto: {formatContainers(forecast.summary.finishedGoodsInventory)}</p>
-            <p>Vapaa tehdastila: {Math.round(forecast.summary.freeFactorySpace)} m2</p>
+            <p>Vapaa tehdastila nykytilassa: {Math.round(forecast.current.space.freeArea)} m²</p>
+            <p>Vapaa tehdastila ennusteessa: {Math.round(forecast.forecast.space.freeArea)} m²</p>
           </article>
         </Card>
 
@@ -468,9 +481,39 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
                   <td>{previewForecast ? `${Math.round(previewForecast.forecast.inventory.finishedGoodsArea)} m2` : '-'}</td>
                 </tr>
                 <tr>
+                  <td>Koneistus</td>
+                  <td>{Math.round(forecast.current.space.machiningArea)} m²</td>
+                  <td>{Math.round(forecast.forecast.space.machiningArea)} m²</td>
+                </tr>
+                <tr>
+                  <td>Kokoonpano</td>
+                  <td>{Math.round(forecast.current.space.assemblyArea)} m²</td>
+                  <td>{Math.round(forecast.forecast.space.assemblyArea)} m²</td>
+                </tr>
+                <tr>
+                  <td>Lähettämö</td>
+                  <td>{Math.round(forecast.current.space.shippingArea)} m²</td>
+                  <td>{Math.round(forecast.forecast.space.shippingArea)} m²</td>
+                </tr>
+                <tr>
+                  <td>Toimistot ja muut kiinteät tilat</td>
+                  <td>{Math.round(forecast.current.space.officeAndSocialArea)} m²</td>
+                  <td>{Math.round(forecast.forecast.space.officeAndSocialArea)} m²</td>
+                </tr>
+                <tr>
+                  <td>Käytetty tehdastila yhteensä</td>
+                  <td>{Math.round(forecast.current.space.totalUsed)} m²</td>
+                  <td>{Math.round(forecast.forecast.space.totalUsed)} m²</td>
+                </tr>
+                <tr>
+                  <td>Tehtaan kokonaispinta-ala</td>
+                  <td>{Math.round(forecast.current.space.totalArea)} m²</td>
+                  <td>{Math.round(forecast.forecast.space.totalArea)} m²</td>
+                </tr>
+                <tr>
                   <td>Vapaa tehdastila</td>
-                  <td>{Math.round(forecast.forecast.space.freeFactorySpace)} m2</td>
-                  <td>{previewForecast ? `${Math.round(previewForecast.forecast.space.freeFactorySpace)} m2` : '-'}</td>
+                  <td>{Math.round(forecast.current.space.freeArea)} m²</td>
+                  <td>{Math.round(forecast.forecast.space.freeArea)} m²</td>
                 </tr>
               </tbody>
             </table>

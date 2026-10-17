@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Button from '../../shared/ui/Button/Button.jsx'
 import {
   TEACHER_SETTING_DEFINITIONS,
+  TEACHER_FIXED_STARTING_VALUES,
   TEACHER_SETTING_GROUPS,
   buildFactorySettingsSnapshot,
   createDefaultTeacherPreferences,
@@ -67,7 +68,7 @@ function SettingRow({ definition, preferences, errors, onBoundaryChange, onPosit
         <strong>{definition.label}</strong>
         <span className="teacher-setting-unit">{definition.unit}</span>
       </div>
-      {renderBoundaryInput('easy', 'Helppo')}
+      {renderBoundaryInput('easy', 'Minimi')}
       <div className="teacher-game-value">
         <label htmlFor={`setting-position-${definition.id}`}>Pelin arvo</label>
         <output htmlFor={`setting-position-${definition.id}`}>
@@ -81,13 +82,13 @@ function SettingRow({ definition, preferences, errors, onBoundaryChange, onPosit
           step="1"
           value={sliderPosition}
           disabled={sliderDisabled}
-          aria-label={`${definition.label}, pelin arvo Helppo- ja Vaikea-rajan välillä`}
+          aria-label={`${definition.label}, pelin arvo minimi- ja maksimirajan välillä`}
           aria-describedby={describedBy}
           onChange={(event) => onPositionChange(definition.id, Number(event.target.value))}
         />
         <small>Moottorin oletus {formatSettingValue(definition, defaultValue)}</small>
       </div>
-      {renderBoundaryInput('hard', 'Vaikea')}
+      {renderBoundaryInput('hard', 'Maksimi')}
       <p className="teacher-setting-help" id={`setting-help-${definition.id}`}>
         {definition.help}
       </p>
@@ -194,8 +195,8 @@ function TeacherSettingsPage({ onBackToLogin, onStartTestGame }) {
         <div>
           <strong>Säädä pelin lähtötilannetta</strong>
           <p>
-            Helppo- ja Vaikea-arvot rajaavat jokaisen säätimen omat lähtöarvot. Suosikit tallentuvat tähän selaimeen;
-            Quest käyttää aina pelimoottorin alkuperäisiä oletuksia.
+            Minimi- ja maksimirajat määrittävät kunkin muuttuvan asetuksen sallitun alueen. Ne eivät kuvaa pelin vaikeustasoa.
+            Kiinteät lähtöarvot ovat samat Questissa ja opettajan testipelissä; suosikit tallentuvat tähän selaimeen.
           </p>
         </div>
       </div>
@@ -212,9 +213,9 @@ function TeacherSettingsPage({ onBackToLogin, onStartTestGame }) {
                 </header>
                 <div className="teacher-settings-columns" aria-hidden="true">
                   <span>Parametri</span>
-                  <span>Helppo</span>
+                  <span>Minimi</span>
                   <span>Pelin arvo</span>
-                  <span>Vaikea</span>
+                  <span>Maksimi</span>
                   <span>Vaikutus peliin</span>
                 </div>
                 <div className="teacher-settings-rows">
@@ -229,6 +230,20 @@ function TeacherSettingsPage({ onBackToLogin, onStartTestGame }) {
                     />
                   ))}
                 </div>
+                {group.id === 'production' ? (
+                  <section className="teacher-fixed-start-values" aria-label="Kiinteät lähtöarvot">
+                    <h3>Kiinteät lähtöarvot — eivät säädettävissä</h3>
+                    <dl>
+                      {TEACHER_FIXED_STARTING_VALUES.map((item) => (
+                        <div key={item.id}>
+                          <dt>{item.label}</dt>
+                          <dd>{formatSettingValue({ step: 1, unit: item.unit }, item.value)}</dd>
+                          <small>{item.help}</small>
+                        </div>
+                      ))}
+                    </dl>
+                  </section>
+                ) : null}
               </section>
             )
           })}
@@ -252,6 +267,17 @@ function TeacherSettingsPage({ onBackToLogin, onStartTestGame }) {
               </dl>
             </section>
           ))}
+          <section className="teacher-summary-group summary-production">
+            <h3>Kiinteät lähtöarvot</h3>
+            <dl>
+              {TEACHER_FIXED_STARTING_VALUES.map((item) => (
+                <div key={item.id}>
+                  <dt>{item.label}</dt>
+                  <dd>{formatSettingValue({ step: 1, unit: item.unit }, item.value)}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
 
           <div className="teacher-settings-snapshot-action">
               <Button className="ui-button teacher-snapshot-button" onClick={handleStartTestGame} disabled={!validation.valid}>

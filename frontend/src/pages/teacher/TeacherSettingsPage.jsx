@@ -2,7 +2,6 @@ import { useState } from 'react'
 import Button from '../../shared/ui/Button/Button.jsx'
 import {
   TEACHER_SETTING_DEFINITIONS,
-  TEACHER_FIXED_STARTING_VALUES,
   TEACHER_SETTING_GROUPS,
   buildFactorySettingsSnapshot,
   createDefaultTeacherPreferences,
@@ -17,6 +16,10 @@ import './TeacherSettingsPage.css'
 
 const INTEGER_FORMATTER = new Intl.NumberFormat('fi-FI', { maximumFractionDigits: 0 })
 const DECIMAL_FORMATTER = new Intl.NumberFormat('fi-FI', { maximumFractionDigits: 1 })
+const DISPLAY_GROUP_ORDER = ['result', 'balance', 'development', 'production', 'market']
+const DISPLAY_GROUPS = [...TEACHER_SETTING_GROUPS].sort(
+  (a, b) => DISPLAY_GROUP_ORDER.indexOf(a.id) - DISPLAY_GROUP_ORDER.indexOf(b.id),
+)
 
 function formatSettingValue(definition, value) {
   if (!Number.isFinite(value)) {
@@ -74,21 +77,22 @@ function SettingRow({ definition, preferences, errors, onBoundaryChange, onPosit
         <output htmlFor={`setting-position-${definition.id}`}>
           {formatSettingValue(definition, value)}
         </output>
-        <input
-          id={`setting-position-${definition.id}`}
-          type="range"
-          min="0"
-          max={Math.max(1, sliderSteps ?? 1)}
-          step="1"
-          value={sliderPosition}
-          disabled={sliderDisabled}
-          aria-label={`${definition.label}, pelin arvo minimi- ja maksimirajan välillä`}
-          aria-describedby={describedBy}
-          onChange={(event) => onPositionChange(definition.id, Number(event.target.value))}
-        />
-        <small>Moottorin oletus {formatSettingValue(definition, defaultValue)}</small>
       </div>
       {renderBoundaryInput('hard', 'Maksimi')}
+      <input
+        className="teacher-setting-slider"
+        id={`setting-position-${definition.id}`}
+        type="range"
+        min="0"
+        max={Math.max(1, sliderSteps ?? 1)}
+        step="1"
+        value={sliderPosition}
+        disabled={sliderDisabled}
+        aria-label={`${definition.label}, pelin arvo minimi- ja maksimirajan välillä`}
+        aria-describedby={describedBy}
+        onChange={(event) => onPositionChange(definition.id, Number(event.target.value))}
+      />
+      <small className="teacher-setting-default">Moottorin oletus {formatSettingValue(definition, defaultValue)}</small>
       <p className="teacher-setting-help" id={`setting-help-${definition.id}`}>
         {definition.help}
       </p>
@@ -203,7 +207,7 @@ function TeacherSettingsPage({ onBackToLogin, onStartTestGame }) {
 
       <div className="teacher-settings-layout">
         <div className="teacher-settings-groups">
-          {TEACHER_SETTING_GROUPS.map((group) => {
+          {DISPLAY_GROUPS.map((group) => {
             const definitions = TEACHER_SETTING_DEFINITIONS.filter((item) => item.group === group.id)
             return (
               <section className={`teacher-settings-group group-${group.id}`} key={group.id} aria-labelledby={`group-title-${group.id}`}>
@@ -211,13 +215,6 @@ function TeacherSettingsPage({ onBackToLogin, onStartTestGame }) {
                   <span className="teacher-group-mark" aria-hidden="true" />
                   <h2 id={`group-title-${group.id}`}>{group.label}</h2>
                 </header>
-                <div className="teacher-settings-columns" aria-hidden="true">
-                  <span>Parametri</span>
-                  <span>Minimi</span>
-                  <span>Pelin arvo</span>
-                  <span>Maksimi</span>
-                  <span>Vaikutus peliin</span>
-                </div>
                 <div className="teacher-settings-rows">
                   {definitions.map((definition) => (
                     <SettingRow
@@ -230,58 +227,15 @@ function TeacherSettingsPage({ onBackToLogin, onStartTestGame }) {
                     />
                   ))}
                 </div>
-                {group.id === 'production' ? (
-                  <section className="teacher-fixed-start-values" aria-label="Kiinteät lähtöarvot">
-                    <h3>Kiinteät lähtöarvot — eivät säädettävissä</h3>
-                    <dl>
-                      {TEACHER_FIXED_STARTING_VALUES.map((item) => (
-                        <div key={item.id}>
-                          <dt>{item.label}</dt>
-                          <dd>{formatSettingValue({ step: 1, unit: item.unit }, item.value)}</dd>
-                          <small>{item.help}</small>
-                        </div>
-                      ))}
-                    </dl>
-                  </section>
-                ) : null}
               </section>
             )
           })}
         </div>
 
-        <aside className="teacher-settings-summary" aria-labelledby="teacher-summary-title">
-          <header>
-            <span aria-hidden="true">▥</span>
-            <h2 id="teacher-summary-title">Valitun pelin yhteenveto</h2>
-          </header>
-          {TEACHER_SETTING_GROUPS.map((group) => (
-            <section className={`teacher-summary-group summary-${group.id}`} key={group.id}>
-              <h3>{group.label}</h3>
-              <dl>
-                {TEACHER_SETTING_DEFINITIONS.filter((item) => item.group === group.id).map((definition) => (
-                  <div key={definition.id}>
-                    <dt>{definition.label}</dt>
-                    <dd>{formatSettingValue(definition, getTeacherSelectedValue(definition.id, preferences))}</dd>
-                  </div>
-                ))}
-              </dl>
-            </section>
-          ))}
-          <section className="teacher-summary-group summary-production">
-            <h3>Kiinteät lähtöarvot</h3>
-            <dl>
-              {TEACHER_FIXED_STARTING_VALUES.map((item) => (
-                <div key={item.id}>
-                  <dt>{item.label}</dt>
-                  <dd>{formatSettingValue({ step: 1, unit: item.unit }, item.value)}</dd>
-                </div>
-              ))}
-            </dl>
-          </section>
-
+        <footer className="teacher-settings-footer">
           <div className="teacher-settings-snapshot-action">
-              <Button className="ui-button teacher-snapshot-button" onClick={handleStartTestGame} disabled={!validation.valid}>
-                Kokeile peliä näillä asetuksilla
+            <Button className="ui-button teacher-snapshot-button" onClick={handleStartTestGame} disabled={!validation.valid}>
+              Kokeile peliä näillä asetuksilla
             </Button>
             <p className="teacher-snapshot-status">
               Käynnistys luo peliin oman asetussnapshotin. Myöhemmät suosikkimuutokset eivät muuta aloitettua peliä.
@@ -298,10 +252,10 @@ function TeacherSettingsPage({ onBackToLogin, onStartTestGame }) {
             </div>
           ) : null}
 
-          <footer className="teacher-settings-notice">
+          <p className="teacher-settings-notice">
             Tallennus on selainkohtainen. Asetuksia ei ole kytketty Quest-peliin eikä vielä palvelintallennukseen.
-          </footer>
-        </aside>
+          </p>
+        </footer>
       </div>
     </main>
   )

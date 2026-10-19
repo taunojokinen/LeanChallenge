@@ -124,6 +124,21 @@ tilojen osastokohtaiset ja yhteiset pinta-alat.
 
 ### Opettajan asetukset ja uusien pelien lähtöarvot
 
+Opettajan asetussivu käyttää etusivun ja kirjautumissivun tummansinistä
+Lean Cockpit -ilmettä ja turkooseja korostuksia. Leveällä näytöllä ylärivillä
+ovat Tulos, Tase ja Kehittäminen. Niiden alla Tuotanto sisältää neljä
+rinnakkaista parametrikorttia ja asiakkuuksien osio kaksi. Keskikokoisilla
+näytöillä käytetään tarvittaessa kahta palstaa, mobiilissa yhtä.
+Kaikki yhdeksän säädettävää parametria säilyvät näkyvissä; kiinteitä
+lähtöarvoja ei esitellä sivulla, mutta ne säilyvät pelimallissa ennallaan.
+Erillistä yhteenvetopaneelia ei ole. Testipelin käynnistys,
+tilaviestit ja selainkohtaisen tallennuksen huomautus ovat korttien alla.
+
+Vähintään 1280 pikselin levyisillä näkymillä pystysuuntaiset välit ovat
+tiiviimmät ilman fonttikokojen pienentämistä. Sivun korkeus määräytyy
+sisällöstä: lyhyemmissä näkymissä ja validointiviestien lisätessä sisältöä
+sivua voi vierittää normaalisti. Mobiilin väljempi asettelu säilyy ennallaan.
+
 Opettaja voi rajata muuttuvia asetuksia seuraavien sallittujen minimien ja
 maksimien välille:
 

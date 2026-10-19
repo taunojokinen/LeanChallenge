@@ -1,42 +1,14 @@
+import { useState } from 'react'
 import Button from '../../shared/ui/Button/Button.jsx'
+import GuideWindow from './GuideWindow.jsx'
+import { LANDING_GUIDES } from './guideContent.js'
 import factoryImage from '../../assets/factory.png'
 import './LandingPage.css'
 
-const guideLinks = [
-  'Lean-perusteet',
-  'PDCA-sykli',
-  'Hukan 7 lajia',
-  'OEE ja KNL',
-  'Lean-johtaminen',
-  'JIT',
-  'Kaizen',
-  '5S',
-]
-
-const pdcaSteps = [
-  {
-    key: 'plan',
-    title: 'PLAN',
-    description: 'Analysoi nykytila ja aseta tavoitteet.',
-  },
-  {
-    key: 'do',
-    title: 'DO',
-    description: 'Suunnittele Lean-toimenpiteet.',
-  },
-  {
-    key: 'check',
-    title: 'CHECK',
-    description: 'Arvioi vaikutukset KNL-mittareihin ja kapasiteettiin.',
-  },
-  {
-    key: 'act',
-    title: 'ACT',
-    description: 'Määritä hinta ja tuotevalikoima, hyväksy päätökset.',
-  },
-]
-
 function LandingPage({ onLogin }) {
+  const [activeGuideId, setActiveGuideId] = useState(null)
+  const activeGuide = LANDING_GUIDES.find((guide) => guide.id === activeGuideId)
+
   return (
     <div className="landing-page">
       <header className="landing-topbar">
@@ -48,33 +20,29 @@ function LandingPage({ onLogin }) {
           </span>
           <span className="landing-brand-text">LEAN COCKPIT</span>
         </div>
-
-        <Button data-variant="topbar" onClick={onLogin}>
-          KIRJAUDU
-        </Button>
       </header>
 
       <div className="landing-layout">
         <aside className="landing-sidebar" aria-label="Ohjeet">
           <h2>OHJEET</h2>
-          <nav className="landing-guide-list" aria-label="Oppaat ja ohjeet">
-            {guideLinks.map((item) => (
-              <button type="button" className="landing-guide-link" key={item}>
+          <nav className="landing-guide-list" aria-label="Lean-aiheiden ohjeet">
+            {LANDING_GUIDES.map((guide) => (
+              <button
+                type="button"
+                className={`landing-guide-link${activeGuideId === guide.id ? ' is-active' : ''}`}
+                key={guide.id}
+                aria-pressed={activeGuideId === guide.id}
+                aria-controls={activeGuideId === guide.id ? 'landing-guide-window' : undefined}
+                onClick={() => setActiveGuideId(guide.id)}
+              >
                 <span className="landing-guide-icon" aria-hidden="true">
                   <span />
                   <span />
                 </span>
-                <span>{item}</span>
+                <span>{guide.title}</span>
               </button>
             ))}
           </nav>
-
-          <section className="landing-help-box" aria-label="Apu">
-            <p>Tarvitsetko apua?</p>
-            <button type="button" className="landing-help-link">
-              Ota yhteyttä
-            </button>
-          </section>
         </aside>
 
         <main className="landing-main">
@@ -94,48 +62,12 @@ function LandingPage({ onLogin }) {
                 laatuun ja KNL-tuloksiin.
               </p>
               <Button data-variant="hero" onClick={onLogin}>
-                KIRJAUDU JA ALOITA
+                Kirjaudu ja aloita
               </Button>
             </div>
-          </section>
-
-          <section className="landing-pdca" aria-labelledby="pdca-title">
-            <h2 id="pdca-title">PDCA-malli</h2>
-            <p className="landing-section-lead">PLAN → DO → CHECK → ACT</p>
-            <div className="landing-pdca-flow" role="list" aria-label="PDCA-vaiheet">
-              {pdcaSteps.map((step, index) => (
-                <div className="landing-pdca-step-wrap" key={step.key} role="listitem">
-                  <article className={`landing-pdca-step landing-pdca-step-${step.key}`}>
-                    <h3>{step.title}</h3>
-                    <p>{step.description}</p>
-                  </article>
-                  {index < pdcaSteps.length - 1 ? (
-                    <span className="landing-pdca-arrow" aria-hidden="true">
-                      →
-                    </span>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="landing-info-bar" aria-label="Pelin keskeiset tiedot">
-            <article className="landing-info-item">
-              <h3>12 kierrosta</h3>
-              <p>Simuloi yrityksen kehitystä 12 kierroksen ajan.</p>
-            </article>
-            <article className="landing-info-item">
-              <h3>3 osastoa</h3>
-              <p>Koneistus, Koonta, Lähettämö.</p>
-            </article>
-            <article className="landing-info-item">
-              <h3>PDCA-malli</h3>
-              <p>Jatkuva parantaminen PLAN → DO → CHECK → ACT.</p>
-            </article>
-            <article className="landing-info-item">
-              <h3>Ohjeet ja oppaat</h3>
-              <p>Vasemman reunan valikosta löydät oppaat ja ohjeet.</p>
-            </article>
+            {activeGuide ? (
+              <GuideWindow guide={activeGuide} onClose={() => setActiveGuideId(null)} />
+            ) : null}
           </section>
         </main>
       </div>

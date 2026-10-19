@@ -26,8 +26,7 @@ function LoginPage({ onBackToLanding, onStartQuest, onOpenTeacherSettings }) {
             <span className="login-brand-text">LEAN COCKPIT</span>
           </div>
           <div className="login-copy-block">
-            <h1 id="login-visual-title">LEAN COCKPIT</h1>
-            <p className="login-tagline">Johda. Kehitä. Paranna.</p>
+            <h1 id="login-visual-title" className="login-tagline">Johda. Kehitä. Paranna.</h1>
             <p className="login-copy">
               Lean Cockpit on pelillinen oppimisympäristö, jossa johdat tuotantoyritystä
               PDCA-mallin mukaisesti. Päätöksesi vaikuttavat tuotantoon, kannattavuuteen,
@@ -46,7 +45,7 @@ function LoginPage({ onBackToLanding, onStartQuest, onOpenTeacherSettings }) {
             </header>
 
             <div className="login-options">
-              <button className="login-option-card login-option-quest" type="button" onClick={onStartQuest}>
+              <button className="login-option-card" type="button" onClick={onStartQuest}>
                 <span className="login-option-copy">
                   <strong>Pelaa Quest</strong>
                   <span>Aloita itsenäinen peli heti, ilman kirjautumista.</span>

@@ -1,0 +1,93 @@
+.game-intro-dialog {
+  width: min(42rem, calc(100% - 2rem));
+  max-height: calc(100svh - 2rem);
+  margin: auto;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  overflow-y: auto;
+  border: 1px solid rgba(93, 226, 246, 0.45);
+  border-radius: 1.25rem;
+  background: linear-gradient(180deg, #092037 0%, #0f2841 100%);
+  color: #f3f8fc;
+  color-scheme: dark;
+  text-align: left;
+  box-shadow: 0 28px 60px rgba(1, 8, 18, 0.45);
+}
+
+.game-intro-dialog::backdrop {
+  background: rgba(2, 10, 22, 0.78);
+}
+
+.game-intro-dialog h2 {
+  margin: 0 0 1rem;
+  color: #3ec9da;
+  font-size: clamp(1.4rem, 4vw, 2rem);
+}
+
+.game-intro-copy {
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.game-intro-copy p {
+  margin: 0 0 1rem;
+}
+
+.game-intro-copy strong {
+  color: #5de2f6;
+}
+
+.game-intro-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(72, 167, 197, 0.3);
+}
+
+.game-intro-actions label {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+}
+
+.game-intro-actions input {
+  width: 1.2rem;
+  height: 1.2rem;
+  accent-color: #3ec9da;
+}
+
+.game-intro-actions .ui-button {
+  min-height: 2.75rem;
+  padding: 0.7rem 1.4rem;
+  border: 1px solid rgba(93, 226, 246, 0.45);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #1cb7cf 0%, #128aa5 100%);
+  color: #f7fbfd;
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+}
+
+.game-intro-actions .ui-button:hover {
+  background: #14687d;
+}
+
+.game-intro-dialog :focus-visible {
+  outline: 2px solid #5de2f6;
+  outline-offset: 3px;
+}
+
+.game-intro-error {
+  color: #ffb5bf;
+  line-height: 1.5;
+}
+
+@media (max-width: 520px) {
+  .game-intro-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

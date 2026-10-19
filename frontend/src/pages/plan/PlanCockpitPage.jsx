@@ -1,52 +1,13 @@
-import { useMemo } from 'react'
-import { buildConfirmedCockpitViewModel, formatChange, formatPercent } from './cockpitModel.js'
+import { useMemo, useState } from 'react'
+import { COCKPIT_NAME } from '../../config/appConfig.js'
+import Button from '../../shared/ui/Button/Button.jsx'
+import { buildConfirmedCockpitViewModel, formatPercent } from './cockpitModel.js'
 import GaugesPanel from '../../widgets/gauges-panel/GaugesPanel.jsx'
+import CockpitDepartmentDialog from './CockpitDepartmentDialog.jsx'
 import './PlanCockpitPage.css'
 
-function getChangeClass(value) {
-  if (value > 0) {
-    return 'is-positive'
-  }
-
-  if (value < 0) {
-    return 'is-negative'
-  }
-
-  return 'is-neutral'
-}
-
-function DepartmentCard({ department }) {
-  return (
-    <article className="cockpit-department-card">
-      <h2>{department.name}</h2>
-      <table>
-        <caption className="visually-hidden">{department.name} K/N/L/KNL-vertailu</caption>
-        <thead>
-          <tr>
-            <th scope="col">Mittari</th>
-            <th scope="col">Kierros {department.previousRound}</th>
-            <th scope="col">Kierros {department.currentRound}</th>
-            <th scope="col">Muutos</th>
-          </tr>
-        </thead>
-        <tbody>
-          {Object.values(department.metrics).map((metric) => (
-            <tr key={metric.key}>
-              <th scope="row">{metric.label}</th>
-              <td>{formatPercent(metric.previous)}</td>
-              <td>{formatPercent(metric.current)}</td>
-              <td className={`comparison-change ${getChangeClass(metric.change)}`}>
-                {formatChange(metric.change)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </article>
-  )
-}
-
-function PlanCockpitPage({ round, totalRounds, gameState, factorySettings }) {
+function PlanCockpitPage({ gameState, factorySettings, onOpenGameGoals }) {
+  const [showDepartments, setShowDepartments] = useState(false)
   const cockpit = useMemo(
     () => buildConfirmedCockpitViewModel(gameState, factorySettings),
     [factorySettings, gameState],
@@ -57,8 +18,7 @@ function PlanCockpitPage({ round, totalRounds, gameState, factorySettings }) {
       <div className="plan-cockpit-page">
         <main className="plan-cockpit-main">
           <section className="plan-cockpit-loading">
-            <h1>Lean Cockpit</h1>
-            <p>Ladataan Lean Cockpit -näkymää...</p>
+            <p role="status">Ladataan {COCKPIT_NAME} -näkymää...</p>
           </section>
         </main>
       </div>
@@ -68,6 +28,7 @@ function PlanCockpitPage({ round, totalRounds, gameState, factorySettings }) {
   const gauges = cockpit.gauges.map((gauge) => ({ ...gauge, value: gauge.value }))
   const departments = cockpit.departments.map((department) => ({
     ...department,
+    name: department.key === 'assembly' ? 'Kokoonpano' : department.name,
     previousRound: cockpit.previousConfirmedRound,
     currentRound: cockpit.confirmedRound,
   }))
@@ -75,27 +36,49 @@ function PlanCockpitPage({ round, totalRounds, gameState, factorySettings }) {
   return (
     <div className="plan-cockpit-page">
       <main className="plan-cockpit-main">
-        <header className="plan-cockpit-header">
-          <div>
-            <h1>Lean Cockpit</h1>
-            <p>K/N/L-kehitys kahdelta viimeisimmältä vahvistetulta kierrokselta.</p>
+        <section className="plan-cockpit-metrics" aria-labelledby="cockpit-metrics-title">
+          <div className="cockpit-section-heading">
+            <h2 id="cockpit-metrics-title">Tehtaan kokonaismittarit</h2>
+            <Button className="ui-button cockpit-goals-button" type="button" onClick={onOpenGameGoals}>
+              Pelin tavoitteet
+            </Button>
           </div>
-          <strong>Kierros {round} / {totalRounds}</strong>
-        </header>
-
-        <section className="plan-cockpit-metrics" aria-label="Tehtaan kokonaismittarit">
-          <h2>Tehtaan kokonaismittarit</h2>
           <GaugesPanel gauges={gauges} />
         </section>
 
-        <section className="plan-cockpit-departments" aria-label="Osastojen K/N/L-vertailu">
-          <h2>Osastot</h2>
-          <div className="cockpit-department-grid">
+        <section className="plan-cockpit-departments" aria-labelledby="cockpit-departments-title">
+          <div className="cockpit-section-heading">
+            <h2 id="cockpit-departments-title">Osastojen KNL</h2>
+            <Button
+              className="ui-button cockpit-details-button"
+              type="button"
+              aria-haspopup="dialog"
+              onClick={() => setShowDepartments(true)}
+            >
+              Näytä osastojen tarkemmat tiedot
+            </Button>
+          </div>
+          <div className="cockpit-department-bars">
             {departments.map((department) => (
-              <DepartmentCard key={department.key} department={department} />
+              <div className="cockpit-department-bar" key={department.key}>
+                <h3 id={`cockpit-knl-${department.key}`}>{department.name}</h3>
+                <meter
+                  min="0"
+                  max="100"
+                  value={department.metrics.KNL.current}
+                  aria-labelledby={`cockpit-knl-${department.key}`}
+                  aria-valuetext={formatPercent(department.metrics.KNL.current)}
+                >
+                  {formatPercent(department.metrics.KNL.current)}
+                </meter>
+                <strong>{formatPercent(department.metrics.KNL.current)}</strong>
+              </div>
             ))}
           </div>
         </section>
+        {showDepartments ? (
+          <CockpitDepartmentDialog departments={departments} onClose={() => setShowDepartments(false)} />
+        ) : null}
       </main>
     </div>
   )

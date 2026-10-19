@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { APP_NAME, APP_TAGLINE } from '../../config/appConfig.js'
 import Button from '../../shared/ui/Button/Button.jsx'
 import './LoginPage.css'
 
@@ -17,18 +18,18 @@ function LoginPage({ onBackToLanding, onStartQuest, onOpenTeacherSettings }) {
     <div className="login-page">
       <section className="login-visual" aria-labelledby="login-visual-title">
         <div className="login-visual-content">
-          <div className="login-brand" aria-label="Lean Cockpit">
+          <div className="login-brand" aria-label={APP_NAME}>
             <span className="login-brand-mark" aria-hidden="true">
               <span />
               <span />
               <span />
             </span>
-            <span className="login-brand-text">LEAN COCKPIT</span>
+            <span className="login-brand-text">{APP_NAME.toUpperCase()}</span>
           </div>
           <div className="login-copy-block">
-            <h1 id="login-visual-title" className="login-tagline">Johda. Kehitä. Paranna.</h1>
+            <h1 id="login-visual-title" className="login-tagline">{APP_TAGLINE}</h1>
             <p className="login-copy">
-              Lean Cockpit on pelillinen oppimisympäristö, jossa johdat tuotantoyritystä
+              {APP_NAME} on pelillinen oppimisympäristö, jossa johdat tuotantoyritystä
               PDCA-mallin mukaisesti. Päätöksesi vaikuttavat tuotantoon, kannattavuuteen,
               laatuun ja KNL-tuloksiin.
             </p>
@@ -40,7 +41,7 @@ function LoginPage({ onBackToLanding, onStartQuest, onOpenTeacherSettings }) {
         {view === 'entry' ? (
           <section className="login-entry" aria-labelledby="login-entry-title">
             <header className="login-entry-header">
-              <p className="login-eyebrow">LEAN CHALLENGE</p>
+              <p className="login-eyebrow">{APP_NAME.toUpperCase()}</p>
               <h2 id="login-entry-title">Valitse tapa aloittaa</h2>
             </header>
 

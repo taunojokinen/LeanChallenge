@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createServer } from 'vite'
 import { LANDING_GUIDES } from './guideContent.js'
+import { APP_NAME, APP_TAGLINE } from '../../config/appConfig.js'
 
 const HOOKS_MODULE = 'virtual:landing-page-test-hooks'
 const originalWindow = globalThis.window
@@ -132,7 +133,9 @@ test('landing keeps the factory hero and one login action, with compact ordered 
   assert.equal(loginActions.length, 1)
   loginActions[0].props.onClick()
   assert.equal(loginCalls, 1)
-  assert.match(html, /alt="Lean Cockpitin tehdasympäristö"/)
+  assert.ok(html.includes(`alt="${APP_NAME} -pelin tehdasympäristö"`))
+  assert.ok(html.includes(APP_NAME.toUpperCase()))
+  assert.ok(html.includes(APP_TAGLINE))
   assert.doesNotMatch(html, /class="landing-pdca|class="landing-info/)
   assert.doesNotMatch(html, /KIRJAUDU/)
 })
@@ -150,7 +153,7 @@ test('each guide opens with its matching content and a different selection switc
     assert.equal(panel.props.guide.title, guide.title)
     const html = renderToStaticMarkup(hooks.render(GuideWindow, panel.props))
     assert.match(html, new RegExp(guide.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
-    assert.match(html, /Lean Challengessa/)
+    assert.ok(html.includes(`${APP_NAME} -pelissä`))
   }
 })
 

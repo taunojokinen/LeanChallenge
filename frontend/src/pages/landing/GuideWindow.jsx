@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { APP_NAME } from '../../config/appConfig.js'
 import './GuideWindow.css'
 
 function GuideWindow({ guide, onClose }) {
@@ -34,7 +35,7 @@ function GuideWindow({ guide, onClose }) {
       </header>
       <div className="landing-guide-window-content">
         <p>{guide.summary}</p>
-        <h3>Lean Challengessa</h3>
+        <h3>{APP_NAME} -pelissä</h3>
         <p>{guide.inGame}</p>
       </div>
     </aside>

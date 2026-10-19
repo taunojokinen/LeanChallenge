@@ -1,8 +1,8 @@
-# Lean Cockpit – vaatimusmäärittely
+# Lean Challenge – vaatimusmäärittely
 
 ## 1. Projektin tavoite
 
-Lean Cockpit on yrityspelimäinen oppimispeli, jonka tavoitteena on opettaa Lean-johtamisen menetelmien tehokasta käyttöä.
+Lean Challenge on yrityspelimäinen oppimispeli, jonka tavoitteena on opettaa Lean-johtamisen menetelmien tehokasta käyttöä.
 
 Pelaaja johtaa virtuaalista tehdasta 12 kierroksen ajan. Jokainen kierros muodostaa PDCA-syklin.
 
@@ -16,6 +16,25 @@ Pelin keskeinen oppimistavoite on ymmärtää Lean-toimenpiteiden vaikutus:
 - yrityksen taloudelliseen tulokseen
 
 Pelaajan käytettävissä olevat resurssit ovat rajallisia. Kaikkia parannuksia ei voida toteuttaa samalla kierroksella.
+
+### Sovelluksen nimi ja pelin aloitus
+
+Yhteiset nimet ja iskulause määritellään tiedostossa
+`src/config/appConfig.js`: pelin nimi on Lean Challenge ja johtamisnäkymän
+nimi Lean Cockpit. Vasemman navigaation Cockpit-teksti säilyy ennallaan.
+
+Uuden Quest- tai opettajan testipelin ensimmäinen Cockpit-näkymä avaa
+pelin tavoitteet modaalisessa aloitusikkunassa. Aloita peli ja Escape
+sulkevat ikkunan muuttamatta pelitilaa tai kierrosta. Sivunvaihto tai
+tallennetun pelin jatkaminen ei avaa sitä automaattisesti uudelleen.
+Cockpitin Pelin tavoitteet -painike avaa ikkunan aina tarvittaessa.
+
+Älä näytä enää -valinta tallentuu heti localStorageen avaimella
+`lean-challenge-hide-game-intro`. Valinnan voi myös poistaa samasta
+ikkunasta. Tallennusvirhe näytetään ikkunassa eikä estä sen sulkemista.
+Asetus on erillinen pelisessioista ja opettajan asetussnapshotista.
+Ikkuna tukee näppäimistökäyttöä, pitää kohdistuksen modaalissa,
+palauttaa sen suljettaessa ja vierittää sisältöä pienissä näkymissä.
 
 ---
 
@@ -78,6 +97,17 @@ KNL:
 KNL = Käytettävyys × Nopeus × Laatu
 
 ### Cockpitin lähtöhistoria ja yläpalkki
+
+Cockpitin päänäkymä näyttää kolme tehtaan kokonaismittaria tummina
+kortteina ja osastojen nykyiset KNL-arvot vertailukelpoisina 0–100 %
+palkkeina. Kokoonpano on näkymän esitysnimi mallin assembly-osastolle.
+Näytä osastojen tarkemmat tiedot avaa yhden modaalin, jossa ovat kaikkien
+kolmen osaston alkuperäiset mittarivertailut. Sarakkeiden kierrokset
+seuraavat vahvistettua pelihistoriaa (aluksi −1 ja 0).
+Sulje ja Escape sulkevat ikkunan muuttamatta pelitilaa ja palauttavat
+kohdistuksen avauspainikkeeseen. Pienissä näkymissä taulukot ovat
+allekkain ja ikkuna vierittyy pystysuunnassa. Pelin tavoitteet säilyy
+erillisenä aloitusikkunan avaavana painikkeena.
 
 Kierros 0 lasketaan pelimoottorilla pelin omasta tehdasasetusten snapshotista.
 Kierros −1 johdetaan tästä yhteisellä `buildInitialKnlHistory`-funktiolla.

@@ -19,6 +19,8 @@ import { buildGameHeaderKpis } from './headerKpis.js'
 import { advanceRoundState } from '../entities/game-round/advanceRound.js'
 import { resetGameDecisionStorage } from '../features/session/resetGameSession.js'
 import { loadCheckProductionDecision } from '../features/check/decisionStore.js'
+import GameIntroDialog from '../features/game-intro/GameIntroDialog.jsx'
+import { isGameIntroHidden } from '../features/game-intro/preferences.js'
 import {
   TEACHER_TEST_GAME_MODE,
   clearTeacherTestGameSession,
@@ -95,6 +97,7 @@ const placeholderContentByPageKey = {
 
 function App() {
   const [restoredSession] = useState(() => loadTeacherTestGameSession() ?? loadQuestGameSession())
+  const [showGameIntro, setShowGameIntro] = useState(() => !restoredSession && !isGameIntroHidden())
   const [pathname, setPathname] = useState(() => normalizePath(window.location.pathname, true))
   const [lastGamePathname, setLastGamePathname] = useState(
     () => restoredSession?.pathname ?? '/plan/cockpit',
@@ -221,6 +224,7 @@ function App() {
     setInitialGameState(startState)
     setGameState(structuredClone(startState))
     setRoundStatus('')
+    setShowGameIntro(!isGameIntroHidden())
     navigateTo(destination)
   }
 
@@ -284,6 +288,7 @@ function App() {
             totalRounds={factorySettings.game.totalRounds}
             gameState={gameState}
             factorySettings={factorySettings}
+            onOpenGameGoals={() => setShowGameIntro(true)}
           />
         ) : pageKey === 'plan-balance-sheet' ? (
           <PlanBalanceSheetPage inventoryTurnover={inventoryTurnover} gameState={gameState} />
@@ -322,6 +327,9 @@ function App() {
         ) : (
           <GamePlaceholderPage title={placeholderContent.title} description={placeholderContent.description} />
         )}
+        {pageKey === 'plan-cockpit' && showGameIntro ? (
+          <GameIntroDialog onClose={() => setShowGameIntro(false)} />
+        ) : null}
       </GameLayout>
     )
   }

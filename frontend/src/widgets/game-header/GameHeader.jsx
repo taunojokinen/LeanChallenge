@@ -1,17 +1,18 @@
 import Button from '../../shared/ui/Button/Button.jsx'
+import { APP_NAME } from '../../config/appConfig.js'
 import { formatConfirmedKpiRound, formatGameplayRound } from './roundDisplay.js'
 import './GameHeader.css'
 
 function GameHeader({ round, totalRounds, kpis, userName, onLogout }) {
   return (
     <header className="game-header">
-      <div className="game-header-brand" aria-label="Lean Cockpit">
+      <div className="game-header-brand" aria-label={APP_NAME}>
         <span className="game-header-brand-mark" aria-hidden="true">
           <span />
           <span />
           <span />
         </span>
-        <strong>LEAN COCKPIT</strong>
+        <strong>{APP_NAME.toUpperCase()}</strong>
       </div>
 
       <div className="game-header-round" aria-label="Kierrostieto">

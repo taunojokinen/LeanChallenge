@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { APP_NAME, APP_TAGLINE } from '../../config/appConfig.js'
 import Button from '../../shared/ui/Button/Button.jsx'
 import GuideWindow from './GuideWindow.jsx'
 import { LANDING_GUIDES } from './guideContent.js'
@@ -12,13 +13,13 @@ function LandingPage({ onLogin }) {
   return (
     <div className="landing-page">
       <header className="landing-topbar">
-        <div className="landing-brand" aria-label="Lean Cockpit">
+        <div className="landing-brand" aria-label={APP_NAME}>
           <span className="landing-brand-mark" aria-hidden="true">
             <span />
             <span />
             <span />
           </span>
-          <span className="landing-brand-text">LEAN COCKPIT</span>
+          <span className="landing-brand-text">{APP_NAME.toUpperCase()}</span>
         </div>
       </header>
 
@@ -50,14 +51,14 @@ function LandingPage({ onLogin }) {
             <img
               className="landing-hero-image"
               src={factoryImage}
-              alt="Lean Cockpitin tehdasympäristö"
+              alt={`${APP_NAME} -pelin tehdasympäristö`}
             />
             <div className="landing-hero-overlay" aria-hidden="true" />
             <div className="landing-hero-content">
-              <h1 id="landing-title">LEAN COCKPIT</h1>
-              <p className="landing-hero-tagline">Johda. Kehitä. Paranna.</p>
+              <h1 id="landing-title">{APP_NAME.toUpperCase()}</h1>
+              <p className="landing-hero-tagline">{APP_TAGLINE}</p>
               <p className="landing-hero-copy">
-                Lean Cockpit on pelillinen oppimisympäristö, jossa johdat tuotantoyritystä
+                {APP_NAME} on pelillinen oppimisympäristö, jossa johdat tuotantoyritystä
                 PDCA-mallin mukaisesti. Päätöksesi vaikuttavat tuotantoon, kannattavuuteen,
                 laatuun ja KNL-tuloksiin.
               </p>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { APP_NAME } from '../../config/appConfig.js'
 import Button from '../../shared/ui/Button/Button.jsx'
 import {
   TEACHER_SETTING_DEFINITIONS,
@@ -182,7 +183,7 @@ function TeacherSettingsPage({ onBackToLogin, onStartTestGame }) {
             ‹
           </Button>
           <div>
-            <p>Lean Challenge</p>
+            <p>{APP_NAME}</p>
             <h1>Opettajan asetukset</h1>
           </div>
         </div>

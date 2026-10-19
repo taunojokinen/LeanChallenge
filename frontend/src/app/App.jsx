@@ -291,7 +291,11 @@ function App() {
             onOpenGameGoals={() => setShowGameIntro(true)}
           />
         ) : pageKey === 'plan-balance-sheet' ? (
-          <PlanBalanceSheetPage inventoryTurnover={inventoryTurnover} gameState={gameState} />
+          <PlanBalanceSheetPage
+            inventoryTurnover={inventoryTurnover}
+            gameState={gameState}
+            factorySettings={factorySettings}
+          />
         ) : pageKey === 'plan-income' ? (
           <PlanIncomePage
             gameState={gameState}

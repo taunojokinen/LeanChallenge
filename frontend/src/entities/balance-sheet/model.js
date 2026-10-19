@@ -127,6 +127,7 @@ export function buildBalanceSheetHistoryView({ baselineHistory, runtimeHistory =
     previousAssets: previous.assets,
     liabilities: current.liabilities,
     previousLiabilities: previous.liabilities,
+    confirmedEntry: selectedEntries.at(-1),
   }
 }
 
@@ -259,6 +260,10 @@ export function buildBalanceSheetViewModel(snapshot, inventoryTurnover) {
       solvencyRatio: `${DECIMAL_FORMATTER.format(solvencyRatio)} %`,
       assetsTotal,
       liabilitiesTotal,
+      equity,
+      bankLoans: currentDebt,
+      inventoryAmount: currentInventory,
+      solvencyRatioValue: solvencyRatio,
     },
   }
 }

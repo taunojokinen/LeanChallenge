@@ -1,5 +1,6 @@
 import { DEFAULT_FACTORY_SETTINGS } from './defaultFactorySettings.js'
-import { createInitialGameState } from './initialGameState.js'
+import { createInitialFactoryState } from './initialFactoryState.js'
+import { calculateFinancingStructure } from './financingStructure.js'
 import { calculateRoundForecast } from '../forecast/model.js'
 
 const REQUIRED_INCOME_FIELDS = [
@@ -170,27 +171,8 @@ export function normalizeFinancialHistoryEntry(entry, { strict = false } = {}) {
   )
 }
 
-export function buildCanonicalFinancialHistory(
-  gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS),
-  factorySettings = DEFAULT_FACTORY_SETTINGS,
-) {
-  const settings = factorySettings ?? gameState?.factorySettings ?? DEFAULT_FACTORY_SETTINGS
-  let historicalState = createInitialGameState(settings, { historySeed: 0 })
-  const configuredProduction = Math.max(
-    0,
-    Math.round(Number(settings.production?.initialProductionQuantity) || 0),
-  )
-  const roundZeroProbe = calculateRoundForecast(
-    historicalState,
-    { market: { productionQuantity: configuredProduction } },
-    settings,
-  )
-  const effectiveRoundZeroProduction = roundZeroProbe.forecast.actualProduction
-  const productionByRound = new Map([
-    [-2, Math.max(0, effectiveRoundZeroProduction - 10)],
-    [-1, Math.max(0, effectiveRoundZeroProduction - 5)],
-    [0, effectiveRoundZeroProduction],
-  ])
+function simulateFinancialHistory(initialState, settings, productionByRound) {
+  let historicalState = structuredClone(initialState)
   const entries = []
 
   for (const round of [-2, -1, 0]) {
@@ -231,8 +213,98 @@ export function buildCanonicalFinancialHistory(
   return entries
 }
 
+function getHistoricalProduction(initialState, settings) {
+  const configuredProduction = Math.max(
+    0,
+    Math.round(Number(settings.production?.initialProductionQuantity) || 0),
+  )
+  const roundZeroProbe = calculateRoundForecast(
+    initialState,
+    { market: { productionQuantity: configuredProduction } },
+    settings,
+  )
+  const effectiveRoundZeroProduction = roundZeroProbe.forecast.actualProduction
+  return new Map([
+    [-2, Math.max(0, effectiveRoundZeroProduction - 10)],
+    [-1, Math.max(0, effectiveRoundZeroProduction - 5)],
+    [0, effectiveRoundZeroProduction],
+  ])
+}
+
+export function buildLegacyFinancialHistory(factorySettings) {
+  const initialState = createInitialFactoryState(factorySettings, { historySeed: 0 })
+  return simulateFinancialHistory(initialState, factorySettings, getHistoricalProduction(initialState, factorySettings))
+}
+
+export function buildCanonicalFinancialHistory(
+  gameState,
+  factorySettings = DEFAULT_FACTORY_SETTINGS,
+) {
+  if (gameState?.initialFinancialHistory) {
+    const entries = gameState.initialFinancialHistory
+    if (!Array.isArray(entries) || entries.length !== 3 ||
+      entries.some((entry, index) => entry.round !== index - 2)) {
+      throw new Error('Pelin tallennettu lähtöhistoria ei sisällä kierroksia −2, −1 ja 0.')
+    }
+    entries.forEach(assertCanonicalFinancialHistoryEntry)
+    return structuredClone(entries)
+  }
+  const settings = factorySettings ?? gameState?.factorySettings ?? DEFAULT_FACTORY_SETTINGS
+  const initialState = createInitialFactoryState(settings, { historySeed: 0 })
+  const productionByRound = getHistoricalProduction(initialState, settings)
+  const targetEquity = Number(initialState.finance.equity)
+  if (!Number.isFinite(targetEquity)) {
+    throw new Error('Kierroksen 0 tavoitepääoman tulee olla äärellinen luku.')
+  }
+  const generate = (equity) => {
+    const state = structuredClone(initialState)
+    const finance = state.finance
+    const financing = calculateFinancingStructure({
+      nonCashAssets: finance.machineryBookValue + finance.buildingsBookValue +
+        finance.finishedGoodsInventoryBookValue + finance.rawMaterialInventoryBookValue,
+      equity,
+      rawMaterialCosts: finance.incomeStatement.materials,
+      factorySettings: settings,
+    })
+    state.finance = {
+      ...finance,
+      equity,
+      cash: financing.cash,
+      bankLoans: financing.interestBearingDebt,
+      otherLiabilities: financing.otherLiabilities,
+      overdraft: 0,
+    }
+    return simulateFinancialHistory(state, settings, productionByRound)
+  }
+  let openingEquity = targetEquity
+  let lower
+  let upper
+  // Each trial reruns the existing financing/forecast model, including the debt-free branch.
+  for (let iteration = 0; iteration < 100; iteration += 1) {
+    const entries = generate(openingEquity)
+    const difference = entries.at(-1).finance.equity - targetEquity
+    if (!Number.isFinite(difference)) {
+      throw new Error('Historialaskennan oman pääoman ratkaisu ei ole äärellinen.')
+    }
+    if (Math.abs(difference) <= 1e-9) {
+      return entries
+    }
+    if (difference < 0) {
+      lower = openingEquity
+    } else {
+      upper = openingEquity
+    }
+    // The correction converges quickly at normal rates; bisection safeguards overshoots.
+    const corrected = openingEquity - difference
+    openingEquity = lower != null && upper != null && (corrected <= lower || corrected >= upper)
+      ? (lower + upper) / 2
+      : corrected
+  }
+  throw new Error('Kierroksen 0 tavoitepääomaa ei saavutettu historialaskennassa.')
+}
+
 export function buildInitialIncomeHistory(
-  gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS),
+  gameState = createInitialFactoryState(DEFAULT_FACTORY_SETTINGS),
   factorySettings = DEFAULT_FACTORY_SETTINGS,
 ) {
   const entries = buildCanonicalFinancialHistory(gameState, factorySettings)
@@ -292,7 +364,7 @@ export function buildInitialIncomeHistory(
 }
 
 export function buildInitialBalanceSheetHistory(
-  gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS),
+  gameState = createInitialFactoryState(DEFAULT_FACTORY_SETTINGS),
   factorySettings = DEFAULT_FACTORY_SETTINGS,
 ) {
   const entries = buildCanonicalFinancialHistory(gameState, factorySettings)

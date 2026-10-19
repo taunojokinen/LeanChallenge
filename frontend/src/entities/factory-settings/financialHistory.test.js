@@ -2,6 +2,9 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { DEFAULT_FACTORY_SETTINGS } from './defaultFactorySettings.js'
 import { createInitialGameState } from './initialGameState.js'
+import { createInitialFactoryState } from './initialFactoryState.js'
+import { calculateFinancingStructure } from './financingStructure.js'
+import { calculateRoundForecast } from '../forecast/model.js'
 import {
   assertCanonicalFinancialHistoryEntry,
   buildCanonicalFinancialHistory,
@@ -10,6 +13,7 @@ import {
 } from './financialHistory.js'
 import { buildIncomeHistoryView } from '../income/model.js'
 import { buildBalanceSheetHistoryView } from '../balance-sheet/model.js'
+import { buildFactorySettingsSnapshot, createDefaultTeacherPreferences, getTeacherSliderStepCount } from './teacherGameSettings.js'
 
 function settingsWithProduction(quantity) {
   return {
@@ -25,18 +29,14 @@ function generated(quantity = 134) {
   return buildCanonicalFinancialHistory(undefined, settingsWithProduction(quantity))
 }
 
-test('initial game state keeps canonical gameplay opening anchors', () => {
+test('initial game finance is the confirmed round-zero closing balance', () => {
   const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
-
+  const history = buildCanonicalFinancialHistory(gameState, DEFAULT_FACTORY_SETTINGS)
   assert.equal(gameState.round, 1)
+  assert.deepEqual(gameState.finance, history.at(-1).finance)
+  assert.ok(Math.abs(gameState.finance.equity - DEFAULT_FACTORY_SETTINGS.initialState.finance.equity) < 1e-7)
   assert.equal(gameState.finance.cash, 50000)
-  assert.equal(gameState.finance.bankLoans, 2957900)
-  assert.equal(gameState.finance.equity, 2073975)
-  assert.equal(gameState.finance.otherLiabilities, 660000)
-  assert.equal(gameState.finance.machineryBookValue, 498750)
-  assert.equal(gameState.finance.buildingsBookValue, 2998125)
-  assert.equal(gameState.finance.finishedGoodsInventoryBookValue, 1645000)
-  assert.equal(gameState.finance.rawMaterialInventoryBookValue, 500000)
+  assert.equal(gameState.finance.totalAssets, gameState.finance.totalLiabilitiesAndEquity)
 })
 
 test('generated history uses canonical finished-goods valuation and inventory change', () => {
@@ -125,18 +125,148 @@ test('generated historical balance sheets are balanced without a balancing line'
 test('historical depreciation and interest use the same opening-balance runtime rules', () => {
   const entries = buildCanonicalFinancialHistory()
   const settings = DEFAULT_FACTORY_SETTINGS
-  let openingFinance = createInitialGameState(settings).finance
+  const initialFinance = createInitialFactoryState(settings).finance
+  let openingFinance = initialFinance
   const roundRate = settings.finance.annualInterestRate * settings.game.monthsPerRound / 12
 
-  entries.forEach((entry) => {
+  entries.forEach((entry, index) => {
     const expectedDepreciation =
       openingFinance.machineryBookValue * settings.finance.machineryDepreciationPerRound +
       openingFinance.buildingsBookValue * settings.finance.buildingDepreciationPerRound
 
     assert.equal(entry.incomeStatement.depreciation, expectedDepreciation)
-    assert.ok(
-      Math.abs(entry.incomeStatement.financingCosts - openingFinance.bankLoans * roundRate) < 1e-9,
-    )
+    if (index > 0) {
+      assert.ok(Math.abs(entry.incomeStatement.financingCosts - openingFinance.bankLoans * roundRate) < 1e-9)
+    } else {
+      const openingEquity = entry.finance.equity - entry.incomeStatement.result
+      const financing = calculateFinancingStructure({
+        nonCashAssets: initialFinance.machineryBookValue + initialFinance.buildingsBookValue +
+          initialFinance.finishedGoodsInventoryBookValue + initialFinance.rawMaterialInventoryBookValue,
+        equity: openingEquity,
+        rawMaterialCosts: initialFinance.incomeStatement.materials,
+        factorySettings: settings,
+      })
+      assert.ok(Math.abs(entry.incomeStatement.financingCosts - financing.interestBearingDebt * roundRate) < 1e-7)
+    }
     openingFinance = entry.finance
   })
+})
+
+for (const startingEquity of [2000000, 3000000, DEFAULT_FACTORY_SETTINGS.initialState.finance.equity]) {
+  test(`teacher starting equity ${startingEquity} flows through historical results and balanced financing`, () => {
+    const preferences = createDefaultTeacherPreferences()
+    preferences.equity.position = (startingEquity - preferences.equity.easy) / 25
+    const settings = buildFactorySettingsSnapshot(preferences)
+    const state = createInitialGameState(settings)
+    const history = buildCanonicalFinancialHistory(state, settings)
+    assert.ok(Math.abs(state.finance.equity - startingEquity) < 1e-7)
+    assert.deepEqual(history.map((entry) => entry.round), [-2, -1, 0])
+    let openingEquity = history[0].finance.equity - history[0].incomeStatement.result
+    for (const entry of history) {
+      const finance = entry.finance
+      assert.ok(Math.abs(finance.equity - openingEquity - entry.incomeStatement.result) < 1e-7)
+      assert.ok(entry.incomeStatement.result < 0)
+      assert.equal(finance.totalAssets, finance.totalLiabilitiesAndEquity)
+      assert.equal(finance.totalAssets, finance.equity + finance.bankLoans + finance.otherLiabilities)
+      openingEquity = finance.equity
+    }
+    const view = buildBalanceSheetHistoryView({
+      baselineHistory: buildInitialBalanceSheetHistory(state, settings),
+      runtimeHistory: state.history,
+    })
+    assert.equal(view.previousLiabilities.equity, history[1].finance.equity)
+    assert.equal(view.liabilities.equity, history[2].finance.equity)
+    assert.equal(view.previousRound, -1)
+    assert.equal(view.round, 0)
+    assert.ok(Math.abs(view.liabilities.equity - startingEquity) < 1e-7)
+    const firstRound = calculateRoundForecast(state, {}, settings)
+    assert.equal(firstRound.forecast.finance.openingInterestBearingDebt, history[2].finance.bankLoans)
+    assert.equal(firstRound.closingState.finance.equity, state.finance.equity + firstRound.forecast.finance.result)
+    assert.equal(firstRound.closingState.finance.totalAssets, firstRound.closingState.finance.totalLiabilitiesAndEquity)
+  })
+}
+
+test('capital targeting also supports debt-free histories with excess cash and zero interest', () => {
+  const settings = structuredClone(DEFAULT_FACTORY_SETTINGS)
+  settings.initialState.finance.equity = 10000000
+  const history = buildCanonicalFinancialHistory(undefined, settings)
+  assert.ok(Math.abs(history.at(-1).finance.equity - 10000000) < 1e-7)
+  for (const entry of history) {
+    assert.equal(entry.finance.bankLoans, 0)
+    assert.equal(entry.incomeStatement.financingCosts, 0)
+    assert.ok(entry.finance.cash > settings.finance.targetCash)
+    assert.equal(entry.finance.totalAssets, entry.finance.totalLiabilitiesAndEquity)
+  }
+})
+
+test('targeting retains production, operating income and KNL inputs across teacher range boundaries', () => {
+  for (const useMaximum of [false, true]) {
+    const preferences = createDefaultTeacherPreferences()
+    for (const [id, preference] of Object.entries(preferences)) {
+      preference.position = useMaximum ? getTeacherSliderStepCount(id, preferences) : 0
+    }
+    const settings = buildFactorySettingsSnapshot(preferences)
+    let referenceState = createInitialFactoryState(settings)
+    const history = buildCanonicalFinancialHistory(undefined, settings)
+    assert.ok(Math.abs(history.at(-1).finance.equity - settings.initialState.finance.equity) < 1e-7)
+    for (const entry of history) {
+      referenceState.inventory.finishedGoodsContainers = settings.initialState.inventory.finishedGoodsContainers
+      const forecast = calculateRoundForecast(
+        referenceState, { market: { productionQuantity: entry.production.actualProduction } }, settings,
+      )
+      assert.equal(entry.production.actualProduction, forecast.forecast.actualProduction)
+      for (const key of ['revenue', 'inventoryChange', 'materials', 'labor', 'fixedCosts', 'depreciation']) {
+        assert.equal(entry.incomeStatement[key], forecast.closingState.finance.incomeStatement[key])
+      }
+      referenceState = forecast.closingState
+    }
+    const initialState = createInitialGameState(settings)
+    assert.deepEqual(initialState.lean, settings.initialState.lean)
+    assert.deepEqual(initialState.production, settings.initialState.production)
+    assert.deepEqual(
+      calculateRoundForecast(initialState, {}, settings).current.knl,
+      calculateRoundForecast(createInitialFactoryState(settings), {}, settings).current.knl,
+    )
+  }
+})
+
+test('higher teacher starting equity reduces historical debt and subsequent interest without changing assets', () => {
+  const historyFor = (equity) => {
+    const settings = structuredClone(DEFAULT_FACTORY_SETTINGS)
+    settings.initialState.finance.equity = equity
+    return buildCanonicalFinancialHistory(createInitialGameState(settings), settings)
+  }
+  const lower = historyFor(2000000)
+  const higher = historyFor(3000000)
+  for (const [index, entry] of higher.entries()) {
+    assert.equal(entry.finance.totalAssets, lower[index].finance.totalAssets)
+    assert.ok(entry.finance.equity > lower[index].finance.equity)
+    assert.ok(entry.finance.bankLoans < lower[index].finance.bankLoans)
+    if (index > 0) {
+      assert.ok(entry.incomeStatement.financingCosts < lower[index].incomeStatement.financingCosts)
+    }
+  }
+})
+
+test('capital targeting accounts for zero and higher interest rates without changing the target', () => {
+  for (const annualInterestRate of [0, 0.08, 1]) {
+    const settings = structuredClone(DEFAULT_FACTORY_SETTINGS)
+    settings.finance.annualInterestRate = annualInterestRate
+    const history = buildCanonicalFinancialHistory(undefined, settings)
+    assert.ok(Math.abs(history.at(-1).finance.equity - settings.initialState.finance.equity) < 1e-7)
+    for (const [index, entry] of history.entries()) {
+      assert.equal(entry.finance.totalAssets, entry.finance.totalLiabilitiesAndEquity)
+      if (index > 0) {
+        assert.ok(Math.abs(entry.incomeStatement.financingCosts -
+          history[index - 1].finance.bankLoans * annualInterestRate * settings.game.monthsPerRound / 12) < 1e-7)
+      }
+    }
+  }
+})
+
+test('invalid capital targets and incomplete persisted history are reported explicitly', () => {
+  const settings = structuredClone(DEFAULT_FACTORY_SETTINGS)
+  settings.initialState.finance.equity = NaN
+  assert.throws(() => buildCanonicalFinancialHistory(undefined, settings), /tavoitepääoman/)
+  assert.throws(() => buildCanonicalFinancialHistory({ initialFinancialHistory: [] }), /lähtöhistoria/)
 })

@@ -756,10 +756,10 @@ test('interest uses opening debt and settings-derived round rate on first playab
   const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
   const forecast = calculateRoundForecast(gameState)
 
-  assert.equal(forecast.forecast.finance.openingInterestBearingDebt, 2957900)
+  assert.equal(forecast.forecast.finance.openingInterestBearingDebt, gameState.finance.bankLoans)
   assert.equal(forecast.forecast.finance.roundInterestRate, 0.0125)
-  assert.equal(forecast.forecast.finance.interest, 36973.75)
-  assert.equal(Math.round(forecast.forecast.finance.interest), 36974)
+  assert.equal(forecast.forecast.finance.interest, gameState.finance.bankLoans * 0.0125)
+  assert.equal(Math.round(forecast.forecast.finance.interest), 37531)
 })
 
 test('same-round investments do not change interest when opening debt is the same', () => {
@@ -782,8 +782,8 @@ test('same-round investments do not change interest when opening debt is the sam
     },
   })
 
-  assert.equal(withoutInvestment.forecast.finance.openingInterestBearingDebt, 2957900)
-  assert.equal(withInvestment.forecast.finance.openingInterestBearingDebt, 2957900)
+  assert.equal(withoutInvestment.forecast.finance.openingInterestBearingDebt, baseState.finance.bankLoans)
+  assert.equal(withInvestment.forecast.finance.openingInterestBearingDebt, baseState.finance.bankLoans)
   assert.equal(withoutInvestment.forecast.finance.interest, withInvestment.forecast.finance.interest)
 })
 
@@ -819,8 +819,8 @@ test('ACT market decisions do not change same-round interest when opening debt i
     },
   })
 
-  assert.equal(scenarioA.forecast.finance.openingInterestBearingDebt, 2957900)
-  assert.equal(scenarioB.forecast.finance.openingInterestBearingDebt, 2957900)
+  assert.equal(scenarioA.forecast.finance.openingInterestBearingDebt, gameState.finance.bankLoans)
+  assert.equal(scenarioB.forecast.finance.openingInterestBearingDebt, gameState.finance.bankLoans)
   assert.equal(scenarioA.forecast.finance.interest, scenarioB.forecast.finance.interest)
 })
 
@@ -860,7 +860,7 @@ test('round interest rate is derived from settings and not hardcoded', () => {
   const forecast = calculateRoundForecast(gameState, {}, customSettings)
 
   assert.equal(forecast.forecast.finance.roundInterestRate, 0.02)
-  assert.equal(forecast.forecast.finance.interest, 59158)
+  assert.equal(forecast.forecast.finance.interest, gameState.finance.bankLoans * 0.02)
 })
 
 test('depreciation override changes depreciation while leaving asset base intact', () => {

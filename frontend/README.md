@@ -137,6 +137,91 @@ Negatiivisten tulosten vertailussa käytetään edellisen tuloksen itseisarvoa.
 Validointi: `node --test`, muutettujen JavaScript/JSX-tiedostojen ESLint ja
 `npm run build`.
 
+### PLAN / Tulos
+
+Tuloslaskelma esitetään Cockpitin tumman ilmeen mukaisessa pääpaneelissa.
+Kaikki kymmenen riviä ja kuusi saraketta säilyvät näkyvissä. Vertailu ja
+sarakeotsikot seuraavat kahta viimeistä vahvistettua kierrosta; arvot,
+prosenttiosuudet ja muutosten väriluokat tulevat nykyisestä tulosmallista.
+MYYNTIKATE ja TULOS korostetaan taustalla ja erotinviivoilla.
+Pienessä näkymässä vain taulukko vierittyy vaakasuunnassa, myös
+näppäimistöllä, eikä sarakkeita piiloteta.
+
+### PLAN / Tase
+
+Tase käyttää Tulos-sivun mukaista leveää tummaa pääpaneelia. Vastaavaa-
+ja Vastattavaa-taulukot säilyttävät kaikki nykyiset erät, välisummat,
+yhteissummat ja dynaamiset vahvistettujen kierrosten sarakkeet.
+Myös nykyinen Lean-yhteenveto säilyy taulukoiden alla.
+Taulukot ovat työpöydällä rinnakkain ja pienemmissä näkymissä allekkain.
+Kapealla näytöllä taulukoilla on oma näppäimistöllä käytettävä
+vaakavieritys; rivejä tai sarakkeita ei piiloteta.
+
+Taseen tulkinta näyttää kolme tilannekohtaista korttia taulukoiden oikealla
+puolella leveällä näytöllä ja niiden alla pienemmissä näkymissä.
+Kortit käyttävät samaa viimeistä vahvistettua kierrosta kuin taulukot,
+eivät keskeneräisen kierroksen ennustetta:
+
+- Oman pääoman riittävyys on oma pääoma / (4 × kauden tappio). Alle kolmen
+  vuoden puskuri on punainen, vähintään kolme vuotta keltainen ja
+  voitollinen tulos vihreä. Nolla tai negatiivinen oma pääoma on aina
+  punainen; tappiollisena riittävyys on tällöin nolla vuotta.
+  Kortti näyttää riittävyyden ja lyhyen johtopäätöksen ilman laskentateknisiä
+  selityksiä tai kolmen vuoden pääomaennustetta.
+- Omavaraisuusaste käyttää taseen omaa pääomaa suhteessa koko vastaavaan:
+  alle 33 % on punainen, 33–50 % keltainen ja yli 50 % vihreä.
+  Neutraali lainanottovara käyttää Investoinnit-sivun samaa
+  `canFinanceInvestment`-laskentaa ja pelin velkarajaa 2 × oma pääoma.
+  Kassaa ei lasketa lainanottovaraan eikä koneiden ostomääriä näytetä.
+  Keltaisen tilan teksti on Tyydyttävä.
+- Varastoon sitoutunut pääoma sisältää valmistuote- ja raaka-ainevaraston
+  kirjanpitoarvot. Vuosittainen kiertonopeus on yläpalkinkin käyttämä
+  vahvistetut toimitukset / fyysinen valmistuotevarasto, kerrottuna neljällä.
+  Alle 8 on punainen (Heikko), 8–16 keltainen ja yli 16 vihreä.
+  Taseen Lean-yhteenveto ja tulkintakortti näyttävät saman vuositasoisen
+  luvun samalta vahvistetulta kierrokselta. Questin kierroksella 0
+  luku on 150 / 100 × 4 = 6,0 kertaa vuodessa.
+  Yläpalkki käyttää samaa yhteistä vuosilaskentaa ja esittää luvun muodossa
+  6,0x/vuosi. Myös sen muutosluku vertaa vuositasoisia arvoja kahdelta
+  viimeiseltä vahvistetulta kierrokselta.
+
+Nollan loppuvaraston kiertonopeus ja nollan taseen loppusumman
+omavaraisuusaste esitetään nimenomaisesti ei-laskettavina, ilman
+onnistunutta tilannetta tarkoittavaa väriä. Arviot eivät muuta talousmallia.
+
+Taseen lähtöhistoria käyttää aktiivisen pelin asetussnapshotia kuten
+Tulos-sivu. Opettajan Oma pääoma -asetus on kierroksen 0 lopun
+tavoitepääoma, josta pelaaja aloittaa kierroksen 1. Quest käyttää
+erillistä kiinteää tavoitettaan 2 073 975 € oletusasetuksista; opettajan
+suosikit eivät vaikuta Questiin. Questin kiinteät kulut säilyvät
+4 000 000 €/vuosi eli 1 000 000 €/kierros.
+
+Historiakierrokset −2, −1 ja 0 lasketaan edelleen samalla ennuste- ja
+rahoitusmallilla. Historian alkupääoma ratkaistaan toistamalla laskenta
+ja korjaamalla pääomaa kierroksen 0 tavoitepoikkeamalla; alarajan ja
+ylärajan löydyttyä puolitus suojaa korjauksen ylityksiltä.
+Jokainen kokeilu laskee myös velan, kassan ja korkojen vaikutuksen
+uudelleen. Tavoite tarkistetaan alle sentin numeerisella toleranssilla;
+epäonnistunut ratkaisu aiheuttaa virheen eikä oletusarvoihin palaamista.
+Historiallisia tappioita ei poisteta tai nollata: oma pääoma muuttuu
+jokaisella kierroksella sen tuloksen verran.
+
+Uusi peli käyttää kierroksen 0 lopun koko taloudellista tilaa
+(myös velkaa, kassaa ja kirjanpitoarvoja) kierroksen 1 alussa.
+Tuotannon, henkilöstön, Lean-menetelmien ja KNL:n lähtötiloja ei
+siirretä historiasta. Ratkaistu lähtöhistoria tallentuu pelitilan
+`initialFinancialHistory`-kenttään, säilyy kierroksen vahvistuksessa ja
+palautuu session mukana ilman uudelleenratkaisua.
+Ennen muutosta tallennetun pelin palautus säilyttää sen alkuperäisen
+talouden ja vanhan lähtöhistorian; käynnissä olevaa peliä ei rahoiteta
+uudelleen. Uusi tavoiteperiaate tulee käyttöön aloittamalla uusi peli.
+Nykyinen rahoituslaskenta sopeuttaa velan ja tarvittaessa kassan
+niin, että tase pysyy tasapainossa. Pelattujen kierrosten tulokset
+muuttavat omaa pääomaa normaalisti eivätkä palauta sitä tavoitteeseen.
+Asetusten muuttaminen ei muuta käynnissä olevan pelin snapshotia.
+Kokeile peliä näillä asetuksilla käynnistää uuden testipelin nykyisistä
+kenttien arvoista; pelkkä suosikkiasetusten tallennus ei aloita uutta peliä.
+
 ### Tehdastilan laskenta ja investoinnit
 
 Investoinnit ja tuotantoennuste käyttävät samaa `calculateFactorySpace`-funktiota.

@@ -40,8 +40,8 @@ test('income history starts with canonical rounds -1 and 0', () => {
   assert.equal(view.previousRound, -1)
   assert.equal(view.round, 0)
   assert.equal(rows.find((row) => row.key === 'sales').currentAmount, 150)
-  assert.ok(Math.abs(result.currentAmount - (-859890.5212890625)) < 1e-8)
-  assert.ok(Math.abs(financing.currentAmount - (-62382.113085937504)) < 1e-8)
+  assert.ok(Math.abs(result.currentAmount - (-825961.8778935188)) < 1e-7)
+  assert.ok(Math.abs(financing.currentAmount - (-28453.46969039373)) < 1e-7)
 })
 
 test('actual income API baseline pipeline preserves round zero values', async () => {
@@ -58,8 +58,8 @@ test('actual income API baseline pipeline preserves round zero values', async ()
   assert.equal(values.grossMargin, 296250)
   assert.equal(values.fixedCosts, -1000000)
   assert.equal(values.depreciation, -93758.408203125)
-  assert.ok(Math.abs(values.financingCosts - (-62382.113085937504)) < 1e-8)
-  assert.ok(Math.abs(values.result - (-859890.5212890625)) < 1e-8)
+  assert.ok(Math.abs(values.financingCosts - (-28453.46969039373)) < 1e-7)
+  assert.ok(Math.abs(values.result - (-825961.8778935188)) < 1e-7)
 })
 
 test('income statement cost percentages use revenue minus inventory change as presentation basis', () => {

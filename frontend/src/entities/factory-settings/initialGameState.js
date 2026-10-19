@@ -1,33 +1,12 @@
 import { DEFAULT_FACTORY_SETTINGS } from './defaultFactorySettings.js'
+import { createInitialFactoryState } from './initialFactoryState.js'
+import { buildCanonicalFinancialHistory } from './financialHistory.js'
 
-function toNonNegativeInt(value, fallback = 0) {
-  const numeric = Number(value)
-
-  if (!Number.isFinite(numeric)) {
-    return Math.max(0, Math.round(Number(fallback) || 0))
-  }
-
-  return Math.max(0, Math.round(numeric))
-}
-
-export function createInitialGameState(factorySettings = DEFAULT_FACTORY_SETTINGS, { historySeed } = {}) {
+export function createInitialGameState(factorySettings = DEFAULT_FACTORY_SETTINGS, options = {}) {
   const settings = factorySettings ?? DEFAULT_FACTORY_SETTINGS
-  const initialState = settings.initialState ?? DEFAULT_FACTORY_SETTINGS.initialState
-  const nextState = structuredClone(initialState)
-  nextState.historySeed = historySeed ?? globalThis.crypto.getRandomValues(new Uint32Array(1))[0]
-
-  const workersPerMachine = toNonNegativeInt(settings.production?.workersPerMachine, 5)
-  const machineCount = toNonNegativeInt(nextState.production?.machiningMachines, 0)
-  const existingMachining = nextState.staffing?.machining
-
-  nextState.staffing = {
-    machining:
-      existingMachining == null
-        ? machineCount * workersPerMachine
-        : toNonNegativeInt(existingMachining, machineCount * workersPerMachine),
-    assembly: toNonNegativeInt(nextState.staffing?.assembly, 0),
-    shipping: toNonNegativeInt(nextState.staffing?.shipping, 0),
-  }
-
+  const nextState = createInitialFactoryState(settings, options)
+  const history = buildCanonicalFinancialHistory(nextState, settings)
+  nextState.finance = structuredClone(history.at(-1).finance)
+  nextState.initialFinancialHistory = history
   return nextState
 }

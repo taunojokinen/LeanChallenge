@@ -6,6 +6,7 @@ import {
 import { selectConfirmedKnlRounds } from '../entities/history/confirmedKnl.js'
 import { selectLatestConfirmedRounds } from '../entities/history/confirmedRounds.js'
 import { relativePercentChange } from '../entities/history/relativeChange.js'
+import { calculateAnnualConfirmedInventoryTurnover } from '../entities/history/financialMetrics.js'
 
 const headerKpiMap = {
   oee: 'KNL',
@@ -38,15 +39,6 @@ function formatKnl(value) {
   return `${Math.round((Number(value) || 0) * 100).toLocaleString('fi-FI')} %`
 }
 
-function inventoryTurnover(entry) {
-  const inventory = entry?.inventory?.finishedGoodsContainers
-  const deliveries = entry?.production?.deliveries
-  if (inventory == null || deliveries == null
-    || !Number.isFinite(Number(inventory)) || !Number.isFinite(Number(deliveries))
-    || Number(inventory) <= 0) return null
-  return Number(deliveries) / Number(inventory)
-}
-
 function incomeChange(current, previous, field) {
   return relativePercentChange(
     current?.incomeStatement?.[field],
@@ -68,8 +60,8 @@ export function buildGameHeaderKpis(gameState, factorySettings = DEFAULT_FACTORY
   const resultAmount = currentIncome.result
 
   const production = current?.production?.actualProduction
-  const currentTurnover = inventoryTurnover(current)
-  const previousTurnover = inventoryTurnover(previous)
+  const currentTurnover = calculateAnnualConfirmedInventoryTurnover(current)
+  const previousTurnover = calculateAnnualConfirmedInventoryTurnover(previous)
   const [previousKnl, latestConfirmed] = selectConfirmedKnlRounds(gameState, settings)
 
   return [
@@ -103,10 +95,10 @@ export function buildGameHeaderKpis(gameState, factorySettings = DEFAULT_FACTORY
       value: currentTurnover == null ? '—' : `${currentTurnover.toLocaleString('fi-FI', {
         minimumFractionDigits: 1,
         maximumFractionDigits: 1,
-      })}x`,
+      })}x/vuosi`,
       delta: formatSignedChange(
         currentTurnover == null || previousTurnover == null ? null : currentTurnover - previousTurnover,
-        'x',
+        'x/vuosi',
       ),
     },
   ]

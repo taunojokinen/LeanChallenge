@@ -61,6 +61,7 @@ export function advanceRoundState({ gameState, forecast, totalRounds, checkProdu
   const nextGameState = {
     ...canonical,
     historySeed: gameState.historySeed,
+    ...(gameState.initialFinancialHistory ? { initialFinancialHistory: gameState.initialFinancialHistory } : {}),
     round: nextRound,
     history: appendHistory(gameState.history, historyEntry),
   }

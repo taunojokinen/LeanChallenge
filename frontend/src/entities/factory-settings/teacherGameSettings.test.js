@@ -292,8 +292,9 @@ test('fixed costs change result and selected equity enters the new game opening 
   const costDifference = highCostForecast.forecast.finance.fixedCosts - lowCostForecast.forecast.finance.fixedCosts
 
   assert.equal(costDifference, 600000)
-  assert.equal(lowCostForecast.closingState.finance.equity, lowCostSettings.initialState.finance.equity + lowCostForecast.forecast.finance.result)
-  assert.equal(createInitialGameState(lowCostSettings).finance.equity, 2000000)
+  assert.ok(Math.abs(lowCostForecast.closingState.finance.equity -
+    lowCostSettings.initialState.finance.equity - lowCostForecast.forecast.finance.result) < 1e-7)
+  assert.ok(Math.abs(createInitialGameState(lowCostSettings).finance.equity - 2000000) < 1e-7)
 })
 
 test('fixed costs use quarterly values in preferences and convert back to annual snapshot values', () => {

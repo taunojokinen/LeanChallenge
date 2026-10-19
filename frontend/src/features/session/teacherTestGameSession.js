@@ -1,3 +1,5 @@
+import { buildLegacyFinancialHistory } from '../../entities/factory-settings/financialHistory.js'
+
 export const TEACHER_TEST_GAME_MODE = 'teacher-test'
 export const TEACHER_TEST_SESSION_STORAGE_KEY = 'lean-challenge-teacher-test-session-v1'
 export const TEACHER_TEST_SESSION_VERSION = 1
@@ -93,6 +95,13 @@ function loadGameSession(storage, mode, key) {
     const session = JSON.parse(serializedSession)
     if (!isSessionShapeValid(session, mode)) {
       return null
+    }
+
+    if (!session.gameState.initialFinancialHistory) {
+      const history = session.initialGameState.initialFinancialHistory ??
+        buildLegacyFinancialHistory(session.factorySettings)
+      session.initialGameState.initialFinancialHistory = structuredClone(history)
+      session.gameState.initialFinancialHistory = structuredClone(history)
     }
 
     return structuredClone(session)

@@ -29,8 +29,8 @@ test('balance history preserves canonical baseline rounds', () => {
 
   assert.equal(view.previousRound, -1)
   assert.equal(view.round, 0)
-  assert.ok(Math.abs(view.liabilities.equity - (-674245.1150390625)) < 1e-8)
-  assert.ok(Math.abs(view.liabilities.bankLoans - 5750701.159960938) < 1e-8)
+  assert.ok(Math.abs(view.liabilities.equity - DEFAULT_FACTORY_SETTINGS.initialState.finance.equity) < 1e-7)
+  assert.ok(Math.abs(view.liabilities.bankLoans - 3002481.044921875) < 1e-7)
 })
 
 test('balance history selects latest confirmed runtime rounds', () => {

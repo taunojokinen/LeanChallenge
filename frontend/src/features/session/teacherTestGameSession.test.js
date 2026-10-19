@@ -1,9 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createInitialGameState } from '../../entities/factory-settings/initialGameState.js'
+import { createInitialFactoryState } from '../../entities/factory-settings/initialFactoryState.js'
 import { DEFAULT_FACTORY_SETTINGS } from '../../entities/factory-settings/defaultFactorySettings.js'
 import { calculateRoundForecast } from '../../entities/forecast/model.js'
 import { buildInitialKnlHistory } from '../../entities/history/confirmedKnl.js'
+import { buildInitialBalanceSheetHistory, buildCanonicalFinancialHistory } from '../../entities/factory-settings/financialHistory.js'
+import { advanceRoundState } from '../../entities/game-round/advanceRound.js'
 import {
   buildFactorySettingsSnapshot,
   createDefaultTeacherPreferences,
@@ -76,7 +79,7 @@ test('a restored teacher session is isolated from later favorite changes', () =>
 
   const restored = loadTeacherTestGameSession(storage)
   assert.equal(restored.factorySettings.costs.annualFixedCosts, 2500000)
-  assert.equal(restored.initialGameState.finance.equity, DEFAULT_FACTORY_SETTINGS.initialState.finance.equity)
+  assert.ok(Math.abs(restored.initialGameState.finance.equity - DEFAULT_FACTORY_SETTINGS.initialState.finance.equity) < 1e-7)
 })
 
 test('teacher test game uses selected quarterly fixed costs in its forecast', () => {
@@ -175,5 +178,95 @@ test('both game modes restore the same seeded history and their own settings sna
     }
     clearQuestGameSession(storage)
     assert.equal(loadQuestGameSession(storage), null)
+  }
+})
+
+test('starting a new teacher game after an equity change replaces the old snapshot and balance history', () => {
+  const storage = createSessionStorage()
+  const preferences = createDefaultTeacherPreferences()
+  let oldHistory
+  for (const equity of [2000000, 3000000]) {
+    preferences.equity.position = (equity - preferences.equity.easy) / 25
+    const factorySettings = buildFactorySettingsSnapshot(preferences)
+    const initialGameState = createInitialGameState(factorySettings)
+    clearTeacherTestGameSession(storage)
+    saveTeacherTestGameSession(createTeacherTestGameSession({ factorySettings, initialGameState }), storage)
+    const restored = loadTeacherTestGameSession(storage)
+    assert.equal(restored.factorySettings.initialState.finance.equity, equity)
+    assert.ok(Math.abs(restored.gameState.finance.equity - equity) < 1e-7)
+    const history = buildInitialBalanceSheetHistory(restored.gameState, restored.factorySettings)
+    if (oldHistory) {
+      assert.notEqual(history.liabilities.equity, oldHistory.liabilities.equity)
+      assert.ok(history.liabilities.bankLoans < oldHistory.liabilities.bankLoans)
+    }
+    oldHistory = history
+  }
+  assert.equal(DEFAULT_FACTORY_SETTINGS.initialState.finance.equity, 2073975)
+})
+
+test('Quest retains its independent fixed round-zero capital and unchanged fixed costs', () => {
+  const preferences = createDefaultTeacherPreferences()
+  preferences.equity.position = (3000000 - preferences.equity.easy) / 25
+  const teacherSettings = buildFactorySettingsSnapshot(preferences)
+  const teacher = createTeacherTestGameSession({
+    factorySettings: teacherSettings,
+    initialGameState: createInitialGameState(teacherSettings),
+  })
+  const quest = createQuestGameSession({
+    factorySettings: DEFAULT_FACTORY_SETTINGS,
+    initialGameState: createInitialGameState(DEFAULT_FACTORY_SETTINGS),
+  })
+  assert.ok(Math.abs(teacher.gameState.finance.equity - 3000000) < 1e-7)
+  assert.equal(quest.factorySettings.initialState.finance.equity, 2073975)
+  assert.ok(Math.abs(quest.gameState.initialFinancialHistory.at(-1).finance.equity - 2073975) < 1e-7)
+  assert.equal(quest.factorySettings.costs.annualFixedCosts, 4000000)
+  assert.equal(quest.gameState.initialFinancialHistory.at(-1).incomeStatement.fixedCosts, 1000000)
+})
+
+test('new and advanced saved sessions preserve initial capital history and closing-finance continuity in both modes', () => {
+  for (const mode of ['teacher-test', 'quest']) {
+    const settings = structuredClone(DEFAULT_FACTORY_SETTINGS)
+    if (mode === 'teacher-test') settings.initialState.finance.equity = 3000000
+    const initialGameState = createInitialGameState(settings)
+    const storage = createSessionStorage()
+    const create = mode === 'teacher-test' ? createTeacherTestGameSession : createQuestGameSession
+    const save = mode === 'teacher-test' ? saveTeacherTestGameSession : saveQuestGameSession
+    const load = mode === 'teacher-test' ? loadTeacherTestGameSession : loadQuestGameSession
+    let gameState = initialGameState
+    for (const round of [1, 2]) {
+      save(create({ factorySettings: settings, initialGameState, gameState }), storage)
+      const restored = load(storage)
+      assert.deepEqual(restored.gameState, gameState)
+      assert.deepEqual(restored.initialGameState, initialGameState)
+      assert.deepEqual(
+        buildCanonicalFinancialHistory(restored.gameState, restored.factorySettings),
+        initialGameState.initialFinancialHistory,
+      )
+      const forecast = calculateRoundForecast(restored.gameState, {}, restored.factorySettings)
+      const advanced = advanceRoundState({ gameState: restored.gameState, forecast, totalRounds: 12 })
+      assert.equal(advanced.historyEntry.round, round)
+      assert.equal(advanced.historyEntry.finance.equity,
+        restored.gameState.finance.equity + forecast.forecast.finance.result)
+      assert.equal(forecast.closingState.finance.totalAssets, forecast.closingState.finance.totalLiabilitiesAndEquity)
+      gameState = advanced.nextGameState
+      assert.deepEqual(gameState.initialFinancialHistory, initialGameState.initialFinancialHistory)
+    }
+  }
+})
+
+test('legacy sessions keep their original finance and financial baseline rather than silently rebasing a running game', () => {
+  for (const mode of ['teacher-test', 'quest']) {
+    const storage = createSessionStorage()
+    const initialGameState = createInitialFactoryState(DEFAULT_FACTORY_SETTINGS)
+    const create = mode === 'teacher-test' ? createTeacherTestGameSession : createQuestGameSession
+    const save = mode === 'teacher-test' ? saveTeacherTestGameSession : saveQuestGameSession
+    const load = mode === 'teacher-test' ? loadTeacherTestGameSession : loadQuestGameSession
+    save(create({ factorySettings: DEFAULT_FACTORY_SETTINGS, initialGameState }), storage)
+    const restored = load(storage)
+    assert.deepEqual(restored.gameState.finance, initialGameState.finance)
+    const baseline = buildCanonicalFinancialHistory(restored.gameState, restored.factorySettings)
+    assert.equal(baseline.at(-1).finance.equity, -674245.1150390625)
+    save(restored, storage)
+    assert.deepEqual(load(storage).gameState.initialFinancialHistory, baseline)
   }
 })

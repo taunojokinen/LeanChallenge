@@ -43,72 +43,85 @@ function PlanIncomePage({ gameState, factorySettings = DEFAULT_FACTORY_SETTINGS 
   if (!snapshot) {
     return (
       <section className="plan-income-page" aria-label="Tuloslaskelma latautuu">
-        <h1>TULOS</h1>
+        <header className="plan-income-header">
+          <h1>Tuloslaskelma</h1>
+        </header>
         <p>Ladataan kierroksen tuloslaskelmaa...</p>
       </section>
     )
   }
 
+  return <IncomeStatementPanel historyView={historyView} rows={rows} />
+}
+
+export function IncomeStatementPanel({ historyView, rows }) {
   return (
     <section className="plan-income-page" aria-label="Tuloslaskelma">
       <header className="plan-income-header">
-        <h1>TULOS</h1>
-          <p>Lähtövertailu: Kierros {historyView.previousRound} | Kierros {historyView.round}</p>
+        <h1>Tuloslaskelma</h1>
+        <p>Vertailu: kierros {historyView.previousRound} / kierros {historyView.round}</p>
       </header>
 
-      <div className="plan-income-table" role="table" aria-label="Kierroksen tuloslaskelma">
-        <div className="plan-income-row plan-income-row-header" role="row">
-          {[
-            'Erä',
-            `Kierros ${historyView.previousRound}`,
-            '%',
-            `Kierros ${historyView.round}`,
-            '%',
-            'Muutos',
-          ].map((header, index) => (
-            <span key={`${header}-${index}`} className="plan-income-header-cell" role="columnheader">
-              {header}
-            </span>
-          ))}
-        </div>
-        {rows.map((row) => {
-          const isResultRow = row.key === 'result'
-          const previousIsNegative = isResultRow && Number(row.previousAmount) < 0
-          const currentIsNegative = isResultRow && Number(row.currentAmount) < 0
+      <div
+        className="plan-income-table-scroll"
+        role="region"
+        aria-label="Tuloslaskelman taulukko, vieritettävissä vaakasuunnassa"
+        tabIndex={0}
+      >
+        <div className="plan-income-table" role="table" aria-label="Kierroksen tuloslaskelma">
+          <div className="plan-income-row plan-income-row-header" role="row">
+            {[
+              'Erä',
+              `Kierros ${historyView.previousRound}`,
+              '%',
+              `Kierros ${historyView.round}`,
+              '%',
+              'Muutos',
+            ].map((header, index) => (
+              <span key={`${header}-${index}`} className="plan-income-header-cell" role="columnheader">
+                {header}
+              </span>
+            ))}
+          </div>
+          {rows.map((row) => {
+            const isResultRow = row.key === 'result'
+            const previousIsNegative = isResultRow && Number(row.previousAmount) < 0
+            const currentIsNegative = isResultRow && Number(row.currentAmount) < 0
 
-          return (
-            <div
-              key={row.key}
-              className={`plan-income-row ${row.kind === 'subtotal' ? 'is-subtotal' : ''} ${row.kind === 'total' ? 'is-total' : ''} ${row.isNegative ? 'is-negative-total' : ''}`}
-              role="row"
-            >
-              <span className="plan-income-label" role="cell">
-                {row.label}
-              </span>
-              <span
-                className={`plan-income-value plan-income-previous-value ${previousIsNegative ? 'is-negative-result' : ''}`}
-                role="cell"
+            return (
+              <div
+                key={row.key}
+                className={`plan-income-row ${row.kind === 'subtotal' ? 'is-subtotal' : ''} ${row.kind === 'total' ? 'is-total' : ''} ${row.isNegative ? 'is-negative-total' : ''}`}
+                role="row"
               >
-                {row.previousAmountText}
-              </span>
-              <span className="plan-income-percentage" role="cell">
-                {row.previousPercentageText}
-              </span>
-              <span
-                className={`plan-income-value plan-income-current-value ${currentIsNegative ? 'is-negative-result' : ''}`}
-                role="cell"
-              >
-                {row.currentAmountText}
-              </span>
-              <span className="plan-income-percentage" role="cell">
-                {row.currentPercentageText}
-              </span>
-              <span className={`plan-income-delta is-${row.impact}`} role="cell">
-                {row.deltaText}
-              </span>
-            </div>
-          )
-        })}
+                <span className="plan-income-label" role="cell">
+                  {row.label}
+                </span>
+                <span
+                  className={`plan-income-value plan-income-previous-value ${previousIsNegative ? 'is-negative-result' : ''}`}
+                  role="cell"
+                >
+                  {row.previousAmountText}
+                </span>
+                <span className="plan-income-percentage" role="cell">
+                  {row.previousPercentageText}
+                </span>
+                <span
+                  className={`plan-income-value plan-income-current-value ${currentIsNegative ? 'is-negative-result' : ''}`}
+                  role="cell"
+                >
+                  {row.currentAmountText}
+                </span>
+                <span className="plan-income-percentage" role="cell">
+                  {row.currentPercentageText}
+                </span>
+                <span className={`plan-income-delta is-${row.impact}`} role="cell">
+                  {row.deltaText}
+                </span>
+              </div>
+            )
+          })}
+        </div>
       </div>
     </section>
   )

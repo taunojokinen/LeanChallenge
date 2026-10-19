@@ -190,10 +190,10 @@ test('investments view model uses canonical gameState finance', () => {
   })
 
   assert.equal(viewModel.financing.currentCash, 50000)
-  assert.equal(viewModel.financing.currentDebt, 2957900)
+  assert.equal(viewModel.financing.currentDebt, gameState.finance.bankLoans)
   assert.equal(viewModel.financing.equity, 2073975)
   assert.equal(viewModel.financing.availableCash, 0)
-  assert.equal(viewModel.financing.financingCapacity, 1190050)
+  assert.equal(viewModel.financing.financingCapacity, gameState.finance.equity * 2 - gameState.finance.bankLoans)
 })
 
 test('removed raw draft flags are ignored without legacy catalogue entries or project levels', () => {

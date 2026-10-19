@@ -8,6 +8,10 @@ import { calculateRoundForecast } from '../entities/forecast/model.js'
 import { advanceRoundState } from '../entities/game-round/advanceRound.js'
 import { buildCanonicalFinancialHistory, buildInitialIncomeHistory } from '../entities/factory-settings/financialHistory.js'
 import { buildIncomeHistoryView, buildIncomeStatementRows } from '../entities/income/model.js'
+import { buildInitialBalanceSheetHistory } from '../entities/factory-settings/financialHistory.js'
+import { buildBalanceSheetHistoryView, buildBalanceSheetViewModel } from '../entities/balance-sheet/model.js'
+import { buildBalanceInterpretation } from '../entities/balance-sheet/interpretation.js'
+import { buildFactorySettingsSnapshot, createDefaultTeacherPreferences } from '../entities/factory-settings/teacherGameSettings.js'
 
 test('header KPIs come from persisted round-0 state, not forecast output', () => {
   const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
@@ -22,7 +26,7 @@ test('header KPIs come from persisted round-0 state, not forecast output', () =>
   assert.ok(production)
 
   assert.equal(revenue.value.replace(/\s/g, ' '), '3 750 000 €')
-  assert.equal(result.value.replace(/\s/g, ' ').replace(/−/g, '-'), '-859 891 €')
+  assert.equal(result.value.replace(/\s/g, ' ').replace(/−/g, '-'), '-825 962 €')
   assert.equal(production.value.replace(/\s/g, ' '), '150 kpl')
 })
 
@@ -95,8 +99,8 @@ test('header compares actual production, revenue, result and physical inventory 
   assert.equal(kpis.production.delta, '+20,0 %')
   assert.equal(kpis.revenue.delta, '+20,0 %')
   assert.equal(kpis.result.delta, '+50,0 %')
-  assert.equal(kpis.inventoryTurnover.value, '0,4x')
-  assert.equal(kpis.inventoryTurnover.delta, '+0,2x')
+  assert.equal(kpis.inventoryTurnover.value, '1,6x/vuosi')
+  assert.equal(kpis.inventoryTurnover.delta, '+0,8x/vuosi')
   assert.equal(kpis.oee.delta, '+33,1 %')
 
   state.market.price = 999999
@@ -163,3 +167,41 @@ test('negative results use the absolute denominator including crossing zero', ()
   state.history[1].incomeStatement.result = -150
   assert.equal(kpisByKey(state).result.delta, '-50,0 %')
 })
+
+for (const mode of ['quest', 'teacher']) {
+  test(`${mode} header and balance use the same annual turnover before and after round confirmation`, () => {
+    const settings = mode === 'quest'
+      ? DEFAULT_FACTORY_SETTINGS
+      : buildFactorySettingsSnapshot(createDefaultTeacherPreferences())
+    const state = createInitialGameState(settings)
+    const originalState = structuredClone(state)
+    const baselineHistory = buildInitialBalanceSheetHistory(state, settings)
+    const turnover = (gameState) => buildGameHeaderKpis(gameState, settings)
+      .find((kpi) => kpi.key === 'inventoryTurnover')
+    const verifyBalance = (gameState) => {
+      const view = buildBalanceSheetHistoryView({ baselineHistory, runtimeHistory: gameState.history })
+      const balanceSheet = buildBalanceSheetViewModel(view, 999)
+      const interpretation = buildBalanceInterpretation({ balanceSheet, confirmedEntry: view.confirmedEntry, factorySettings: settings })
+      assert.equal(turnover(gameState).value, interpretation.inventory.value.replace(' kertaa vuodessa', 'x/vuosi'))
+    }
+    assert.equal(turnover(state).value, '6,0x/vuosi')
+    assert.equal(turnover(state).delta, '+0,2x/vuosi')
+    verifyBalance(state)
+    const before = buildGameHeaderKpis(state, settings)
+    const forecast = calculateRoundForecast(state, { market: { price: 25500, productionQuantity: 100 } }, settings)
+    assert.deepEqual(buildGameHeaderKpis(state, settings), before)
+    assert.deepEqual(state, originalState)
+    const advanced = advanceRoundState({ gameState: state, forecast, totalRounds: 12 })
+    const entry = advanced.historyEntry
+    const annualTurnover = entry.production.deliveries / entry.inventory.finishedGoodsContainers * 4
+    assert.equal(turnover(advanced.nextGameState).value, `${annualTurnover.toLocaleString('fi-FI', {
+      minimumFractionDigits: 1, maximumFractionDigits: 1,
+    })}x/vuosi`)
+    assert.notEqual(turnover(advanced.nextGameState).value, turnover(state).value)
+    const delta = annualTurnover - 6
+    assert.equal(turnover(advanced.nextGameState).delta, `${delta > 0 ? '+' : ''}${delta.toLocaleString('fi-FI', {
+      minimumFractionDigits: 1, maximumFractionDigits: 1,
+    }).replace('−', '-')}x/vuosi`)
+    verifyBalance(advanced.nextGameState)
+  })
+}

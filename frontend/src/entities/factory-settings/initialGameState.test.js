@@ -49,7 +49,7 @@ test('100h of machining 5S investment on a zero-baseline game splits into exact 
   assert.equal(Math.abs(hours.L_machining - 100 / 3) < 1e-9, true)
 })
 
-test('createInitialGameState clones the default initial state', () => {
+test('createInitialGameState clones factory inputs and uses the round-zero closing finance', () => {
   const initialGameState = createInitialGameState()
 
   assert.notStrictEqual(initialGameState, DEFAULT_FACTORY_SETTINGS.initialState)
@@ -67,15 +67,16 @@ test('createInitialGameState clones the default initial state', () => {
   assert.equal(initialGameState.staffing.shipping, 5)
   assert.equal(initialGameState.factory.totalAreaM2, 4000)
   assert.equal(initialGameState.finance.cash, 50000)
-  assert.equal(initialGameState.finance.bankLoans, 2957900)
+  assert.ok(Math.abs(initialGameState.finance.bankLoans - 3002481.044921875) < 1e-7)
   assert.equal(initialGameState.finance.equity, 2073975)
-  assert.equal(initialGameState.finance.otherLiabilities, 660000)
-  assert.equal(initialGameState.finance.machineryBookValue, 498750)
-  assert.equal(initialGameState.finance.buildingsBookValue, 2998125)
-  assert.equal(initialGameState.finance.finishedGoodsInventoryBookValue, 1645000)
-  assert.equal(initialGameState.finance.rawMaterialInventoryBookValue, 500000)
-  assert.equal(initialGameState.finance.inventoryBookValue, 2145000)
-  assert.equal(initialGameState.finance.incomeStatement.depreciation, 103125)
+  assert.equal(initialGameState.finance.otherLiabilities, 900000)
+  assert.equal(initialGameState.finance.machineryBookValue, 427615.78125)
+  assert.equal(initialGameState.finance.buildingsBookValue, 2778840.263671875)
+  assert.equal(initialGameState.finance.finishedGoodsInventoryBookValue, 2000000)
+  assert.equal(initialGameState.finance.rawMaterialInventoryBookValue, 720000)
+  assert.equal(initialGameState.finance.inventoryBookValue, 2720000)
+  assert.equal(initialGameState.finance.incomeStatement.depreciation, 93758.408203125)
+  assert.deepEqual(initialGameState.finance, initialGameState.initialFinancialHistory.at(-1).finance)
 })
 
 test('createInitialGameState respects settings overrides', () => {

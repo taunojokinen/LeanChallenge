@@ -6,6 +6,8 @@ import { loadFiveSDecision, saveFiveSDecision } from '../five-s/decisionStore.js
 import { loadProjectsDecision, saveProjectsDecision } from '../projects/decisionStore.js'
 import { createInitialGameState } from '../../entities/factory-settings/initialGameState.js'
 import { calculateRoundForecast } from '../../entities/forecast/model.js'
+import { advanceRoundState } from '../../entities/game-round/advanceRound.js'
+import { updateDevelopmentHours, sumDevelopmentHours } from '../../entities/development/model.js'
 
 const originalWindow = globalThis.window
 beforeEach(() => {
@@ -53,6 +55,38 @@ test('round-trips continuous choices through existing stores and calculates exis
   assert.equal(loadProjectsDecision(1).usedFocusHours, 120)
   assert.equal(loadProjectsDecision(1).totalCost, 12000)
   assert.equal(loadProjectsDecision(1).savedAt, 'test-time')
+})
+
+test('each slider update immediately refreshes the shared decisions without applying the effect twice', () => {
+  const gameState = createInitialGameState()
+  let hours = normalizeDevelopmentHours()
+  const moves = [
+    ['machining:five-s', 300],
+    ['assembly:method-development', 200],
+    ['machining:five-s', 200],
+    ['assembly:method-development', 200],
+  ]
+  for (const [key, value] of moves) {
+    hours = updateDevelopmentHours(hours, key, value)
+    saveDevelopmentDecision({ round: gameState.round, hours })
+    assert.equal(sumDevelopmentHours(loadDevelopmentDecision(gameState.round).hours), sumDevelopmentHours(hours))
+    assert.ok(sumDevelopmentHours(hours) <= 400)
+  }
+  assert.equal(hours['machining:five-s'], 200)
+  assert.equal(hours['assembly:method-development'], 200)
+
+  const savedFiveS = loadFiveSDecision(gameState.round)
+  const savedProjects = loadProjectsDecision(gameState.round)
+  const decidedState = { ...gameState, fiveSDecision: savedFiveS, projectsDecision: savedProjects }
+  const forecast = calculateRoundForecast(decidedState)
+  assert.equal(forecast.closingState.lean.fiveS.departments.machining.effectiveHours,
+    gameState.lean.fiveS.departments.machining.effectiveHours + 200)
+  assert.equal(forecast.closingState.lean.methods.assembly['method-development'], 200)
+  const advanced = advanceRoundState({ gameState: decidedState, forecast, totalRounds: 12 })
+  assert.equal(advanced.nextGameState.lean.methods.assembly['method-development'], 200)
+  assert.equal(advanced.nextGameState.lean.fiveS.departments.machining.effectiveHours,
+    forecast.closingState.lean.fiveS.departments.machining.effectiveHours)
+  assert.equal(loadDevelopmentDecision(advanced.nextGameState.round).hours['machining:five-s'], 0)
 })
 
 test('rejects invalid and over-budget save before changing either store', () => {

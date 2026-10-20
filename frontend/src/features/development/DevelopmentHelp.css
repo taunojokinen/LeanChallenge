@@ -1,0 +1,162 @@
+.development-page__title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.development-page__title-group > .ui-button {
+  min-height: 2rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid rgba(93, 226, 246, 0.35);
+  border-radius: 999px;
+  background: transparent;
+  color: #b5d3e3;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.development-page__title-group > .ui-button:hover {
+  border-color: #5de2f6;
+  color: #5de2f6;
+}
+
+.development-page__title-group > .ui-button:focus-visible,
+.development-help-dialog :focus-visible {
+  outline: 2px solid #5de2f6;
+  outline-offset: 3px;
+}
+
+.development-help-dialog {
+  width: min(42rem, calc(100% - 2rem));
+  max-height: calc(100svh - 2rem);
+  margin: auto;
+  padding: clamp(1.1rem, 3vw, 1.75rem);
+  overflow-y: auto;
+  border: 1px solid rgba(93, 226, 246, 0.45);
+  border-radius: 1rem;
+  background: linear-gradient(180deg, #092037 0%, #0f2841 100%);
+  color: #f3f8fc;
+  color-scheme: dark;
+  box-shadow: 0 24px 56px rgba(1, 8, 18, 0.45);
+}
+
+.development-help-dialog::backdrop {
+  background: rgba(2, 10, 22, 0.78);
+}
+
+.development-help-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.development-help-dialog__header h2 {
+  margin: 0;
+  color: #3ec9da;
+  font-size: clamp(1.3rem, 4vw, 1.7rem);
+}
+
+.development-help-dialog__close {
+  display: grid;
+  flex: 0 0 auto;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  border: 1px solid rgba(93, 226, 246, 0.35);
+  border-radius: 50%;
+  background: transparent;
+  color: #d7ebf2;
+  cursor: pointer;
+  font: inherit;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.development-help-dialog__close:hover {
+  border-color: #5de2f6;
+  color: #5de2f6;
+}
+
+.development-help-dialog__content {
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.development-help-dialog__content p {
+  margin: 0 0 0.75rem;
+}
+
+.development-help-dialog__content h3 {
+  margin: 1rem 0 0.4rem;
+  color: #5de2f6;
+  font-size: 1rem;
+}
+
+.development-help-dialog__content ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.development-help-dialog__content strong {
+  color: #5de2f6;
+}
+
+.development-help-dialog__error {
+  color: #ffb5bf;
+  line-height: 1.5;
+}
+
+.development-help-dialog__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(72, 167, 197, 0.3);
+}
+
+.development-help-dialog__actions label {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+}
+
+.development-help-dialog__actions input {
+  width: 1.15rem;
+  height: 1.15rem;
+  accent-color: #3ec9da;
+}
+
+.development-help-dialog__actions .ui-button {
+  min-height: 2.5rem;
+  padding: 0.55rem 1.15rem;
+  border: 1px solid rgba(93, 226, 246, 0.45);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #1cb7cf 0%, #128aa5 100%);
+  color: #f7fbfd;
+  font: inherit;
+  font-weight: 600;
+}
+
+.development-help-dialog__actions .ui-button:hover {
+  background: #14687d;
+}
+
+@media (max-width: 520px) {
+  .development-help-dialog__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .development-help-dialog__actions .ui-button {
+    align-self: flex-end;
+  }
+}

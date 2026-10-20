@@ -57,6 +57,7 @@ test('renders three departments, twelve sliders, summary and save action without
     assert.ok(html.includes(label))
   }
   assert.match(html, /400 h/)
+  assert.match(html, />Ohje<\/button>/)
   assert.match(html, /Tallenna ja jatka/)
 })
 
@@ -70,7 +71,7 @@ test('a fresh new game renders all twelve method progressbars at zero percent', 
   }
 })
 
-test('loads both stored decisions, displays cumulative forecast and dynamic own-inclusive maxima', () => {
+test('loads both stored decisions, displays cumulative forecast and fixed slider scales', () => {
   saveDevelopmentDecision({ round: 1, hours: normalizeDevelopmentHours({
     'machining:five-s': 100, 'assembly:method-development': 200,
   }) })
@@ -78,9 +79,24 @@ test('loads both stored decisions, displays cumulative forecast and dynamic own-
   state.lean.methods.assembly['method-development'] = 200
   const html = renderToStaticMarkup(createElement(DevelopmentPage, { gameState: state }))
   assert.match(html, /300 h/)
-  assert.match(html, /min="0" max="200" step="10"/)
-  assert.match(html, /min="0" max="300" step="10"/)
+  assert.equal((html.match(/min="0" max="400" step="10"/g) ?? []).length, 12)
   assert.match(html, /aria-valuetext="50%"/)
   const nextRound = renderToStaticMarkup(createElement(DevelopmentPage, { gameState: { ...state, round: 2 } }))
   assert.match(nextRound, /0 \/ 400 h/)
+})
+
+test('all methods keep the full 400-hour visual scale when shared capacity is partly used', () => {
+  saveDevelopmentDecision({ round: 1, hours: normalizeDevelopmentHours({
+    'machining:five-s': 160,
+    'machining:smed': 150,
+    'assembly:method-development': 80,
+  }) })
+  const html = renderToStaticMarkup(createElement(DevelopmentPage, { gameState: createInitialGameState() }))
+  assert.equal((html.match(/min="0" max="400" step="10"/g) ?? []).length, 12)
+  assert.match(html, /390 \/ 400 h/)
+  assert.match(html, /--range-value-position:40%;--range-allowed-position:42\.5%/)
+  assert.match(html, /--range-value-position:20%;--range-allowed-position:22\.5%/)
+  assert.equal((html.match(/aria-label="Kapasiteetin käyttö"/g) ?? []).length, 1)
+  assert.equal((html.match(/aria-label="Kehitystaso \(ennuste\)"/g) ?? []).length, 12)
+  assert.doesNotMatch(html, /<span class="progress-bar__value">390 \/ 400 h<\/span>/)
 })

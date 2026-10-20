@@ -343,6 +343,15 @@ Jokaisella kierroksella voidaan toteuttaa vain rajallinen määrä toimenpiteit�
 
 Toimenpiteet maksavat rahaa ja/tai kuluttavat kehitysresursseja.
 
+Kehitystuntien 12 liukusäädintä käyttävät pysyvää koko kierroksen
+kehityskapasiteetin asteikkoa. Muutos kohdennetaan jäljellä olevan yhteisen
+kapasiteetin puitteissa: tunnit voi aina vähentää ja vapautuneet tunnit
+kohdentaa toiseen menetelmään. Valinnat tallentuvat pelin yhteiseen
+päätöstilaan jokaisen liukusäädinmuutoksen yhteydessä, joten ne säilyvät
+sivuvalikossa liikuttaessa ja näkyvät CHECK-/ACT-ennusteissa. Tämä tallennus
+ei toteuta kehitystoimenpiteitä; vaikutukset lasketaan vasta kierroksen
+vahvistuksessa.
+
 ## Lean-menetelmiä
 
 Pelissä voidaan käyttää esimerkiksi:

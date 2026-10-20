@@ -60,6 +60,28 @@ test('updates within shared capacity while retaining the edited slider own alloc
   assert.deepEqual(updateDevelopmentHours(hours, 'assembly:tpm', NaN), hours)
 })
 
+test('rapid sequential changes never exceed shared capacity and freed hours can be moved', () => {
+  let hours = normalizeDevelopmentHours()
+  for (const [key, value] of [
+    ['machining:five-s', 300],
+    ['assembly:method-development', 200],
+    ['shipping:tpm', 100],
+  ]) {
+    hours = updateDevelopmentHours(hours, key, value)
+    assert.ok(sumDevelopmentHours(hours) <= 400)
+  }
+  assert.equal(hours['machining:five-s'], 300)
+  assert.equal(hours['assembly:method-development'], 100)
+  assert.equal(hours['shipping:tpm'], 0)
+
+  hours = updateDevelopmentHours(hours, 'machining:five-s', 200)
+  assert.equal(sumDevelopmentHours(hours), 300)
+  hours = updateDevelopmentHours(hours, 'shipping:tpm', 100)
+  assert.equal(hours['shipping:tpm'], 100)
+  assert.equal(sumDevelopmentHours(hours), 400)
+  assert.equal(isDevelopmentHoursValid(hours), true)
+})
+
 test('percentage reuses exponential curve normalized to its maximum', () => {
   const settings = DEFAULT_FACTORY_SETTINGS.knl
   assert.equal(calculateDevelopmentPercent(0), 0)
@@ -71,7 +93,7 @@ test('percentage reuses exponential curve normalized to its maximum', () => {
   assert.equal(calculateDevelopmentPercent(-10), 0)
 })
 
-test('view model combines canonical cumulative hours and draft, including continuous method development', () => {
+test('view model keeps fixed slider scales separate from each allocation maximum', () => {
   const gameState = { lean: { methods: { assembly: { 'method-development': 100 } },
     fiveS: { departments: { machining: { effectiveHours: 400 } } } } }
   const hours = normalizeDevelopmentHours({ 'assembly:method-development': 120 })
@@ -80,7 +102,9 @@ test('view model combines canonical cumulative hours and draft, including contin
   assert.equal(method.value, 120)
   assert.equal(method.predictedHours, 220)
   assert.equal(method.maximum, 400)
-  assert.equal(view.departments[0].methods[1].maximum, 280)
+  assert.equal(method.allocationMaximum, 400)
+  assert.equal(view.departments[0].methods[1].maximum, 400)
+  assert.equal(view.departments[0].methods[1].allocationMaximum, 280)
   assert.equal(view.departments[0].methods[0].predictedHours, 380)
   const invested = buildDevelopmentViewModel(gameState,
     updateDevelopmentHours(hours, 'machining:five-s', 50))
@@ -88,4 +112,9 @@ test('view model combines canonical cumulative hours and draft, including contin
   assert.ok(invested.departments[0].methods[0].predictedLevel > view.departments[0].methods[0].predictedLevel)
   assert.equal(view.usedHours, 120)
   assert.equal(view.remainingHours, 280)
+
+  const anotherSelection = buildDevelopmentViewModel(gameState,
+    updateDevelopmentHours(hours, 'machining:smed', 100))
+  assert.equal(anotherSelection.departments[1].methods[1].maximum, 400)
+  assert.equal(anotherSelection.departments[1].methods[1].allocationMaximum, 300)
 })

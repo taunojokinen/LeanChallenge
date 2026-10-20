@@ -101,6 +101,26 @@ test('uses supplied bounds, step and explicit accessible identifier', () => {
   assert.equal(input.props.step, 5)
 })
 
+test('shows allowed capacity on the fixed scale without changing accessible range endpoints', () => {
+  const { tree } = render({ value: 160, max: 400, allocationMaximum: 170 })
+  const input = findElement(tree, 'input')
+
+  assert.equal(input.props.min, 0)
+  assert.equal(input.props.max, 400)
+  assert.equal(input.props.style['--range-value-position'], '40%')
+  assert.equal(input.props.style['--range-allowed-position'], '42.5%')
+  assert.equal(input.props['aria-valuetext'], '160 h')
+  assert.equal(input.props['aria-description'], 'Valittu 160 h. Vapaan kapasiteetin puitteissa enintään 170 h.')
+})
+
+test('keeps capacity track safe and at the current selection when no increase is allowed', () => {
+  const { tree } = render({ value: 400, max: 400, allocationMaximum: 400 })
+  const input = findElement(tree, 'input')
+
+  assert.equal(input.props.style['--range-value-position'], '100%')
+  assert.equal(input.props.style['--range-allowed-position'], '100%')
+})
+
 test('generates distinct identifiers for multiple sliders', () => {
   const html = renderToStaticMarkup(createElement('div', null,
     createElement(DevelopmentSlider, { label: 'First', value: 0, max: 400, predictedLevel: 0, onChange: () => {} }),
@@ -121,7 +141,7 @@ test('uses ProgressBar with supplied percentage without deriving it from hours',
 
   assert.equal(progress.props.value, 12.5)
   assert.equal(progress.props.maximum, 100)
-  assert.equal(progress.props.label, 'Kehitystaso')
+  assert.equal(progress.props.label, 'Kehitystaso (ennuste)')
   assert.equal(progress.props.showValue, true)
   assert.match(html, /aria-valuetext="12.5%"/)
   assert.match(html, /style="width:12.5%"/)

@@ -128,6 +128,36 @@ test('cash above target can finance part of an investment', () => {
   )
 })
 
+test('remaining investment capacity includes available cash and only unused debt headroom', () => {
+  const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+  gameState.finance.cash = 300000
+  gameState.finance.bankLoans = 2023981
+  gameState.finance.equity = 3062075
+  const beforeSelection = buildInvestmentsViewModel({
+    snapshot: investmentsSnapshot,
+    gameState,
+    factorySettings: DEFAULT_FACTORY_SETTINGS,
+    draftSelection: {},
+  }).financing
+  const afterSelection = buildInvestmentsViewModel({
+    snapshot: investmentsSnapshot,
+    gameState,
+    factorySettings: DEFAULT_FACTORY_SETTINGS,
+    draftSelection: { newMachineCount: 2, expansionCount: 1 },
+  }).financing
+
+  assert.equal(beforeSelection.maxDebt, 6124150)
+  assert.equal(beforeSelection.debtHeadroom, 4100169)
+  assert.equal(beforeSelection.availableCash, 250000)
+  assert.equal(beforeSelection.financingCapacity, 4350169)
+  assert.equal(beforeSelection.remainingFinancingCapacity, 4350169)
+  assert.equal(afterSelection.remainingFinancingCapacity, 2350169)
+  assert.equal(
+    beforeSelection.financingCapacity - afterSelection.remainingFinancingCapacity,
+    2000000,
+  )
+})
+
 test('canonical round-one investment costs use opening debt headroom', () => {
   const openingFinance = {
     cashBalance: 50000,

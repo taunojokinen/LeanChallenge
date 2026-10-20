@@ -5,6 +5,7 @@ import { getInvestmentsSnapshot } from '../../shared/api/investmentsApi.js'
 import {
   buildDraftSelectionFromDecision,
   buildInvestmentsViewModel,
+  getAdditionalPersonnelFromMachines,
 } from '../../entities/investments/model.js'
 import {
   loadInvestmentsDecision,
@@ -17,10 +18,50 @@ const EMPTY_DRAFT_SELECTION = {
   expansionCount: 0,
 }
 
-function formatSpaceChange(value) {
-  const rounded = Math.round(Number(value) || 0)
-  const sign = rounded > 0 ? '+' : rounded < 0 ? '−' : ''
-  return `${sign}${Math.abs(rounded).toLocaleString('fi-FI')} m²`
+const INTEGER_FORMATTER = new Intl.NumberFormat('fi-FI', { maximumFractionDigits: 0 })
+
+function formatPercent(value) {
+  return `${new Intl.NumberFormat('fi-FI', { maximumFractionDigits: 1 }).format(value * 100)} %`
+}
+
+function InvestmentRules({ settings }) {
+  const machineSpace = settings.factory.machineSpaceM2
+  const expansionSpace = settings.factory.factoryExpansionM2
+  const machineRate = settings.finance.machineryDepreciationPerRound
+  const expansionRate = settings.finance.buildingDepreciationPerRound
+
+  return (
+    <section className="investments-rules" aria-labelledby="investments-rules-title">
+      <h2 id="investments-rules-title">Investointien säännöt</h2>
+      <dl>
+        <div>
+          <dt>Rahoitus</dt>
+          <dd>
+            Investointeja voi tehdä investointivaran puitteissa. Korollinen velka voi olla
+            korkeintaan {settings.finance.maxDebtToEquity} × oma pääoma.
+          </dd>
+        </div>
+        <div>
+          <dt>Tilantarve</dt>
+          <dd>
+            Uusi tuotantokone tarvitsee {INTEGER_FORMATTER.format(machineSpace)} m² tehdastilaa.
+            Tehdaslaajennus lisää tilaa {INTEGER_FORMATTER.format(expansionSpace)} m².
+          </dd>
+        </div>
+        <div>
+          <dt>Poistot</dt>
+          <dd>
+            Koneista poistetaan {formatPercent(machineRate)} ja tehdaslaajennuksista
+            {' '}{formatPercent(expansionRate)} kierroksittain jäljellä olevasta arvosta.
+          </dd>
+        </div>
+        <div>
+          <dt>Voimaantulo</dt>
+          <dd>Investoinnit vaikuttavat seuraavalla simuloitavalla kierroksella.</dd>
+        </div>
+      </dl>
+    </section>
+  )
 }
 
 function InvestmentsPage({ round, gameState, factorySettings, onNavigate }) {
@@ -72,6 +113,29 @@ function InvestmentsPage({ round, gameState, factorySettings, onNavigate }) {
     })
   }, [snapshot, gameState, factorySettings, draftSelection])
 
+  const machineSpace = factorySettings?.factory?.machineSpaceM2 ?? 250
+  const machineCandidate = viewModel && snapshot && gameState && factorySettings
+    ? buildInvestmentsViewModel({
+      snapshot,
+      gameState,
+      factorySettings,
+      draftSelection: { ...draftSelection, newMachineCount: draftSelection.newMachineCount + 1 },
+    })
+    : null
+  const expansionCandidate = viewModel && snapshot && gameState && factorySettings
+    ? buildInvestmentsViewModel({
+      snapshot,
+      gameState,
+      factorySettings,
+      draftSelection: { ...draftSelection, expansionCount: draftSelection.expansionCount + 1 },
+    })
+    : null
+  const machineBlockedBySpace = machineCandidate?.space.projected.freeArea < 0
+  const machineBlockedByFinancing = machineCandidate && !machineCandidate.financing.canFinance
+  const expansionBlockedByFinancing = expansionCandidate && !expansionCandidate.financing.canFinance
+  const currentDecisionIsInvalid = viewModel
+    && (!viewModel.financing.canFinance || viewModel.space.projected.freeArea < 0)
+
   const persistSelection = (selectionModel) => {
     const decision = {
       round,
@@ -113,16 +177,11 @@ function InvestmentsPage({ round, gameState, factorySettings, onNavigate }) {
   }
 
   const incrementMachine = () => {
-    if (!viewModel || !viewModel.guards.canAddMachine) {
-      const hasSpace = viewModel?.space.projected.freeArea >= 0
-      const hasFinance = viewModel?.financing.canFinance
-      setStatusMessage(
-        !hasSpace && !hasFinance
-          ? 'Ei mahdollista - vapaata tehdastilaa ja rahoitusvaraa ei ole riittävästi.'
-          : !hasSpace
-            ? 'Ei mahdollista - vapaata tehdastilaa ei ole riittävästi.'
-            : 'Ei mahdollista - rahoitusvara ei ole riittävä.',
-      )
+    if (!viewModel || !machineCandidate) {
+      return
+    }
+
+    if (machineBlockedBySpace || machineBlockedByFinancing || !viewModel.guards.canAddMachine) {
       return
     }
 
@@ -134,8 +193,7 @@ function InvestmentsPage({ round, gameState, factorySettings, onNavigate }) {
   }
 
   const incrementExpansion = () => {
-    if (!viewModel || !viewModel.guards.canAddExpansion) {
-      setStatusMessage('Ei mahdollista - rahoitusvara ei ole riittävä.')
+    if (!viewModel || expansionBlockedByFinancing || !viewModel.guards.canAddExpansion) {
       return
     }
 
@@ -174,18 +232,22 @@ function InvestmentsPage({ round, gameState, factorySettings, onNavigate }) {
     )
   }
 
+  const settings = factorySettings
+  const machineInvestment = settings.investments.newMachine
+  const expansionInvestment = settings.investments.factoryExpansion
+  const roundsPerYear = 12 / settings.game.monthsPerRound
+
   return (
     <section className="investments-page" aria-label="DO-vaiheen investoinnit">
       <header className="investments-header">
         <h1>INVESTOINNIT</h1>
-        <p>Valitse investoinnit seuraavalle simuloitavalle kierrokselle.</p>
       </header>
 
       <section className="investments-kpi-grid" aria-label="Rahoitus ja tehdastila">
         <Card>
           <article className="investments-kpi-card">
-            <small>Velkaraja</small>
-            <strong>{viewModel.financing.maxDebtText}</strong>
+            <small>Investointivara</small>
+            <strong>{viewModel.financing.remainingFinancingCapacityText}</strong>
           </article>
         </Card>
         <Card>
@@ -202,207 +264,101 @@ function InvestmentsPage({ round, gameState, factorySettings, onNavigate }) {
         </Card>
         <Card>
           <article className="investments-kpi-card">
-            <small>Nykyinen tehdastila käytössä / vapaana</small>
-            <strong>
-              {viewModel.space.usedAreaText} / {viewModel.space.freeAreaText}
-            </strong>
+            <small>Tehdastila käytössä / vapaana</small>
+            <strong>{viewModel.space.usedAreaText} / {viewModel.space.freeAreaText}</strong>
           </article>
         </Card>
       </section>
 
-      <details className="investments-space-breakdown">
-        <summary>Mistä tehdastilan käyttö muodostuu?</summary>
-        <p>
-          Tehtaan kokonaispinta-ala jakautuu tuotannon, toimistojen ja varaston käyttämiin
-          tiloihin sekä vapaaseen tilaan. Uudet tuotantokoneet lisäävät tilantarvetta ja
-          tehdaslaajennukset kasvattavat käytettävissä olevaa kokonaispinta-alaa.
-          Varastotilan tarve muuttuu varastomäärän mukaan.
-        </p>
-        <div className="investments-space-table-wrap">
-          <table className="investments-space-table">
-            <thead>
-              <tr>
-                <th scope="col">Tilankäyttö</th>
-                <th scope="col">Nykytila</th>
-                <th scope="col">Ennuste investointien jälkeen</th>
-              </tr>
-            </thead>
-            <tbody>
-              {viewModel.space.breakdown.map((row) => (
-                <tr key={row.key}>
-                  <th scope="row">{row.label}</th>
-                  <td>{row.currentAreaText}</td>
-                  <td>{row.projectedAreaText}</td>
-                </tr>
-              ))}
-              <tr>
-                <th scope="row">Käytetty tehdastila yhteensä</th>
-                <td>{viewModel.space.baseText.usedArea}</td>
-                <td>{viewModel.space.projectedText.usedArea}</td>
-              </tr>
-              <tr>
-                <th scope="row">Vapaa tehdastila</th>
-                <td>{viewModel.space.baseText.freeArea}</td>
-                <td>{viewModel.space.projectedText.freeArea}</td>
-              </tr>
-              <tr>
-                <th scope="row">Tehtaan kokonaispinta-ala</th>
-                <td>{viewModel.space.baseText.totalArea}</td>
-                <td>{viewModel.space.projectedText.totalArea}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div className="investments-space-impact" aria-live="polite">
-          <p>
-            Vapaa tehdastila ennen investointeja:{' '}
-            <strong>{viewModel.space.baseText.freeArea}</strong>
-          </p>
-          {viewModel.selectionState.newMachineCount > 0 ? (
-            <p>
-              Uusien koneiden tilantarve:{' '}
-              <strong>{formatSpaceChange(viewModel.space.projected.machiningArea - viewModel.space.base.machiningArea)}</strong>
-            </p>
-          ) : null}
-          {viewModel.selectionState.expansionCount > 0 ? (
-            <p>
-              Tehdaslaajennusten lisätila:{' '}
-              <strong>{formatSpaceChange(viewModel.space.projected.totalArea - viewModel.space.base.totalArea)}</strong>
-            </p>
-          ) : null}
-          <p>
-            Tilamuutos yhteensä:{' '}
-            <strong>{viewModel.space.investmentSpaceChangeText}</strong>
-          </p>
-          <p>
-            Ennustettu vapaa tehdastila investointien jälkeen:{' '}
-            <strong>{viewModel.space.projectedText.freeArea}</strong>
-          </p>
-          {viewModel.space.projected.freeArea < 0 ? (
-            <p role="alert">Valittujen investointien jälkeen tehdastila ei riitä.</p>
-          ) : null}
-        </div>
-      </details>
+      <InvestmentRules settings={settings} />
 
-      <section className="investments-catalog" aria-label="Investointikatalogi">
+      <section className="investments-catalog" aria-label="Investointivaihtoehdot">
         <Card>
           <article className="investments-card">
-            <h2>Uusi tuotantokone</h2>
-            <p>Hinta: 500 000 € / kone</p>
-            <p>Tilantarve: 250 m² / kone</p>
-            <p>Vaikutus: +1 040 h kapasiteettia ja +5 henkilöä / kone</p>
-            <p>Poisto: 20 % vuodessa menojäännöksestä (5 % / pelikierros).</p>
-            {viewModel.space.projected.freeArea < 0 ? (
-              <small>Ei mahdollista - vapaata tehdastilaa ei ole riittävästi.</small>
-            ) : null}
-            {!viewModel.financing.canFinance ? (
-              <small>Ei mahdollista - vakavaraisuus ei riitä investoinnin rahoittamiseen.</small>
-            ) : null}
-            <div className="investments-counter">
-              <Button type="button" onClick={decrementMachine}>
-                -
-              </Button>
-              <strong>{draftSelection.newMachineCount}</strong>
-              <Button type="button" onClick={incrementMachine}>
-                +
-              </Button>
-            </div>
-          </article>
-        </Card>
-
-        <Card>
-          <article className="investments-card">
-            <h2>Tehdaslaajennus</h2>
-            <p>Hinta: 1 000 000 €</p>
-            <p>Lisätila: +1 000 m²</p>
-            <p>Poisto: 10 % vuodessa menojäännöksestä (2,5 % / pelikierros).</p>
-            <div className="investments-counter">
-              <Button type="button" onClick={decrementExpansion}>
-                -
-              </Button>
-              <strong>{draftSelection.expansionCount}</strong>
-              <Button type="button" onClick={incrementExpansion}>
-                +
-              </Button>
-            </div>
-          </article>
-        </Card>
-
-      </section>
-
-      <section className="investments-summary" aria-label="Valitut investoinnit">
-        <h2>Valitut investoinnit</h2>
-        {viewModel.investmentRows.length === 0 ? (
-          <p>Et ole valinnut investointeja tälle kierrokselle.</p>
-        ) : (
-          <div className="investments-summary-list">
-            {viewModel.investmentRows.map((item, index) => (
-              <p key={`${item.type}-${index}`}>
-                <span>
-                  {item.type}
-                  {item.quantity > 1 ? ` ×${item.quantity}` : ''}
-                </span>
-                <strong>{item.cost.toLocaleString('fi-FI')} €</strong>
+            <header>
+              <h2>Uusi tuotantokone</h2>
+              <strong className="investments-card__price">
+                {INTEGER_FORMATTER.format(machineInvestment.price)} € / kone
+              </strong>
+            </header>
+            <ul className="investments-card__details">
+              <li>Kapasiteetti: +{INTEGER_FORMATTER.format(settings.production.hoursPerMachinePerRound)} h / kone</li>
+              <li>Henkilöstö: +{INTEGER_FORMATTER.format(getAdditionalPersonnelFromMachines(1))} henkilöä / kone</li>
+              <li>Tilantarve: {INTEGER_FORMATTER.format(machineSpace)} m² / kone</li>
+              <li>
+                Poisto: {formatPercent(factorySettings.finance.machineryDepreciationPerRound)} / kierros
+                {' '}({formatPercent(factorySettings.finance.machineryDepreciationPerRound * roundsPerYear)} vuodessa)
+              </li>
+            </ul>
+            {machineBlockedBySpace || machineBlockedByFinancing ? (
+              <p className="investments-notice investments-notice--warning" role="status">
+                {machineBlockedBySpace ? (
+                  <span>Yksi kone tarvitsee {INTEGER_FORMATTER.format(machineSpace)} m². Vapauta tehdastilaa tai hanki tehdaslaajennus.</span>
+                ) : null}
+                {machineBlockedByFinancing ? (
+                  <span>Investointivara ei riitä uuden koneen hankintaan.</span>
+                ) : null}
               </p>
-            ))}
-          </div>
-        )}
+            ) : null}
+            <div className="investments-counter" aria-label="Koneiden määrä">
+              <span>Koneita</span>
+              <div className="investments-counter__controls">
+                <Button type="button" aria-label="Vähennä koneita" onClick={decrementMachine}>−</Button>
+                <output aria-live="polite">{draftSelection.newMachineCount}</output>
+                <Button type="button" aria-label="Lisää koneita" onClick={incrementMachine}>+</Button>
+              </div>
+            </div>
+          </article>
+        </Card>
 
-        <div className="investments-summary-financing">
-          <p>
-            <span>Investoinnit yhteensä</span>
-            <strong>{viewModel.totals.totalCostText}</strong>
-          </p>
-          <p>
-            <span>Vapaata velkakapasiteettia</span>
-            <strong>{viewModel.financing.debtHeadroomText}</strong>
-          </p>
-          <p>
-            <span>Investointeihin käytettävä kassa</span>
-            <strong>{viewModel.financing.availableCashText}</strong>
-          </p>
-          <p>
-            <span>Rahoitusvara yhteensä</span>
-            <strong>{viewModel.financing.financingCapacityText}</strong>
-          </p>
-          <p>
-            <span>Kassareservi</span>
-            <strong>{viewModel.financing.targetCashText}</strong>
-          </p>
-          <p>
-            <span>Kassasta käytetään</span>
-            <strong>{viewModel.financing.cashUsedText}</strong>
-          </p>
-          <p>
-            <span>Uutta velkaa</span>
-            <strong>{viewModel.financing.financingNeedText}</strong>
-          </p>
-          <p>
-            <span>Velka investoinnin jälkeen</span>
-            <strong>{viewModel.financing.debtAfterText}</strong>
-          </p>
-          <p>
-            <span>Velkaraja</span>
-            <strong>{viewModel.financing.debtLimitText}</strong>
-          </p>
-          <p>
-            <span>Arvioitu poisto / kierros</span>
-            <strong>{viewModel.totals.depreciationPerRoundText}</strong>
-          </p>
-        </div>
+        <Card>
+          <article className="investments-card">
+            <header>
+              <h2>Tehdaslaajennus</h2>
+              <strong className="investments-card__price">
+                {INTEGER_FORMATTER.format(expansionInvestment.price)} € / laajennus
+              </strong>
+            </header>
+            <ul className="investments-card__details">
+              <li>Lisätila: +{INTEGER_FORMATTER.format(factorySettings.factory.factoryExpansionM2)} m² / laajennus</li>
+              <li>
+                Poisto: {formatPercent(factorySettings.finance.buildingDepreciationPerRound)} / kierros
+                {' '}({formatPercent(factorySettings.finance.buildingDepreciationPerRound * roundsPerYear)} vuodessa)
+              </li>
+            </ul>
+            {expansionBlockedByFinancing ? (
+              <p className="investments-notice" role="status">
+                Investointivara ei riitä tehdaslaajennuksen hankintaan.
+              </p>
+            ) : null}
+            <div className="investments-counter" aria-label="Tehdaslaajennusten määrä">
+              <span>Laajennuksia</span>
+              <div className="investments-counter__controls">
+                <Button type="button" aria-label="Vähennä laajennuksia" onClick={decrementExpansion}>−</Button>
+                <output aria-live="polite">{draftSelection.expansionCount}</output>
+                <Button type="button" aria-label="Lisää laajennuksia" onClick={incrementExpansion}>+</Button>
+              </div>
+            </div>
+          </article>
+        </Card>
+      </section>
 
-        <div className="investments-actions">
-          <Button
-            type="button"
-            disabled={!viewModel.financing.canFinance || viewModel.space.projected.freeArea < 0}
-            onClick={handleSave}
-          >
-            Tallenna ja jatka
-          </Button>
+      <footer className="investments-actions">
+        <div>
+          {currentDecisionIsInvalid ? (
+            <p role="alert">Investointipäätöstä ei voi hyväksyä - tarkista tila- ja rahoitusrajoitteet.</p>
+          ) : null}
           {statusMessage ? <p role="status">{statusMessage}</p> : null}
           {savedDecision ? <small>Tallennettu kierrokselle {savedDecision.round}.</small> : null}
         </div>
-      </section>
+        <Button
+          type="button"
+          disabled={!viewModel.financing.canFinance || viewModel.space.projected.freeArea < 0}
+          onClick={handleSave}
+        >
+          Tallenna ja jatka
+        </Button>
+      </footer>
     </section>
   )
 }

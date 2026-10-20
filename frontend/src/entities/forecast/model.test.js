@@ -224,7 +224,7 @@ test('inventory value and area use configured unit constants', () => {
 
   // finishedGoodsValue is now the physical closing balance's value, not the Lean minimum metric.
   assert.equal(Math.round(inv.finishedGoodsValue), Math.round(inv.closingFinishedGoodsInventory * 20000))
-  assert.equal(Math.round(inv.finishedGoodsArea), Math.round(inv.minimumFinishedGoodsInventory * 15))
+  assert.equal(Math.round(inv.finishedGoodsArea), Math.round(inv.closingFinishedGoodsInventory * 15))
 })
 
 test('new machine increases machining capacity', () => {
@@ -732,7 +732,7 @@ test('annual fixed cost override changes result by the round fraction amount', (
   const defaultForecast = calculateRoundForecast(gameState)
 
   assert.equal(forecast.forecast.finance.fixedCosts, 900000)
-  assert.equal(forecast.summary.result, defaultForecast.summary.result + 100000)
+  assert.equal(forecast.summary.result, defaultForecast.summary.result - 400000)
 })
 
 test('annual interest rate override changes interest without changing debt logic', () => {
@@ -1095,6 +1095,7 @@ test('production may exceed demand when capacity allows (requested > demand)', (
   const gameState = createInitialGameState()
   gameState.production.machiningMachines = 10
   gameState.staffing = { assembly: 200, shipping: 200 }
+  gameState.factory.totalAreaM2 = 20000
 
   const forecast = calculateRoundForecast(
     gameState,
@@ -1192,6 +1193,7 @@ test('production above demand builds physical inventory and drives inventoryChan
   gameState.inventory.finishedGoodsContainers = 100
   gameState.production.machiningMachines = 10
   gameState.staffing = { assembly: 200, shipping: 200 }
+  gameState.factory.totalAreaM2 = 20000
 
   const forecast = calculateRoundForecast(
     gameState,
@@ -1205,6 +1207,76 @@ test('production above demand builds physical inventory and drives inventoryChan
   assert.equal(forecast.forecast.deliveries, 200)
   assert.equal(inv.closingFinishedGoodsInventory, 120)
   assert.equal(inv.inventoryChange, 400000)
+})
+
+test('factory space limits new finished-goods stock without changing demand or deliveries', () => {
+  const gameState = createInitialGameState()
+  gameState.factory.totalAreaM2 = 2130
+  gameState.production.machiningMachines = 4
+  gameState.staffing = { assembly: 10, shipping: 10 }
+  gameState.inventory.finishedGoodsContainers = 10
+
+  const forecast = calculateRoundForecast(gameState, {
+    market: { price: 25000, productionQuantity: 1000, activeVariationCount: 2 },
+  })
+  const result = forecast.forecast
+
+  assert.equal(result.inventory.openingFreeFactorySpace, 30)
+  assert.equal(result.inventory.additionalFinishedGoodsStorageCapacity, 2)
+  assert.equal(result.demand, 20)
+  assert.equal(result.actualProduction, 22)
+  assert.equal(result.deliveries, 20)
+  assert.equal(result.inventory.closingFinishedGoodsInventory, 12)
+  assert.ok(result.inventory.storageLimitedProductionQuantity > 0)
+  assert.equal(result.space.freeArea, 0)
+
+  const { nextGameState, historyEntry } = advanceRoundState({ gameState, forecast, totalRounds: 12 })
+  assert.equal(nextGameState.inventory.finishedGoodsContainers, 12)
+  assert.equal(historyEntry.production.actualProduction, result.actualProduction)
+  assert.equal(historyEntry.production.deliveries, result.deliveries)
+})
+
+test('an overfull opening warehouse keeps its physical stock and prevents new stock formation', () => {
+  const gameState = createInitialGameState()
+  gameState.factory.totalAreaM2 = 2000
+  gameState.production.machiningMachines = 4
+  gameState.staffing = { assembly: 10, shipping: 10 }
+  gameState.inventory.finishedGoodsContainers = 10
+
+  const forecast = calculateRoundForecast(gameState, {
+    market: { price: 25000, productionQuantity: 1000, activeVariationCount: 2 },
+  })
+  const result = forecast.forecast
+
+  assert.ok(result.inventory.openingFreeFactorySpace < 0)
+  assert.equal(result.inventory.additionalFinishedGoodsStorageCapacity, 0)
+  assert.equal(result.actualProduction, result.demand)
+  assert.equal(result.inventory.closingFinishedGoodsInventory, 10)
+  assert.ok(result.space.freeArea < 0)
+})
+
+test('opening inventory deliveries do not release same-round storage capacity for new production', () => {
+  const gameState = createInitialGameState()
+  gameState.factory.totalAreaM2 = 2100
+  gameState.production.machiningMachines = 4
+  gameState.staffing = { assembly: 10, shipping: 10 }
+  gameState.inventory.finishedGoodsContainers = 10
+
+  const forecast = calculateRoundForecast(gameState, {
+    market: {
+      price: 25000,
+      productionQuantity: 10,
+      activeVariationCount: 2,
+      useFinishedGoodsInventoryForDeliveries: true,
+    },
+  })
+  const result = forecast.forecast
+
+  assert.equal(result.inventory.openingFreeFactorySpace, 0)
+  assert.equal(result.inventory.additionalFinishedGoodsStorageCapacity, 0)
+  assert.equal(result.inventory.inventorySales, 5)
+  assert.equal(result.actualProduction, 10)
+  assert.equal(result.inventory.closingFinishedGoodsInventory, 5)
 })
 
 test('batchSize alone does not rewrite the physical closing inventory when demand is the binding constraint', () => {
@@ -1297,6 +1369,7 @@ function buildDeliveryScenario({
   gameState.inventory.finishedGoodsContainers = 100
   gameState.production.machiningMachines = machineCount
   gameState.staffing = { assembly: 200, shipping: 200 }
+  gameState.factory.totalAreaM2 = 20000
 
   return calculateRoundForecast(
     gameState,
@@ -1621,7 +1694,7 @@ test('closing production and factory state include current-round additions', () 
   })
 
   assert.equal(forecast.closingState.production.machiningMachines, 5)
-  assert.equal(forecast.closingState.factory.totalAreaM2, 5000)
+  assert.equal(forecast.closingState.factory.totalAreaM2, 5250)
   assert.equal(forecast.closingState.factory.expansionsCount, 1)
   assert.equal(forecast.closingState.factory.dispatchM2, gameState.factory.dispatchM2)
   assert.equal(forecast.closingState.factory.officeAndSocialM2, gameState.factory.officeAndSocialM2)

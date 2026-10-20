@@ -87,7 +87,7 @@ export const TEACHER_SETTING_DEFINITIONS = [
     group: 'production',
     label: 'Tehtaan kokonaispinta-ala',
     unit: 'm²',
-    step: 100,
+    step: 50,
     min: 4000,
     max: 5000,
     easy: 4000,

@@ -113,7 +113,7 @@ test('balance interpretation renders three stacked cards with textual statuses, 
     assert.match(cards[index][2], /balance-interpretation-status">(?:Kriittinen|Tyydyttävä|Heikko)</)
   }
   assert.doesNotMatch(html, /Vahvistettu kierros|3 vuoden päästä|Suuntaa antava arvio|oletetaan jatkuvan|Kiertonopeus on muunnettu|Pääoma sisältää myös|<small/)
-  assert.match(cards[0][2], /0,6 vuotta/)
+  assert.match(cards[0][2], /1,6 vuotta/)
   assert.match(cards[1][2], /balance-interpretation-status">Tyydyttävä</)
   assert.match(cards[1][2], /class="balance-interpretation-neutral">Lainanottovara:/)
   assert.equal(cards[2][1], 'danger')

@@ -24,26 +24,12 @@ const DECIMAL_FORMATTER = new Intl.NumberFormat('fi-FI', {
   maximumFractionDigits: 1,
 })
 
-function formatCurrency(value) {
-  const rounded = Math.round(Number(value) || 0)
-  const sign = rounded < 0 ? '-' : ''
-  return `${sign}${EURO_FORMATTER.format(Math.abs(rounded))} €`
+function formatArea(value) {
+  return `${EURO_FORMATTER.format(Math.round(Number(value) || 0))} m²`
 }
 
 function formatContainers(value) {
   return `${DECIMAL_FORMATTER.format(Number(value) || 0)} konttia`
-}
-
-function formatPercent(value) {
-  return `${DECIMAL_FORMATTER.format(Number(value) || 0)} %`
-}
-
-function formatKnl(ratio) {
-  return `${DECIMAL_FORMATTER.format((Number(ratio) || 0) * 100)} %`
-}
-
-function formatTransition(currentValue, nextValue, formatValue) {
-  return `${formatValue(currentValue)} -> ${formatValue(nextValue)}`
 }
 
 function toNonNegativeInteger(value, fallback = 0) {
@@ -56,25 +42,19 @@ function toNonNegativeInteger(value, fallback = 0) {
   return Math.round(numericValue)
 }
 
-function DecisionList({ items, emptyLabel }) {
-  if (items.length === 0) {
-    return <p>{emptyLabel}</p>
-  }
+function getStaffingSliderMax(department, staffing, forecast, factorySettings) {
+  const currentEmployees = Math.max(0, Number(staffing[department]) || 0)
+  const workerSpace = Math.max(0, Number(factorySettings?.factory?.workerSpaceM2) || 0)
+  const freeSpace = Number(forecast?.forecast?.inventory?.openingFreeFactorySpace) || 0
 
-  return (
-    <ul className="check-list">
-      {items.map((item) => (
-        <li key={item}>{item}</li>
-      ))}
-    </ul>
-  )
+  return workerSpace > 0
+    ? currentEmployees + Math.floor(Math.max(0, freeSpace) / workerSpace)
+    : currentEmployees + 1
 }
 
 function CheckPage({ onNavigate, gameState, factorySettings }) {
   const [staffingDraft, setStaffingDraft] = useState(null)
   const [batchSizeDraft, setBatchSizeDraft] = useState(null)
-  const [statusMessage, setStatusMessage] = useState('')
-  const [productionStatusMessage, setProductionStatusMessage] = useState('')
 
   const decisionData = useMemo(() => {
     if (!gameState) {
@@ -166,10 +146,9 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
       return null
     }
   }, [batchSize, decisionGameState, factorySettings, forecast])
+  const capacityForecast = previewForecast ?? forecast
 
-  // Auto-persist every edit to the existing round-scoped decision stores so values entered
-  // during this round survive page navigation (component unmount/remount) without requiring an
-  // explicit save click; the Save buttons remain only to give the player an explicit confirmation.
+  // Persist every edit to the round-scoped decision stores so choices survive navigation and reload.
   const persistStaffing = (nextStaffing) => {
     if (!decisionGameState) {
       return
@@ -194,23 +173,16 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
     })
   }
 
-  const updateStaffing = (key, delta) => {
+  const updateStaffing = (key, rawValue) => {
+    const maxStaffing = getStaffingSliderMax(key, staffing, forecast, factorySettings)
+    const requestedStaffing = toNonNegativeInteger(rawValue, staffing[key])
     const nextStaffing = {
       ...staffing,
-      [key]: Math.max(0, (Number(staffing[key]) || 0) + delta),
+      [key]: Math.min(maxStaffing, requestedStaffing),
     }
 
     setStaffingDraft({ round: decisionGameState.round, values: nextStaffing })
     persistStaffing(nextStaffing)
-  }
-
-  const handleSaveStaffing = () => {
-    if (!forecast || !decisionGameState) {
-      return
-    }
-
-    persistStaffing(staffing)
-    setStatusMessage('Henkilöstöpäätös tallennettu CHECK-vaiheeseen.')
   }
 
   const handleBatchSizeChange = (rawValue) => {
@@ -223,17 +195,12 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
     persistBatchSizeDecision(nextBatchSize)
   }
 
-  const handleSaveNextRoundDecision = () => {
-    if (!decisionGameState) {
-      return
-    }
+  const adjustStaffing = (key, delta) => {
+    updateStaffing(key, Math.max(0, (Number(staffing[key]) || 0) + delta))
+  }
 
-    saveCheckProductionDecision({
-      round: decisionGameState.round,
-      batchSize,
-      savedAt: new Date().toISOString(),
-    })
-    setProductionStatusMessage(`Eräkokopäätös tallennettu kierrokselle ${resolveCheckRoundLabels(decisionGameState.round).planningRound}.`)
+  const adjustBatchSize = (delta) => {
+    handleBatchSizeChange(batchSize + delta)
   }
 
   if (!forecast) {
@@ -245,350 +212,232 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
     )
   }
 
-  const projectsDecisionItems = forecast.decisions.projects.map((selection) => {
-    const hours = Number(selection.investedHours) || 0
-    return `${selection.department} / ${selection.method}: ${hours} h`
-  })
-
-  const investmentDecisionItems = forecast.decisions.investments.map((item) => {
-    const quantity = item.quantity > 1 ? ` x${item.quantity}` : ''
-    return `${item.type}${quantity}`
-  })
+  const factorySpace = capacityForecast.forecast.space
   const previewInventory = previewForecast?.forecast.inventory
-  const previewSummary = previewForecast?.summary
-  const { confirmedRound, planningRound } = resolveCheckRoundLabels(decisionGameState.round)
+  const { planningRound } = resolveCheckRoundLabels(decisionGameState.round)
 
   const departments = [
     { key: 'machining', label: 'Koneistus' },
-    { key: 'assembly', label: 'Koonta' },
-    { key: 'shipping', label: 'Lahettamo' },
+    { key: 'assembly', label: 'Koonta', staffActionLabel: 'koonnan' },
+    { key: 'shipping', label: 'Lähettämö', staffActionLabel: 'lähettämön' },
   ]
 
   return (
     <section className="check-page" aria-label="CHECK-vaiheen vaikutusarvio">
       <header className="check-header">
-        <h1>CHECK - Vaikutusarvio</h1>
-        <p>Arvioi DO-vaiheen vaikutukset ennen ACT-vaiheen hyvaksyntaa.</p>
+        <h1>CHECK – Vaikutusarvio</h1>
+        <p>Säädä henkilöstöä ja eräkokoa. Tarkista vaikutukset ennen ACT-vaihetta.</p>
       </header>
 
-      <div className="check-grid">
+      <div className="check-primary-grid">
         <Card>
-          <article className="check-section">
-            <h2>1. DO-vaiheen paatokset</h2>
-            <p>
-              5S-tunnit: Koneistus {forecast.decisions.fiveS.machining} h, Koonta{' '}
-              {forecast.decisions.fiveS.assembly} h, Lahettamo {forecast.decisions.fiveS.shipping} h
+          <article className="check-primary-card">
+            <h2>Henkilöstö ja kapasiteetti</h2>
+            <p className="check-card-intro">
+              Henkilöstöpäätökset kierrokselle {planningRound}; kapasiteettiennuste kierrokselle {capacityForecast.round}.
             </p>
-            <DecisionList items={projectsDecisionItems} emptyLabel="Projektipaato ksia ei ole tallennettu." />
-            <DecisionList items={investmentDecisionItems} emptyLabel="Investointipaatoksia ei ole tallennettu." />
-            <p>Tuotantoajot / variaatio: {forecast.decisions.market.runsPerVariation}</p>
-            <p>Hinta: {formatCurrency(forecast.decisions.market.price)} / kontti</p>
-            <p>
-              Uudet variaatiot: {forecast.decisions.market.selectedNewVariations} / max{' '}
-              {forecast.decisions.market.allowedNewVariations}
-            </p>
-            <p>Aktiiviset variaatiot: {forecast.decisions.market.activeVariationCount}</p>
-          </article>
-        </Card>
+            <div className="check-department-list">
+              {departments.map((department) => {
+                const employeeCount = capacityForecast.forecast.staffing[department.key]
+                const capacity = capacityForecast.forecast.capacityByDepartment[department.key]
+                const isBottleneck = capacityForecast.summary.bottleneckKey === department.key
+                const adjustable = department.key !== 'machining'
+                const sliderMax = adjustable
+                  ? getStaffingSliderMax(department.key, staffing, forecast, factorySettings)
+                  : employeeCount
+                const staffingSpaceBlocked = adjustable
+                  && (Number(factorySettings?.factory?.workerSpaceM2) || 0) > 0
+                  && sliderMax <= staffing[department.key]
+                  && (Number(forecast.forecast.inventory.openingFreeFactorySpace) || 0)
+                    < (Number(factorySettings?.factory?.workerSpaceM2) || 0)
 
-        <Card>
-          <article className="check-section">
-            <h2>2. Koko tehtaan yhteenveto</h2>
-            <p>KNL: {formatKnl(forecast.current.knl.machining.knl)} -&gt; {formatKnl(forecast.forecast.knl.machining.knl)}</p>
-            <p>Kysynta: {formatContainers(forecast.summary.demand)}</p>
-            <p>Kapasiteetti: {formatContainers(forecast.summary.plantCapacity)}</p>
-            <p>Toteutunut valmistus: {formatContainers(forecast.summary.actualProduction)}</p>
-            <p>Toimitukset: {formatContainers(forecast.summary.deliveries)}</p>
-            <p>Menetetty myynti: {formatContainers(forecast.summary.lostSalesUnits)}</p>
-            <p>Liikevaihto: {formatCurrency(forecast.summary.revenue)}</p>
-            <p>Tulos: {formatCurrency(forecast.summary.result)}</p>
-            <p>Valmistuotevarasto: {formatContainers(forecast.summary.finishedGoodsInventory)}</p>
-            <p>Vapaa tehdastila nykytilassa: {Math.round(forecast.current.space.freeArea)} m²</p>
-            <p>Vapaa tehdastila ennusteessa: {Math.round(forecast.forecast.space.freeArea)} m²</p>
-          </article>
-        </Card>
-
-        <Card>
-          <article className="check-section">
-            <h2>3. K/N/L/KNL osastoittain</h2>
-            <table className="check-table">
-              <thead>
-                <tr>
-                  <th>Osasto</th>
-                  <th>K</th>
-                  <th>N</th>
-                  <th>L</th>
-                  <th>KNL</th>
-                </tr>
-              </thead>
-              <tbody>
-                {departments.map((department) => {
-                  const currentMetrics = forecast.current.knl[department.key]
-                  const forecastMetrics = forecast.forecast.knl[department.key]
-                  return (
-                    <tr key={department.key}>
-                      <td>{department.label}</td>
-                      <td>{formatTransition(currentMetrics.kPct, forecastMetrics.kPct, formatPercent)}</td>
-                      <td>{formatTransition(currentMetrics.nPct, forecastMetrics.nPct, formatPercent)}</td>
-                      <td>{formatTransition(currentMetrics.lPct, forecastMetrics.lPct, formatPercent)}</td>
-                      <td>{formatTransition(currentMetrics.knl, forecastMetrics.knl, formatKnl)}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </article>
-        </Card>
-
-        <Card>
-          <article className="check-section">
-            <h2>4. Kapasiteetti osastoittain</h2>
-            <table className="check-table">
-              <thead>
-                <tr>
-                  <th>Osasto</th>
-                  <th>Nykytila</th>
-                  <th>Ennuste (kierros {planningRound})</th>
-                </tr>
-              </thead>
-              <tbody>
-                {departments.map((department) => {
-                  const highlightedBottleneckKey = previewForecast?.summary?.bottleneckKey ?? forecast.summary.bottleneckKey
-                  const isBottleneck = highlightedBottleneckKey === department.key
-                  return (
-                    <tr key={department.key} className={isBottleneck ? 'is-bottleneck' : ''}>
-                      <td>{department.label}</td>
-                      <td>{formatContainers(forecast.forecast.capacityByDepartment[department.key])}</td>
-                      <td>
-                        {previewForecast
-                          ? formatContainers(previewForecast.forecast.capacityByDepartment[department.key])
-                          : '-'}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-            <p>
-              Pullonkaula (kierros {confirmedRound}): <strong>{forecast.summary.bottleneckLabel}</strong>
-            </p>
-            {previewForecast ? (
-              <p>
-                Pullonkaula-ennuste (kierros {planningRound}):{' '}
-                <strong>{previewForecast.summary.bottleneckLabel}</strong>
-              </p>
-            ) : null}
-          </article>
-        </Card>
-
-        <Card>
-          <article className="check-section">
-            <h2>5. Henkilosto tälle kierrokselle</h2>
-            <div className="check-staffing-row">
-              <span>Koneistus (read-only)</span>
-              <strong>{forecast.forecast.staffing.machining}</strong>
+                return (
+                  <div
+                    key={department.key}
+                    className={`check-department check-department--${department.key}${isBottleneck ? ' is-bottleneck' : ''}`}
+                  >
+                    <div className="check-department__heading">
+                      <span>{department.label}{adjustable ? '' : ' · automaattinen'}</span>
+                      <strong>{employeeCount} hlö</strong>
+                    </div>
+                    <p>{formatContainers(capacity)} / kierros</p>
+                    {adjustable ? (
+                      <>
+                        <div className="check-value-stepper">
+                          <Button
+                            type="button"
+                            aria-label={`Vähennä ${department.staffActionLabel} henkilöstöä`}
+                            disabled={staffing[department.key] <= 0}
+                            onClick={() => adjustStaffing(department.key, -1)}
+                          >
+                            −
+                          </Button>
+                          <output aria-live="polite">{staffing[department.key]} hlö</output>
+                          <Button
+                            type="button"
+                            aria-label={`Lisää ${department.staffActionLabel} henkilöstöä`}
+                            disabled={staffingSpaceBlocked}
+                            onClick={() => adjustStaffing(department.key, 1)}
+                          >
+                            +
+                          </Button>
+                        </div>
+                        <label className="check-range">
+                          <span className="visually-hidden">{department.label} henkilöstö</span>
+                          <input
+                            aria-label={`${department.label} henkilöstö`}
+                            aria-describedby={`${department.key}-staffing-help`}
+                            type="range"
+                            min="0"
+                            max={sliderMax}
+                            step="1"
+                            value={staffing[department.key]}
+                            onChange={(event) => updateStaffing(department.key, event.target.value)}
+                          />
+                          <span id={`${department.key}-staffing-help`} className="visually-hidden">
+                            Henkilöstön alaraja on nolla. Yläraja määräytyy käytettävissä olevan tehdastilan perusteella.
+                          </span>
+                        </label>
+                        {staffingSpaceBlocked ? (
+                          <small className="check-space-warning" role="status">
+                            Tehdastila ei riitä henkilöstön lisäämiseen.
+                          </small>
+                        ) : null}
+                      </>
+                    ) : null}
+                    {isBottleneck ? <small className="check-bottleneck-label">Pullonkaula</small> : null}
+                  </div>
+                )
+              })}
             </div>
-            <div className="check-staffing-row">
-              <span>Koonta</span>
-              <div className="check-staffing-controls">
-                <Button type="button" onClick={() => updateStaffing('assembly', -1)}>
-                  -
+          </article>
+        </Card>
+
+        <Card>
+          <article className="check-primary-card">
+            <h2>Eräkoko ja varasto</h2>
+            <p className="check-card-intro">
+              Eräkoon tuotantovaikutus näkyy kierroksen {capacityForecast.round} ennusteessa.
+            </p>
+            <div className="check-batch-control">
+              <span>Eräkoko</span>
+              <div className="check-value-stepper">
+                <Button
+                  type="button"
+                  aria-label="Pienennä eräkokoa"
+                  disabled={batchSize <= (factorySettings?.production?.minBatchSize ?? 1)}
+                  onClick={() => adjustBatchSize(-1)}
+                >
+                  −
                 </Button>
-                <strong>{staffing.assembly}</strong>
-                <Button type="button" onClick={() => updateStaffing('assembly', 1)}>
+                <output aria-live="polite">{batchSize} konttia</output>
+                <Button
+                  type="button"
+                  aria-label="Suurenna eräkokoa"
+                  disabled={batchSize >= (factorySettings?.production?.maxBatchSize ?? 20)}
+                  onClick={() => adjustBatchSize(1)}
+                >
                   +
                 </Button>
               </div>
-            </div>
-            <div className="check-staffing-row">
-              <span>Lahettamo</span>
-              <div className="check-staffing-controls">
-                <Button type="button" onClick={() => updateStaffing('shipping', -1)}>
-                  -
-                </Button>
-                <strong>{staffing.shipping}</strong>
-                <Button type="button" onClick={() => updateStaffing('shipping', 1)}>
-                  +
-                </Button>
-              </div>
-            </div>
-            <Button type="button" onClick={handleSaveStaffing}>
-              TALLENNA HENKILOSTO
-            </Button>
-            {statusMessage ? <p className="check-status">{statusMessage}</p> : null}
-          </article>
-        </Card>
-
-        <Card>
-          <article className="check-section">
-            <h2>6. Varasto ja tila: nykytila vs. ennuste</h2>
-            <table className="check-table">
-              <thead>
-                <tr>
-                  <th>Mittari</th>
-                  <th>Nykytila (kierros {confirmedRound})</th>
-                  <th>Ennuste (kierros {planningRound})</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>Erakoko</td>
-                  <td>{formatContainers(forecast.decisions.market.batchSize)}</td>
-                  <td>{previewForecast ? formatContainers(previewForecast.decisions.market.batchSize) : '-'}</td>
-                </tr>
-                <tr>
-                  <td>Vaihtojen maara</td>
-                  <td>{forecast.forecast.knl.machining.totalChangeovers}</td>
-                  <td>{previewForecast ? previewForecast.forecast.knl.machining.totalChangeovers : '-'}</td>
-                </tr>
-                <tr>
-                  <td>Fyysinen valmistuotevarasto</td>
-                  <td>{formatContainers(forecast.forecast.inventory.closingFinishedGoodsInventory)}</td>
-                  <td>
-                    {previewForecast
-                      ? formatContainers(previewForecast.forecast.inventory.closingFinishedGoodsInventory)
-                      : '-'}
-                  </td>
-                </tr>
-                <tr>
-                  <td>Minimivarasto</td>
-                  <td>{formatContainers(forecast.forecast.inventory.minimumFinishedGoodsInventory)}</td>
-                  <td>
-                    {previewForecast
-                      ? formatContainers(previewForecast.forecast.inventory.minimumFinishedGoodsInventory)
-                      : '-'}
-                  </td>
-                </tr>
-                <tr>
-                  <td>Myytavissa varastosta (valitulla eraikoolla)</td>
-                  <td>{formatContainers(forecast.forecast.inventory.sellableOpeningFinishedGoodsInventory)}</td>
-                  <td>
-                    {previewForecast
-                      ? formatContainers(previewForecast.forecast.inventory.sellableOpeningFinishedGoodsInventory)
-                      : '-'}
-                  </td>
-                </tr>
-                <tr>
-                  <td>Varaston arvo</td>
-                  <td>{formatCurrency(forecast.forecast.inventory.finishedGoodsValue)}</td>
-                  <td>
-                    {previewForecast ? formatCurrency(previewForecast.forecast.inventory.finishedGoodsValue) : '-'}
-                  </td>
-                </tr>
-                <tr>
-                  <td>Varaston tilantarve</td>
-                  <td>{Math.round(forecast.forecast.inventory.finishedGoodsArea)} m2</td>
-                  <td>{previewForecast ? `${Math.round(previewForecast.forecast.inventory.finishedGoodsArea)} m2` : '-'}</td>
-                </tr>
-                <tr>
-                  <td>Koneistus</td>
-                  <td>{Math.round(forecast.current.space.machiningArea)} m²</td>
-                  <td>{Math.round(forecast.forecast.space.machiningArea)} m²</td>
-                </tr>
-                <tr>
-                  <td>Kokoonpano</td>
-                  <td>{Math.round(forecast.current.space.assemblyArea)} m²</td>
-                  <td>{Math.round(forecast.forecast.space.assemblyArea)} m²</td>
-                </tr>
-                <tr>
-                  <td>Lähettämö</td>
-                  <td>{Math.round(forecast.current.space.shippingArea)} m²</td>
-                  <td>{Math.round(forecast.forecast.space.shippingArea)} m²</td>
-                </tr>
-                <tr>
-                  <td>Toimistot ja muut kiinteät tilat</td>
-                  <td>{Math.round(forecast.current.space.officeAndSocialArea)} m²</td>
-                  <td>{Math.round(forecast.forecast.space.officeAndSocialArea)} m²</td>
-                </tr>
-                <tr>
-                  <td>Käytetty tehdastila yhteensä</td>
-                  <td>{Math.round(forecast.current.space.totalUsed)} m²</td>
-                  <td>{Math.round(forecast.forecast.space.totalUsed)} m²</td>
-                </tr>
-                <tr>
-                  <td>Tehtaan kokonaispinta-ala</td>
-                  <td>{Math.round(forecast.current.space.totalArea)} m²</td>
-                  <td>{Math.round(forecast.forecast.space.totalArea)} m²</td>
-                </tr>
-                <tr>
-                  <td>Vapaa tehdastila</td>
-                  <td>{Math.round(forecast.current.space.freeArea)} m²</td>
-                  <td>{Math.round(forecast.forecast.space.freeArea)} m²</td>
-                </tr>
-              </tbody>
-            </table>
-          </article>
-        </Card>
-
-        <Card>
-          <article className="check-section">
-            <h2>7. Talousennuste</h2>
-            <p>Liikevaihto: {formatCurrency(forecast.forecast.finance.revenue)}</p>
-            <p>Raaka-aineet: {formatCurrency(forecast.forecast.finance.materials)}</p>
-            <p>Henkilostokustannus: {formatCurrency(forecast.forecast.finance.labor)}</p>
-            <p>Kiinteat kustannukset: {formatCurrency(forecast.forecast.finance.fixedCosts)}</p>
-            <p>Varaston muutos: {formatCurrency(forecast.forecast.finance.inventoryChange)}</p>
-            <p>Poistot: {formatCurrency(forecast.forecast.finance.depreciation)}</p>
-            <p>Korot: {formatCurrency(forecast.forecast.finance.interest)}</p>
-            <p>
-              <strong>Tulos: {formatCurrency(forecast.forecast.finance.result)}</strong>
-            </p>
-          </article>
-        </Card>
-
-        <Card>
-          <article className="check-section">
-            <h2>8. Miksi nain?</h2>
-            <ul className="check-list">
-              {forecast.insights.map((insight) => (
-                <li key={insight}>{insight}</li>
-              ))}
-            </ul>
-          </article>
-        </Card>
-
-        <Card>
-          <article className="check-section">
-            <h2>9. Eräkokopäätös</h2>
-            <p>Max. kapasiteetti: {previewSummary ? formatContainers(previewSummary.plantCapacity) : '-'}</p>
-            <p>Rajoittava osasto: {previewSummary?.bottleneckLabel ?? '-'}</p>
-            <p>
-              Nykyinen erakoko (kierros {confirmedRound}):{' '}
-              {formatContainers(forecast.decisions.market.batchSize)}
-            </p>
-            <label className="check-input-row">
-              <span>
-                Eräkoko suunniteltavalle kierrokselle (kierros {planningRound}, {' '}
-                {factorySettings?.production?.minBatchSize ?? 1}-{factorySettings?.production?.maxBatchSize ?? 20})
-              </span>
               <input
-                type="number"
+                aria-label="Eräkoko"
+                type="range"
                 min={factorySettings?.production?.minBatchSize ?? 1}
                 max={factorySettings?.production?.maxBatchSize ?? 20}
                 step="1"
                 value={batchSize}
                 onChange={(event) => handleBatchSizeChange(event.target.value)}
               />
-            </label>
-            <p>
-              Minimivarasto (valitulla eräkoolla):{' '}
-              {previewInventory ? formatContainers(previewInventory.minimumFinishedGoodsInventory) : '-'}
+            </div>
+            <dl className="check-inventory-metrics">
+              <div>
+                <dt>Minimivarasto</dt>
+                <dd>{formatContainers(previewInventory?.minimumFinishedGoodsInventory)}</dd>
+              </div>
+              <div>
+                <dt>Vapaasti myytävä varasto</dt>
+                <dd>{formatContainers(previewInventory?.sellableOpeningFinishedGoodsInventory)}</dd>
+              </div>
+              <div>
+                <dt>Fyysinen varasto</dt>
+                <dd>{formatContainers(previewInventory?.openingFinishedGoodsInventory)}</dd>
+              </div>
+              <div>
+                <dt>
+                  Vapaa tehdastila
+                  <span
+                    className="check-space-info"
+                    role="img"
+                    aria-label="Kierroksen alun valmistuotevarasto varaa tilansa koko kierroksen ajan. Toimitukset eivät vapauta tilaa saman kierroksen uudelle tuotannolle."
+                    title="Kierroksen alun valmistuotevarasto varaa tilansa koko kierroksen ajan. Toimitukset eivät vapauta tilaa saman kierroksen uudelle tuotannolle."
+                  >
+                    i
+                  </span>
+                </dt>
+                <dd className={(previewInventory?.openingFreeFactorySpace ?? 0) < 0 ? 'is-negative' : ''}>
+                  {previewForecast ? `${Math.round(previewInventory?.openingFreeFactorySpace ?? 0)} m²` : '-'}
+                </dd>
+              </div>
+            </dl>
+            <p className="check-space-explanation">
+              Kierroksen alun fyysinen varasto varaa tilansa koko kierroksen ajan; toimitukset eivät vapauta tilaa saman kierroksen uudelle tuotannolle.
             </p>
-            <p>Fyysinen valmisvarasto: {formatContainers(forecast.forecast.inventory.openingFinishedGoodsInventory)}</p>
-            <Button type="button" onClick={handleSaveNextRoundDecision}>
-              TALLENNÄ ERÄKOKOPÄÄTÖS
-            </Button>
-            {productionStatusMessage ? <p className="check-status">{productionStatusMessage}</p> : null}
+          </article>
+        </Card>
+
+        <Card>
+          <article className="check-primary-card check-primary-card--info">
+            <h2>Miksi minimivarastoa tarvitaan?</h2>
+            <p>
+              Asiakas edellyttää jatkuvaa toimituskykyä: viikon aikana on pystyttävä toimittamaan mitä tahansa tuotevariaatiota.
+            </p>
+            <hr />
+            <p>
+              <strong>Pienempi eräkoko ja suurempi konemäärä vähentävät minimivaraston tarvetta.</strong>
+            </p>
+            <h3 className="check-space-breakdown__title">Tehdastilan käyttö</h3>
+            <dl className="check-space-breakdown">
+              <div>
+                <dt>Koneistus</dt>
+                <dd>{formatArea(factorySpace.machiningArea)}</dd>
+              </div>
+              <div>
+                <dt>Koonta</dt>
+                <dd>{formatArea(factorySpace.assemblyArea)}</dd>
+              </div>
+              <div>
+                <dt>Lähettämö ja sen henkilöstö</dt>
+                <dd>{formatArea(factorySpace.shippingArea + factorySpace.shippingWorkerArea)}</dd>
+              </div>
+              <div>
+                <dt>Toimisto- ja sosiaalitilat</dt>
+                <dd>{formatArea(factorySpace.officeAndSocialArea)}</dd>
+              </div>
+              <div>
+                <dt>Valmistuotevarasto</dt>
+                <dd>{formatArea(factorySpace.finishedGoodsArea)}</dd>
+              </div>
+              <div className="check-space-breakdown__total">
+                <dt>Käytetty tehdastila yhteensä</dt>
+                <dd>{formatArea(factorySpace.totalUsed)}</dd>
+              </div>
+              <div className="check-space-breakdown__total">
+                <dt>Vapaa tehdastila</dt>
+                <dd>{formatArea(factorySpace.freeArea)}</dd>
+              </div>
+              <div>
+                <dt>Tehtaan kokonaispinta-ala</dt>
+                <dd>{formatArea(factorySpace.totalArea)}</dd>
+              </div>
+            </dl>
           </article>
         </Card>
       </div>
 
-      <section className="check-actions" aria-label="CHECK-vaiheen navigointi">
-        <Button type="button" onClick={() => onNavigate('/plan/development')}>
-          TAKAISIN DO:HON
-        </Button>
+      <section className="check-page__footer" aria-label="CHECK-vaiheen eteneminen">
         <Button type="button" onClick={() => onNavigate('/act')}>
-          SIIRRY ACT-VAIHEESEEN
+          Siirry ACT-vaiheeseen
         </Button>
       </section>
     </section>

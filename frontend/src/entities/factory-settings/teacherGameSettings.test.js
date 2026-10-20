@@ -55,7 +55,7 @@ function forecastFor(settings, gameState = createInitialGameState(settings), pro
 test('teacher settings defaults mirror the engine values without changing them', () => {
   const preferences = createDefaultTeacherPreferences()
 
-  assert.equal(getTeacherSelectedValue('annualFixedCosts', preferences), 1000000)
+  assert.equal(getTeacherSelectedValue('annualFixedCosts', preferences), 500000)
   assert.equal(preferences.annualFixedCosts.easy, 400000)
   assert.equal(preferences.annualFixedCosts.hard, 1000000)
   assert.equal(getTeacherSelectedValue('equity', preferences), 2073975)
@@ -65,7 +65,7 @@ test('teacher settings defaults mirror the engine values without changing them',
   assert.equal(getTeacherSelectedValue('hoursPerRound', preferences), null)
   assert.equal(getTeacherSelectedValue('initialSetupTimeHours', preferences), 40)
   assert.equal(getTeacherSelectedValue('initialBatchSize', preferences), 20)
-  assert.equal(getTeacherSelectedValue('factoryArea', preferences), 4000)
+  assert.equal(getTeacherSelectedValue('factoryArea', preferences), 4250)
   assert.equal(getTeacherSelectedValue('knlHalfLifeHours', preferences), 400)
   assert.equal(getTeacherSelectedValue('initialVariations', preferences), null)
   assert.equal(getTeacherSelectedValue('goodQualityThreshold', preferences), 75)
@@ -78,7 +78,8 @@ test('teacher settings defaults mirror the engine values without changing them',
     assert.ok(preferences[definition.id].easy >= definition.min, `${definition.id} minimum`)
     assert.ok(preferences[definition.id].hard <= definition.max, `${definition.id} maximum`)
   }
-  assert.equal(DEFAULT_FACTORY_SETTINGS.costs.annualFixedCosts, 4000000)
+  assert.equal(DEFAULT_FACTORY_SETTINGS.costs.annualFixedCosts, 2000000)
+  assert.equal(DEFAULT_FACTORY_SETTINGS.initialState.finance.incomeStatement.fixedCosts, 500000)
   assert.equal(DEFAULT_FACTORY_SETTINGS.knl.knlHalfLifeHours, 400)
   assert.equal(DEFAULT_FACTORY_SETTINGS.initialState.production.machiningMachines, 4)
   assert.equal(DEFAULT_FACTORY_SETTINGS.production.departments.machining.normHoursPerContainer, 12)
@@ -212,7 +213,7 @@ test('game settings snapshot applies selected values to a clone only', () => {
   assert.equal(snapshot.game.hoursPerWorkerPerRound, 1040)
   assert.equal(snapshot.knl.knlHalfLifeHours, 300)
   assert.equal(snapshot.initialState.market.activeVariations, 20)
-  assert.equal(snapshot.initialState.factory.totalAreaM2, 4000)
+  assert.equal(snapshot.initialState.factory.totalAreaM2, 4250)
   assert.equal(snapshot.initialState.finance.equity, 2073975)
   assert.equal(snapshot.lean.smed.initialSetupTimeHours, 40)
   assert.equal(snapshot.variationRules.minimumQualityForZeroAdditionalVariations, 0.76)
@@ -221,7 +222,7 @@ test('game settings snapshot applies selected values to a clone only', () => {
   preferences.knlHalfLifeHours.position = 12
   assert.equal(snapshot.knl.knlHalfLifeHours, 300)
   assert.deepEqual(DEFAULT_FACTORY_SETTINGS, originalDefaults)
-  assert.equal(DEFAULT_FACTORY_SETTINGS.costs.annualFixedCosts, 4000000)
+  assert.equal(DEFAULT_FACTORY_SETTINGS.costs.annualFixedCosts, 2000000)
   assert.equal(DEFAULT_FACTORY_SETTINGS.initialState.production.machiningMachines, 4)
 })
 
@@ -299,7 +300,7 @@ test('fixed costs change result and selected equity enters the new game opening 
 
 test('fixed costs use quarterly values in preferences and convert back to annual snapshot values', () => {
   const preferences = createDefaultTeacherPreferences()
-  assert.equal(getTeacherSelectedValue('annualFixedCosts', preferences), 1000000)
+  assert.equal(getTeacherSelectedValue('annualFixedCosts', preferences), 500000)
   assert.equal(preferences.annualFixedCosts.easy, 400000)
   assert.equal(preferences.annualFixedCosts.hard, 1000000)
 
@@ -309,13 +310,13 @@ test('fixed costs use quarterly values in preferences and convert back to annual
   assert.equal(snapshot.costs.annualFixedCosts, 3000000)
 
   const defaultForecast = forecastFor(DEFAULT_FACTORY_SETTINGS, createInitialGameState())
-  assert.equal(defaultForecast.forecast.finance.fixedCosts, 1000000)
-  assert.equal(DEFAULT_FACTORY_SETTINGS.costs.annualFixedCosts, 4000000)
+  assert.equal(defaultForecast.forecast.finance.fixedCosts, 500000)
+  assert.equal(DEFAULT_FACTORY_SETTINGS.costs.annualFixedCosts, 2000000)
 })
 
 test('factory area and machine price reach forecast inputs while variations stay fixed', () => {
   const compactSettings = settingsAtPositions({ factoryArea: 0 })
-  const spaciousSettings = settingsAtPositions({ factoryArea: 10 })
+  const spaciousSettings = settingsAtPositions({ factoryArea: 20 })
   const spaciousForecast = forecastFor(spaciousSettings, createInitialGameState(spaciousSettings))
   const compactForecast = forecastFor(compactSettings, createInitialGameState(compactSettings))
   assert.equal(spaciousForecast.forecast.space.totalArea, 5000)

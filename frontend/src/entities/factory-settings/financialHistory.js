@@ -294,9 +294,10 @@ export function buildCanonicalFinancialHistory(
     } else {
       upper = openingEquity
     }
-    // The correction converges quickly at normal rates; bisection safeguards overshoots.
+    // Once both sides of the target are bracketed, bisection avoids slow oscillation
+    // when the financing model has a steep response to opening equity.
     const corrected = openingEquity - difference
-    openingEquity = lower != null && upper != null && (corrected <= lower || corrected >= upper)
+    openingEquity = lower != null && upper != null
       ? (lower + upper) / 2
       : corrected
   }

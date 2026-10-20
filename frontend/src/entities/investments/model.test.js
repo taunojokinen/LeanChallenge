@@ -36,7 +36,7 @@ test('new machine adds 250 m2 machining space', () => {
 
 test('space breakdown sums to used space and free space completes total area', () => {
   const usage = calculateFactorySpaceUsage(investmentsSnapshot.factory)
-  const sum = usage.machiningArea + usage.assemblyArea + usage.dispatchArea
+  const sum = usage.machiningArea + usage.assemblyArea + usage.shippingWorkerArea + usage.dispatchArea
     + usage.officeAndSocialArea + usage.finishedGoodsArea
   assert.equal(usage.totalUsed, sum)
   assert.equal(usage.totalUsed + usage.freeArea, usage.totalArea)
@@ -47,6 +47,17 @@ test('physical finished goods quantity changes warehouse area using configured s
   const second = calculateFactorySpaceUsage({ ...investmentsSnapshot.factory, finishedGoodsContainers: 14 })
   assert.equal(second.finishedGoodsArea - first.finishedGoodsArea, 60)
   assert.equal(first.freeArea - second.freeArea, 60)
+})
+
+test('shipping staff use the shared per-worker factory-space allowance', () => {
+  const base = calculateFactorySpaceUsage(investmentsSnapshot.factory)
+  const withOneMoreShippingWorker = calculateFactorySpaceUsage({
+    ...investmentsSnapshot.factory,
+    shippingWorkers: investmentsSnapshot.factory.shippingWorkers + 1,
+  })
+
+  assert.equal(withOneMoreShippingWorker.shippingWorkerArea - base.shippingWorkerArea, 25)
+  assert.equal(withOneMoreShippingWorker.freeArea, base.freeArea - 25)
 })
 
 test('new machine adds 5 personnel', () => {
@@ -221,7 +232,7 @@ test('investments view model uses canonical gameState finance', () => {
 
   assert.equal(viewModel.financing.currentCash, 50000)
   assert.equal(viewModel.financing.currentDebt, gameState.finance.bankLoans)
-  assert.equal(viewModel.financing.equity, 2073975)
+  assert.ok(Math.abs(viewModel.financing.equity - 2073975) < 1e-7)
   assert.equal(viewModel.financing.availableCash, 0)
   assert.equal(viewModel.financing.financingCapacity, gameState.finance.equity * 2 - gameState.finance.bankLoans)
 })
@@ -328,7 +339,8 @@ test('equipment, expansion, several investments and teacher factory area use sha
 })
 
 test('space totals remain correct at zero and negative free area', () => {
-  const exact = calculateFactorySpaceUsage({ ...investmentsSnapshot.factory, totalAreaM2: 1845 })
+  const baseUsage = calculateFactorySpaceUsage(investmentsSnapshot.factory)
+  const exact = calculateFactorySpaceUsage({ ...investmentsSnapshot.factory, totalAreaM2: baseUsage.totalUsed })
   const cramped = calculateFactorySpaceUsage({ ...investmentsSnapshot.factory, totalAreaM2: 1000 })
   assert.equal(exact.freeArea, 0)
   assert.equal(exact.totalUsed + exact.freeArea, exact.totalArea)

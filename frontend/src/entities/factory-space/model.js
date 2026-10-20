@@ -26,6 +26,9 @@ export function calculateFactorySpace(quantities, factorySettings = DEFAULT_FACT
   const assemblyArea = nonNegative(quantities.assemblyWorkers) * nonNegative(
     factory.workerSpaceM2 ?? DEFAULT_FACTORY_SETTINGS.factory.workerSpaceM2,
   )
+  const shippingWorkerArea = nonNegative(quantities.shippingWorkers) * nonNegative(
+    factory.workerSpaceM2 ?? DEFAULT_FACTORY_SETTINGS.factory.workerSpaceM2,
+  )
   const shippingArea = nonNegative(quantities.dispatchM2)
   const officeAndSocialArea = nonNegative(quantities.officeAndSocialM2)
   const finishedGoodsContainers = Math.max(
@@ -38,13 +41,14 @@ export function calculateFactorySpace(quantities, factorySettings = DEFAULT_FACT
         ?? DEFAULT_FACTORY_SETTINGS.inventory.finishedGoodsSpacePerContainerM2,
     )
   const totalArea = nonNegative(quantities.totalAreaM2)
-  const totalUsed = machiningArea + assemblyArea + shippingArea
+  const totalUsed = machiningArea + assemblyArea + shippingWorkerArea + shippingArea
     + officeAndSocialArea + finishedGoodsArea
 
   return {
     totalArea,
     machiningArea,
     assemblyArea,
+    shippingWorkerArea,
     shippingArea,
     dispatchArea: shippingArea,
     officeAndSocialArea,

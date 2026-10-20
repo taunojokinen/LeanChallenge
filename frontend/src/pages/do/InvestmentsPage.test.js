@@ -535,7 +535,9 @@ test('save succeeds before navigating to check with the current machine selectio
 
 test('explicit save failure displays a message and never navigates, and retry succeeds', async () => {
   const paths = []
-  const props = pageProps({ onNavigate: (path) => paths.push(path) })
+  const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+  gameState.factory.totalAreaM2 = 5000
+  const props = pageProps({ gameState, onNavigate: (path) => paths.push(path) })
   let tree = await loadPage(props)
   const write = window.localStorage.setItem
   window.localStorage.setItem = () => { throw new Error('Storage unavailable') }
@@ -571,7 +573,9 @@ test('valid counter edits auto-persist through remounts and a new round clears t
 })
 
 test('expansion controls preserve price, financing limits and removal persistence', async () => {
-  const props = pageProps()
+  const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+  gameState.factory.totalAreaM2 = 5000
+  const props = pageProps({ gameState })
   let tree = await loadPage(props)
   action(tree, '+', 1).onClick()
   tree = hooks.render(InvestmentsPage, props)

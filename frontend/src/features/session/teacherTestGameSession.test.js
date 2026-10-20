@@ -92,7 +92,7 @@ test('teacher test game uses selected quarterly fixed costs in its forecast', ()
 
   assert.equal(session.factorySettings.costs.annualFixedCosts, 3000000)
   assert.equal(forecast.forecast.finance.fixedCosts, 750000)
-  assert.equal(DEFAULT_FACTORY_SETTINGS.costs.annualFixedCosts, 4000000)
+  assert.equal(DEFAULT_FACTORY_SETTINGS.costs.annualFixedCosts, 2000000)
 })
 
 test('Quest and teacher test games share the fixed starting values and teacher settings snapshot', () => {
@@ -219,8 +219,8 @@ test('Quest retains its independent fixed round-zero capital and unchanged fixed
   assert.ok(Math.abs(teacher.gameState.finance.equity - 3000000) < 1e-7)
   assert.equal(quest.factorySettings.initialState.finance.equity, 2073975)
   assert.ok(Math.abs(quest.gameState.initialFinancialHistory.at(-1).finance.equity - 2073975) < 1e-7)
-  assert.equal(quest.factorySettings.costs.annualFixedCosts, 4000000)
-  assert.equal(quest.gameState.initialFinancialHistory.at(-1).incomeStatement.fixedCosts, 1000000)
+  assert.equal(quest.factorySettings.costs.annualFixedCosts, 2000000)
+  assert.equal(quest.gameState.initialFinancialHistory.at(-1).incomeStatement.fixedCosts, 500000)
 })
 
 test('new and advanced saved sessions preserve initial capital history and closing-finance continuity in both modes', () => {
@@ -265,7 +265,7 @@ test('legacy sessions keep their original finance and financial baseline rather 
     const restored = load(storage)
     assert.deepEqual(restored.gameState.finance, initialGameState.finance)
     const baseline = buildCanonicalFinancialHistory(restored.gameState, restored.factorySettings)
-    assert.equal(baseline.at(-1).finance.equity, -674245.1150390625)
+    assert.equal(baseline.at(-1).finance.equity, 844583.0099609375)
     save(restored, storage)
     assert.deepEqual(load(storage).gameState.initialFinancialHistory, baseline)
   }

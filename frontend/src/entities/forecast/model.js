@@ -687,6 +687,23 @@ function calculateScenario({
     machineCount,
     productionSettings.workersPerMachine,
   )
+  const openingFinishedGoodsInventory = toNumber(investmentsSnapshot.factory.finishedGoodsContainers)
+  const openingSpace = calculateFactorySpace({
+    totalAreaM2: totalArea,
+    machineCount,
+    assemblyWorkers: staffing.assembly,
+    shippingWorkers: staffing.shipping,
+    dispatchM2: investmentsSnapshot.factory.dispatchM2,
+    officeAndSocialM2: investmentsSnapshot.factory.officeAndSocialM2,
+    finishedGoodsContainers: openingFinishedGoodsInventory,
+  }, settings)
+  const finishedGoodsSpacePerContainer = toNumber(
+    inventorySettings.finishedGoodsSpacePerContainerM2,
+    DEFAULT_FACTORY_SETTINGS.inventory.finishedGoodsSpacePerContainerM2,
+  )
+  const additionalFinishedGoodsStorageCapacity = finishedGoodsSpacePerContainer > 0
+    ? Math.floor(Math.max(0, openingSpace.freeArea) / finishedGoodsSpacePerContainer)
+    : Number.MAX_SAFE_INTEGER
   const fiveSContributionDivisor = Math.max(1, toNumber(fiveSSettings.contributionDivisor, 3))
   const qualityMaxPct = normalizePercentValue(qualitySettings.maxPct, MAX_COMPONENT_PCT)
   const defaultLearningBasePct = toNumber(performanceSettings.defaultBasePct, 70)
@@ -805,11 +822,16 @@ function calculateScenario({
 
   const plantCapacity = Number(capacityByDepartment[bottleneckKey]) || 0
 
-  // requested/planned production is the player's plan (from CHECK/ACT or the demand fallback);
-  // it is intentionally NOT capped by demand, only by capacity.
-  const plannedProductionQuantity = clamp(requestedProductionQuantity, 0, plantCapacity)
+  // Keep the player's plan up to capacity unless production beyond demand would require more
+  // finished-goods space than remains after reserving the opening stock's area.
+  const capacityLimitedProductionQuantity = clamp(requestedProductionQuantity, 0, plantCapacity)
+  const plannedProductionQuantity = Math.min(
+    capacityLimitedProductionQuantity,
+    demand + additionalFinishedGoodsStorageCapacity,
+  )
   const actualProduction = plannedProductionQuantity
   const unusedCapacity = Math.max(0, plantCapacity - actualProduction)
+  const storageLimitedProductionQuantity = capacityLimitedProductionQuantity - plannedProductionQuantity
 
   // The batch-size-driven quantity is a minimum operational/Lean buffer, not the physical stock level.
   const minimumFinishedGoodsInventory = calculateMinimumFinishedGoodsContainers({
@@ -829,8 +851,7 @@ function calculateScenario({
     batchSize: selectedBatchSize,
     machineCount,
   })
-  const baseFinishedGoodsContainers = toNumber(investmentsSnapshot.factory.finishedGoodsContainers)
-  const openingFinishedGoodsInventory = baseFinishedGoodsContainers
+  const baseFinishedGoodsContainers = openingFinishedGoodsInventory
   const sellableOpeningFinishedGoodsInventory = Math.max(
     0,
     openingFinishedGoodsInventory - selectedBatchSizeMinimumFinishedGoodsInventory,
@@ -855,14 +876,14 @@ function calculateScenario({
   const finishedGoodsValue =
     closingFinishedGoodsInventory *
     toNumber(inventorySettings.finishedGoodsValuePerContainer, FINISHED_GOODS_VALUE_PER_CONTAINER)
-  const requiredFinishedGoodsContainers = Math.max(
-    applyDoDecisions ? closingFinishedGoodsInventory : openingFinishedGoodsInventory,
-    minimumFinishedGoodsInventory,
-  )
+  const requiredFinishedGoodsContainers = applyDoDecisions
+    ? closingFinishedGoodsInventory
+    : openingFinishedGoodsInventory
   const space = calculateFactorySpace({
     totalAreaM2: totalArea,
     machineCount,
     assemblyWorkers: staffing.assembly,
+    shippingWorkers: staffing.shipping,
     dispatchM2: investmentsSnapshot.factory.dispatchM2,
     officeAndSocialM2: investmentsSnapshot.factory.officeAndSocialM2,
     finishedGoodsContainers: requiredFinishedGoodsContainers,
@@ -969,6 +990,10 @@ function calculateScenario({
       finishedGoodsValue,
       finishedGoodsArea,
       baseFinishedGoodsContainers,
+      openingFreeFactorySpace: openingSpace.freeArea,
+      additionalFinishedGoodsStorageCapacity,
+      capacityLimitedProductionQuantity,
+      storageLimitedProductionQuantity,
       inventoryChange,
     },
     space: {
@@ -980,6 +1005,7 @@ function calculateScenario({
       officeArea,
       finishedGoodsArea,
       finishedGoodsContainers: requiredFinishedGoodsContainers,
+      openingFreeFactorySpace: openingSpace.freeArea,
       usedArea,
       freeFactorySpace,
     },

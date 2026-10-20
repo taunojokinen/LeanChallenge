@@ -17,7 +17,7 @@ test('new game starts from round 1 canonical state', () => {
   assert.equal(gameState.staffing.machining, 20)
   assert.equal(gameState.staffing.assembly, 38)
   assert.equal(gameState.staffing.shipping, 5)
-  assert.equal(gameState.factory.totalAreaM2, 4000)
+  assert.equal(gameState.factory.totalAreaM2, 4250)
 })
 
 test('CHECK forecast can be created from round 1 game state', () => {

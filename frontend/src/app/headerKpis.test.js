@@ -26,7 +26,7 @@ test('header KPIs come from persisted round-0 state, not forecast output', () =>
   assert.ok(production)
 
   assert.equal(revenue.value.replace(/\s/g, ' '), '3 750 000 €')
-  assert.equal(result.value.replace(/\s/g, ' ').replace(/−/g, '-'), '-825 962 €')
+  assert.equal(result.value.replace(/\s/g, ' ').replace(/−/g, '-'), '-332 135 €')
   assert.equal(production.value.replace(/\s/g, ' '), '150 kpl')
 })
 

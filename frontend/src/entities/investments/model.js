@@ -37,6 +37,7 @@ export function calculateFactorySpaceUsage(factoryState, factorySettings = DEFAU
     totalAreaM2: factoryState.totalAreaM2,
     machineCount: factoryState.machiningMachineCount,
     assemblyWorkers: factoryState.assemblyWorkers,
+    shippingWorkers: factoryState.shippingWorkers,
     dispatchM2: factoryState.dispatchM2,
     officeAndSocialM2: factoryState.officeAndSocialM2,
     finishedGoodsContainers: factoryState.finishedGoodsContainers,
@@ -254,6 +255,7 @@ export function buildInvestmentsViewModel({ snapshot, gameState, factorySettings
       breakdown: [
         { key: 'machiningArea', label: 'Koneistus' },
         { key: 'assemblyArea', label: 'Kokoonpano' },
+        { key: 'shippingWorkerArea', label: 'Lähettämöhenkilöstö' },
         { key: 'shippingArea', label: 'Lähettämö' },
         { key: 'officeAndSocialArea', label: 'Toimistot ja muut kiinteät tilat' },
         { key: 'finishedGoodsArea', label: 'Valmistuotevarasto' },

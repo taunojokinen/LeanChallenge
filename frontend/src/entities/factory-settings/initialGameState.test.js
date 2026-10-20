@@ -65,10 +65,11 @@ test('createInitialGameState clones factory inputs and uses the round-zero closi
   assert.equal(initialGameState.staffing.machining, 20)
   assert.equal(initialGameState.staffing.assembly, 38)
   assert.equal(initialGameState.staffing.shipping, 5)
-  assert.equal(initialGameState.factory.totalAreaM2, 4000)
+  assert.equal(initialGameState.factory.totalAreaM2, 4250)
+  assert.equal(initialGameState.finance.incomeStatement.fixedCosts, 500000)
   assert.equal(initialGameState.finance.cash, 50000)
   assert.ok(Math.abs(initialGameState.finance.bankLoans - 3002481.044921875) < 1e-7)
-  assert.equal(initialGameState.finance.equity, 2073975)
+  assert.ok(Math.abs(initialGameState.finance.equity - 2073975) < 1e-7)
   assert.equal(initialGameState.finance.otherLiabilities, 900000)
   assert.equal(initialGameState.finance.machineryBookValue, 427615.78125)
   assert.equal(initialGameState.finance.buildingsBookValue, 2778840.263671875)
@@ -77,6 +78,12 @@ test('createInitialGameState clones factory inputs and uses the round-zero closi
   assert.equal(initialGameState.finance.inventoryBookValue, 2720000)
   assert.equal(initialGameState.finance.incomeStatement.depreciation, 93758.408203125)
   assert.deepEqual(initialGameState.finance, initialGameState.initialFinancialHistory.at(-1).finance)
+})
+
+test('default fixed costs are 500000 euros per round in the shared forecast', () => {
+  const forecast = calculateRoundForecast(createInitialGameState())
+
+  assert.equal(forecast.forecast.finance.fixedCosts, 500000)
 })
 
 test('createInitialGameState respects settings overrides', () => {
@@ -177,7 +184,7 @@ test('createInitialGameState works with calculateRoundForecast without attached 
   assert.equal(forecast.forecast.staffing.machining, 20)
   assert.equal(forecast.forecast.staffing.assembly, 38)
   assert.equal(forecast.forecast.staffing.shipping, 5)
-  assert.equal(forecast.forecast.space.totalArea, 4000)
+  assert.equal(forecast.forecast.space.totalArea, 4250)
 })
 
 test('round-1 forecast has no NaN or undefined in essential outputs', () => {

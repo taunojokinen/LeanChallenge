@@ -149,7 +149,7 @@ export const DEFAULT_FACTORY_SETTINGS = {
   costs: {
     materialCostPerContainer: 12000,
     annualEmployeeCost: 105000,
-    annualFixedCosts: 4000000,
+    annualFixedCosts: 2000000,
   },
 
   finance: {
@@ -254,7 +254,7 @@ export const DEFAULT_FACTORY_SETTINGS = {
     },
 
     factory: {
-      totalAreaM2: 4000,
+      totalAreaM2: 4250,
       dispatchM2: 250,
       officeAndSocialM2: 200,
       expansionsCount: 0,
@@ -282,7 +282,7 @@ export const DEFAULT_FACTORY_SETTINGS = {
         inventoryChange: 50000,
         materials: 1320000,
         labor: 1500000,
-        fixedCosts: 750000,
+        fixedCosts: 500000,
         depreciation: 103125,
         financingCosts: 17500,
       },

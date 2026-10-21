@@ -8,12 +8,14 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { createServer } from 'vite'
 import { createInitialGameState } from '../../entities/factory-settings/initialGameState.js'
 import { DEFAULT_FACTORY_SETTINGS } from '../../entities/factory-settings/defaultFactorySettings.js'
+import { advanceRoundState } from '../../entities/game-round/advanceRound.js'
 
 const HOOKS_MODULE = 'virtual:check-page-test-hooks'
 const originalWindow = globalThis.window
 let server
 let cacheDir
 let CheckPage
+let ActPage
 let hooks
 
 before(async () => {
@@ -29,7 +31,7 @@ before(async () => {
       name: 'check-page-test-hooks',
       enforce: 'pre',
       transform(code, id) {
-        if (id.replaceAll('\\', '/').endsWith('/pages/check/CheckPage.jsx')) {
+        if (/\/pages\/(?:check\/CheckPage|act\/ActPage)\.jsx$/.test(id.replaceAll('\\', '/'))) {
           return code.replace("from 'react'", `from '${HOOKS_MODULE}'`)
         }
       },
@@ -57,12 +59,14 @@ before(async () => {
             cursor++
             return calculate()
           }
+          export function useEffect() {}
         `
       },
     }],
   })
   hooks = await server.ssrLoadModule(HOOKS_MODULE)
   CheckPage = (await server.ssrLoadModule('/src/pages/check/CheckPage.jsx')).default
+  ActPage = (await server.ssrLoadModule('/src/pages/act/ActPage.jsx')).default
 })
 
 beforeEach(() => {
@@ -128,6 +132,99 @@ function departmentCapacity(tree, key) {
   return String(findElements(department, (element) => element.type === 'p')[0].props.children)
 }
 
+test('CHECK updates batch-size capacity on every planning round, including eleven and twelve', () => {
+  const capacities = []
+  const initial = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+  for (let round = 1; round <= 12; round++) {
+    hooks.reset()
+    window.localStorage.removeItem('lean-challenge-check-production-decision')
+    const gameState = structuredClone(initial)
+    gameState.round = round
+    gameState.finance.equity = 100000000
+    gameState.market.batchSize = 10
+    const pageProps = props({ gameState })
+    const original = structuredClone(gameState)
+    const initialTree = hooks.render(CheckPage, pageProps)
+    const initialCapacity = departmentCapacity(initialTree, 'machining')
+
+    range(initialTree, 'Eräkoko').props.onChange({ target: { value: '20' } })
+    const updatedTree = hooks.render(CheckPage, pageProps)
+    const saved = JSON.parse(window.localStorage.getItem('lean-challenge-check-production-decision'))
+
+    assert.equal(Number(range(updatedTree, 'Eräkoko').props.value), 20)
+    assert.equal(saved.batchSize, 20)
+    assert.equal(saved.round, round)
+    assert.notEqual(departmentCapacity(updatedTree, 'machining'), initialCapacity)
+    assert.match(renderToStaticMarkup(updatedTree), new RegExp(`kapasiteettiennuste kierrokselle ${round}\\.`))
+    assert.deepEqual(gameState, original)
+    capacities.push([initialCapacity, departmentCapacity(updatedTree, 'machining')])
+  }
+  assert.ok(capacities.every((capacity) => JSON.stringify(capacity) === JSON.stringify(capacities[0])))
+})
+
+test('CHECK and ACT agree on current-round capacity with DO decisions and a saved ACT production plan, even in bankruptcy', () => {
+  const initial = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+  for (const round of [11, 12]) {
+    for (const equity of [100000000, 1]) {
+      hooks.reset()
+      const gameState = structuredClone(initial)
+      gameState.round = round
+      gameState.finance.equity = equity
+      gameState.market.batchSize = 10
+      gameState.factory.totalAreaM2 = 10000
+      window.localStorage.setItem('lean-challenge-five-s-decision', JSON.stringify({
+        round, investedHours: { machining: 30, assembly: 30, shipping: 30 },
+      }))
+      window.localStorage.setItem('lean-challenge-projects-decision', JSON.stringify({
+        round, selections: [{ department: 'machining', method: 'smed', investedHours: 100 }],
+      }))
+      window.localStorage.setItem('lean-challenge-investments-decision', JSON.stringify({
+        round, investments: [{ type: 'new-machine', quantity: 1 }],
+      }))
+      window.localStorage.setItem('lean-challenge-check-staffing-decision', JSON.stringify({
+        round, staffing: { assembly: 45, shipping: 7 },
+      }))
+      window.localStorage.setItem('lean-challenge-check-production-decision', JSON.stringify({ round, batchSize: 10 }))
+      window.localStorage.setItem('lean-challenge-act-decision', JSON.stringify({
+        round, price: 25000, addedVariations: 0, productionQuantity: 100,
+      }))
+      const original = structuredClone(gameState)
+      const pageProps = props({ gameState })
+      const before = hooks.render(CheckPage, pageProps)
+      range(before, 'Eräkoko').props.onChange({ target: { value: '20' } })
+      const checkTree = hooks.render(CheckPage, pageProps)
+      const checkHtml = renderToStaticMarkup(checkTree)
+      const storedActDecision = window.localStorage.getItem('lean-challenge-act-decision')
+      hooks.reset()
+      const forecasts = []
+      const actTree = hooks.render(ActPage, { ...pageProps, onAdvanceRound: (forecast) => forecasts.push(forecast) })
+      findElements(actTree, (element) => element.type?.name === 'Button')[0].props.onClick()
+      const act = forecasts[0]
+
+      assert.equal(act.round, round)
+      assert.equal(act.decisions.market.batchSize, 20)
+      assert.equal(act.summary.actualProduction, 100)
+      for (const department of ['machining', 'assembly', 'shipping']) {
+        const capacity = act.forecast.capacityByDepartment[department].toLocaleString('fi-FI', {
+          minimumFractionDigits: 1, maximumFractionDigits: 1,
+        })
+        assert.equal(departmentCapacity(checkTree, department), `${capacity} konttia, / kierros`)
+      }
+      const minimumInventory = act.forecast.inventory.minimumFinishedGoodsInventory.toLocaleString('fi-FI', {
+        minimumFractionDigits: 1, maximumFractionDigits: 1,
+      })
+      assert.ok(checkHtml.includes(`Minimivarasto</dt><dd>${minimumInventory} konttia</dd>`))
+      assert.equal(JSON.parse(storedActDecision).productionQuantity, 100)
+      assert.deepEqual(gameState, original)
+      const confirmed = advanceRoundState({ gameState, forecast: act, totalRounds: 12 })
+      assert.equal(confirmed.isGameOver, equity === 1)
+      if (equity === 1) {
+        assert.equal(confirmed.nextGameState.completion.reason, 'bankruptcy')
+      }
+    }
+  }
+})
+
 test('renders the three CHECK cards and removes the other effects section', () => {
   const tree = hooks.render(CheckPage, props())
   const html = renderToStaticMarkup(tree)
@@ -136,9 +233,9 @@ test('renders the three CHECK cards and removes the other effects section', () =
   assert.match(html, /CHECK – Vaikutusarvio/)
   assert.match(html, /Säädä henkilöstöä ja eräkokoa\. Tarkista vaikutukset ennen ACT-vaihetta\./)
   assert.match(html, /Henkilöstö ja kapasiteetti/)
-  assert.match(html, /Henkilöstöpäätökset kierrokselle 1; kapasiteettiennuste kierrokselle 2\./)
+  assert.match(html, /Henkilöstöpäätökset kierrokselle 1; kapasiteettiennuste kierrokselle 1\./)
   assert.match(html, /Eräkoko ja varasto/)
-  assert.match(html, /Eräkoon tuotantovaikutus näkyy kierroksen 2 ennusteessa\./)
+  assert.match(html, /Eräkoon tuotantovaikutus näkyy kierroksen 1 ennusteessa\./)
   assert.match(html, /Miksi minimivarastoa tarvitaan\?/)
   assert.match(html, /Asiakas edellyttää jatkuvaa toimituskykyä: viikon aikana on pystyttävä toimittamaan mitä tahansa tuotevariaatiota\./)
   assert.match(html, /Pienempi eräkoko ja suurempi konemäärä vähentävät minimivaraston tarvetta\./)
@@ -274,7 +371,7 @@ test('staffing slider maximum follows free space and blocks further additions at
   assert.equal(button(tree, 'Lisää koonnan henkilöstöä').props.disabled, true)
 })
 
-test('batch-size slider updates the model-backed inventory and space preview and persists for the next round', () => {
+test('batch-size slider updates the current-round inventory and space preview and survives remount', () => {
   const pageProps = props()
   const tree = hooks.render(CheckPage, pageProps)
   const input = range(tree, 'Eräkoko')

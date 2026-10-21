@@ -14,6 +14,7 @@ function GameLayout({
   gameMode,
   onReturnToTeacherSettings,
   onRestartGame,
+  completion,
   children,
 }) {
   return (
@@ -25,9 +26,10 @@ function GameLayout({
         kpis={kpis}
         userName={userName}
         onLogout={onLogout}
+        completion={completion}
       />
-      <div className="game-layout-body">
-        <GameSidebar pageKey={pageKey} onNavigate={onNavigate} />
+      <div className={`game-layout-body${completion ? ' is-complete' : ''}`}>
+        {!completion ? <GameSidebar pageKey={pageKey} onNavigate={onNavigate} /> : null}
         <section className="game-layout-content">
           {gameMode === 'teacher-test' ? (
             <aside className="teacher-test-game-banner" aria-label="Opettajan testipeli">

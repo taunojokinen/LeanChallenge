@@ -3,7 +3,7 @@ import { APP_NAME } from '../../config/appConfig.js'
 import { formatConfirmedKpiRound, formatGameplayRound } from './roundDisplay.js'
 import './GameHeader.css'
 
-function GameHeader({ round, totalRounds, kpis, userName, onLogout }) {
+function GameHeader({ round, totalRounds, kpis, userName, onLogout, completion }) {
   return (
     <header className="game-header">
       <div className="game-header-brand" aria-label={APP_NAME}>
@@ -17,7 +17,9 @@ function GameHeader({ round, totalRounds, kpis, userName, onLogout }) {
 
       <div className="game-header-round" aria-label="Kierrostieto">
         <p>{formatGameplayRound(round, totalRounds)}</p>
-        <small>{formatConfirmedKpiRound(round)}</small>
+        <small>{completion
+          ? `KPI:t vahvistettu kierrokselta ${completion.confirmedRound}`
+          : formatConfirmedKpiRound(round)}</small>
       </div>
 
       <div className="game-header-kpis" aria-label="Pelin päätunnusluvut">

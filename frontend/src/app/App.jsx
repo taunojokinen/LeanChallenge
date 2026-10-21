@@ -11,12 +11,15 @@ import DevelopmentPage from '../pages/do/DevelopmentPage.jsx'
 import InvestmentsPage from '../pages/do/InvestmentsPage.jsx'
 import CheckPage from '../pages/check/CheckPage.jsx'
 import ActPage from '../pages/act/ActPage.jsx'
+import FinalReportPage from '../pages/game/FinalReportPage.jsx'
 import { appRoutes } from './router/index.jsx'
+import { resolveGamePath } from './router/gameNavigation.js'
 import { DEFAULT_FACTORY_SETTINGS } from '../entities/factory-settings/defaultFactorySettings.js'
 import { createInitialGameState } from '../entities/factory-settings/initialGameState.js'
 import { calculateRoundForecast } from '../entities/forecast/model.js'
 import { buildGameHeaderKpis } from './headerKpis.js'
 import { advanceRoundState } from '../entities/game-round/advanceRound.js'
+import { getGameCompletion } from '../entities/game-round/completion.js'
 import { resetGameDecisionStorage } from '../features/session/resetGameSession.js'
 import { loadCheckProductionDecision } from '../features/check/decisionStore.js'
 import GameIntroDialog from '../features/game-intro/GameIntroDialog.jsx'
@@ -66,6 +69,7 @@ const gamePhaseByPageKey = {
   check: 'CHECK',
   act: 'ACT',
   investments: 'ACT',
+  'game-report': 'REPORT',
 }
 
 const placeholderContentByPageKey = {
@@ -113,15 +117,17 @@ function App() {
     () => restoredSession?.gameState ?? structuredClone(initialGameState),
   )
   const [roundStatus, setRoundStatus] = useState('')
+  const completion = getGameCompletion(gameState, factorySettings.game.totalRounds)
+  const effectivePathname = resolveGamePath(pathname, completion)
 
   const baseForecast = useMemo(
-    () => calculateRoundForecast(gameState, {}, factorySettings),
-    [factorySettings, gameState],
+    () => completion ? null : calculateRoundForecast(gameState, {}, factorySettings),
+    [completion, factorySettings, gameState],
   )
 
   const inventoryTurnover = useMemo(() => {
-    const deliveries = Number(baseForecast.summary.deliveries) || 0
-    const averageInventory = Number(baseForecast.summary.finishedGoodsInventory) || 0
+    const deliveries = Number(baseForecast?.summary.deliveries) || 0
+    const averageInventory = Number(baseForecast?.summary.finishedGoodsInventory) || 0
     if (averageInventory <= 0) {
       return 0
     }
@@ -135,6 +141,12 @@ function App() {
   )
 
   useEffect(() => {
+    if (window.location.pathname !== effectivePathname) {
+      window.history.replaceState({}, '', effectivePathname)
+    }
+  }, [effectivePathname, pathname])
+
+  useEffect(() => {
     try {
       const createSession = gameMode === TEACHER_TEST_GAME_MODE
         ? createTeacherTestGameSession : createQuestGameSession
@@ -144,12 +156,13 @@ function App() {
         factorySettings,
         initialGameState,
         gameState,
-        pathname: isTeacherTestGamePath(pathname) ? pathname : lastGamePathname,
+        pathname: completion ? '/game/report'
+          : isTeacherTestGamePath(effectivePathname) ? effectivePathname : lastGamePathname,
       }))
     } catch (error) {
       console.error('Pelisession tallennus epäonnistui.', error)
     }
-  }, [factorySettings, gameMode, gameState, initialGameState, lastGamePathname, pathname])
+  }, [completion, effectivePathname, factorySettings, gameMode, gameState, initialGameState, lastGamePathname])
 
   useEffect(() => {
     const handlePopState = () => {
@@ -168,10 +181,10 @@ function App() {
   }, [])
 
   const pageKey = useMemo(() => {
-    const matchedRoute = appRoutes.find((route) => route.path === pathname)
+    const matchedRoute = appRoutes.find((route) => route.path === effectivePathname)
 
     return matchedRoute?.pageKey ?? 'landing'
-  }, [pathname])
+  }, [effectivePathname])
 
   const navigateTo = (nextPath) => {
     const normalizedPath = normalizePath(nextPath)
@@ -188,6 +201,11 @@ function App() {
   }
 
   const handleAdvanceRound = (forecast) => {
+    if (completion) {
+      navigateTo('/game/report')
+      return
+    }
+
     const checkProductionDecision = loadCheckProductionDecision(gameState.round)
     const result = advanceRoundState({
       gameState,
@@ -198,13 +216,9 @@ function App() {
 
     setGameState(result.nextGameState)
 
-    if (result.isGameOver) {
-      setRoundStatus('Peli päättyi, koska closing equity on nolla tai negatiivinen.')
-      return result
-    }
-
     if (result.isGameComplete) {
-      setRoundStatus('Kaikki pelatut kierrokset on vahvistettu.')
+      setRoundStatus('')
+      navigateTo('/game/report')
       return result
     }
 
@@ -280,8 +294,15 @@ function App() {
         gameMode={gameMode}
         onReturnToTeacherSettings={() => navigateTo('/teacher/settings')}
         onRestartGame={handleRestartGame}
+        completion={completion}
       >
-        {pageKey === 'plan-cockpit' ? (
+        {pageKey === 'game-report' ? (
+          <FinalReportPage
+            gameState={gameState}
+            totalRounds={factorySettings.game.totalRounds}
+            onRestartGame={handleRestartGame}
+          />
+        ) : pageKey === 'plan-cockpit' ? (
           <PlanCockpitPage
             onNavigate={navigateTo}
             round={gameState.round}

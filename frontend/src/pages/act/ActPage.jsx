@@ -4,11 +4,13 @@ import Card from '../../shared/ui/Card/Card.jsx'
 import { calculateRoundForecast } from '../../entities/forecast/model.js'
 import { buildCanonicalFinancialHistory, normalizeFinancialHistoryEntry } from '../../entities/factory-settings/financialHistory.js'
 import { relativePercentChange } from '../../entities/history/relativeChange.js'
+import { formatPercentChange } from '../../shared/lib/formatPercentChange.js'
 import { loadFiveSDecision } from '../../features/five-s/decisionStore.js'
 import { loadProjectsDecision } from '../../features/projects/decisionStore.js'
 import { loadInvestmentsDecision } from '../../features/investments/decisionStore.js'
 import { loadCheckStaffingDecision, loadCheckProductionDecision } from '../../features/check/decisionStore.js'
 import { loadActDecision, saveActDecision } from '../../features/act/decisionStore.js'
+import { createInitialProductionPlan, calculateProductionForecast } from '../../features/act/productionForecast.js'
 import './ActPage.css'
 
 const EURO_FORMATTER = new Intl.NumberFormat('fi-FI', {
@@ -28,15 +30,6 @@ function formatCurrency(value) {
 
 function formatContainers(value) {
   return `${DECIMAL_FORMATTER.format(Number(value) || 0)} konttia`
-}
-
-function formatChange(value) {
-  if (value == null || !Number.isFinite(value)) {
-    return '—'
-  }
-
-  const sign = value > 0 ? '+' : ''
-  return `${sign}${DECIMAL_FORMATTER.format(value)} %`
 }
 
 function clamp(value, min, max) {
@@ -96,32 +89,14 @@ function createInitialActState(gameState, factorySettings) {
     investmentsDecision,
     checkStaffingDecision,
   }
-  const price = actDecision?.price ?? gameState.market?.price ?? 25000
-  const addedVariations = actDecision?.addedVariations ?? 0
   const batchSize =
     checkProductionDecision?.batchSize ??
     gameState.market?.batchSize ??
     factorySettings?.production?.initialBatchSize ??
     20
-  const baseForecast = calculateRoundForecast(
-    decisionGameState,
-    { market: { price, addedVariations, batchSize } },
-    factorySettings,
-  )
-
   return {
     decisionGameState,
-    price,
-    productionQuantity: clamp(
-      actDecision?.productionQuantity ??
-        gameState.market?.productionQuantity ??
-        Math.min(baseForecast.summary.demand, baseForecast.summary.plantCapacity),
-      0,
-      baseForecast.summary.plantCapacity,
-    ),
-    addedVariations: baseForecast.decisions.market.addedVariations,
-    useFinishedGoodsInventoryForDeliveries: actDecision?.useFinishedGoodsInventoryForDeliveries ?? false,
-    batchSize,
+    ...createInitialProductionPlan(decisionGameState, batchSize, actDecision, factorySettings),
     previousIncome: getPreviousIncome(gameState, factorySettings),
   }
 }
@@ -167,24 +142,13 @@ function ActPage({ gameState, factorySettings, onAdvanceRound, statusMessage: ro
       return null
     }
 
-    const overrides = {
-      market: {
-        price,
-        addedVariations,
-        productionQuantity,
-        batchSize,
-        useFinishedGoodsInventoryForDeliveries,
-      },
-    }
-    const requestedForecast = calculateRoundForecast(decisionGameState, overrides, factorySettings)
-    const clampedQuantity = Math.min(productionQuantity, requestedForecast.summary.plantCapacity)
-
-    return clampedQuantity === productionQuantity
-      ? requestedForecast
-      : calculateRoundForecast(decisionGameState, {
-          ...overrides,
-          market: { ...overrides.market, productionQuantity: clampedQuantity },
-        }, factorySettings)
+    return calculateProductionForecast(decisionGameState, {
+      price,
+      addedVariations,
+      productionQuantity,
+      batchSize,
+      useFinishedGoodsInventoryForDeliveries,
+    }, factorySettings)
   }, [
     addedVariations,
     decisionGameState,
@@ -423,7 +387,7 @@ function ActPage({ gameState, factorySettings, onAdvanceRound, statusMessage: ro
               <div>
                 <dt>Liikevaihdon muutos edelliseen kierrokseen</dt>
                 <dd className={revenueChange == null ? '' : revenueChange > 0 ? 'is-positive' : revenueChange < 0 ? 'is-negative' : ''}>
-                  {formatChange(revenueChange)}
+                  {formatPercentChange(revenueChange)}
                 </dd>
               </div>
               <div>
@@ -434,7 +398,7 @@ function ActPage({ gameState, factorySettings, onAdvanceRound, statusMessage: ro
                 <div>
                   <dt>Tuloksen muutos edelliseen kierrokseen</dt>
                   <dd className={resultChange == null ? '' : resultChange > 0 ? 'is-positive' : resultChange < 0 ? 'is-negative' : ''}>
-                    {formatChange(resultChange)}
+                    {formatPercentChange(resultChange)}
                   </dd>
                 </div>
               ) : null}
@@ -445,7 +409,9 @@ function ActPage({ gameState, factorySettings, onAdvanceRound, statusMessage: ro
 
       <section className="act-actions" aria-label="ACT-vaiheen navigointi">
         <Button type="button" onClick={handleApprove}>
-          HYVÄKSY PÄÄTÖKSET JA SIIRRY SEURAAVALLE KIERROKSELLE →
+          {gameState.round >= factorySettings.game.totalRounds
+            ? 'Päätä peli ja näytä loppuraportti'
+            : 'HYVÄKSY PÄÄTÖKSET JA SIIRRY SEURAAVALLE KIERROKSELLE →'}
         </Button>
       </section>
 

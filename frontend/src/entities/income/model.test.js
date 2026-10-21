@@ -186,6 +186,33 @@ test('zero previous values produce finite change values', () => {
   })
 })
 
+test('all income change percentages use one Finnish decimal without changing result direction', () => {
+  const baselineHistory = buildInitialIncomeHistory(createInitialGameState(), DEFAULT_FACTORY_SETTINGS)
+  for (const [previous, current, expected, impact] of [
+    [-100, -7.86813523151572, '+92,1 %', 'positive'],
+    [-100, 50, '+150,0 %', 'positive'],
+    [100, -50, '−150,0 %', 'negative'],
+    [-100, -108.44, '−8,4 %', 'negative'],
+    [100, 100, '0,0 %', 'neutral'],
+    [0, 100, '—', 'neutral'],
+  ]) {
+    const view = buildIncomeHistoryView({
+      baselineHistory,
+      runtimeHistory: [runtimeEntry(1, previous, 200), runtimeEntry(2, current, 240)],
+    })
+    const rows = buildIncomeStatementRows(view)
+    const result = rows.find((row) => row.key === 'result')
+
+    assert.equal(result.deltaText, expected)
+    assert.equal(result.impact, impact)
+    assert.equal(result.currentAmount, current)
+    assert.equal(result.previousAmount, previous)
+    for (const row of rows) {
+      assert.match(row.deltaText, /^(?:[+−]?\d[\d\u00a0]*,\d %|—)$/)
+    }
+  }
+})
+
 test('result change percentage uses the absolute previous result across negative-to-positive changes', () => {
   const row = buildIncomeStatementRows({
     rows: {
@@ -212,7 +239,7 @@ test('result change percentage uses the absolute previous result across negative
     },
   }).find((item) => item.key === 'result')
 
-  assert.equal(row.deltaText, '+150 %')
+  assert.equal(row.deltaText, '+150,0 %')
   assert.equal(row.impact, 'positive')
 })
 

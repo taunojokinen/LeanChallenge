@@ -54,12 +54,14 @@
 
 .plan-income-table {
   display: grid;
+  grid-template-columns: minmax(180px, 1.5fr) minmax(max-content, 1fr) minmax(max-content, 0.5fr) minmax(max-content, 1fr) minmax(max-content, 0.5fr) minmax(max-content, 0.65fr);
   min-width: 48rem;
 }
 
 .plan-income-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1.5fr) minmax(140px, 1fr) minmax(65px, 0.5fr) minmax(140px, 1fr) minmax(65px, 0.5fr) minmax(85px, 0.65fr);
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: baseline;
   gap: 1rem;
   padding: 0.85rem 1rem;

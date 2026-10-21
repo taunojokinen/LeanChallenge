@@ -238,3 +238,89 @@ test('zero previous result omits result change percentage', () => {
   assert.match(html, /Tulosennuste/)
   assert.doesNotMatch(html, /Tuloksen muutos edelliseen kierrokseen/)
 })
+
+test('ACT uses the shared Finnish one-decimal change presentation', () => {
+  const html = renderToStaticMarkup(hooks.render(ActPage, props()))
+  const changes = [...html.matchAll(/<dt>(?:Liikevaihdon|Tuloksen) muutos edelliseen kierrokseen<\/dt><dd[^>]*>([^<]*)<\/dd>/g)]
+
+  assert.equal(changes.length, 2)
+  for (const change of changes) {
+    assert.match(change[1], /^(?:[+−]?\d[\d\u00a0]*,\d %|—)$/)
+  }
+})
+
+test('the final ACT confirmation offers to end the game and passes its final forecast', () => {
+  const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+  gameState.round = 12
+  const forecasts = []
+  const tree = hooks.render(ActPage, props({
+    gameState,
+    onAdvanceRound: (forecast) => forecasts.push(forecast),
+  }))
+  const actions = findElements(tree, (element) => element.type?.name === 'Button')
+
+  assert.equal(actions.length, 1)
+  assert.equal(actions[0].props.children, 'Päätä peli ja näytä loppuraportti')
+  actions[0].props.onClick()
+  assert.equal(forecasts.length, 1)
+  assert.equal(forecasts[0].closingState.canonical.round, 12)
+})
+
+test('ACT applies the CHECK batch-size choice equally on rounds one, eleven and twelve', () => {
+  const results = []
+  for (const round of [1, 11, 12]) {
+    for (const batchSize of [10, 20]) {
+      hooks.reset()
+      window.localStorage.removeItem('lean-challenge-act-decision')
+      window.localStorage.setItem('lean-challenge-check-production-decision', JSON.stringify({ round, batchSize }))
+      const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+      gameState.round = round
+      gameState.market.batchSize = 10
+      const approved = []
+      const tree = hooks.render(ActPage, props({
+        gameState,
+        onAdvanceRound: (forecast) => approved.push(forecast),
+      }))
+      findElements(tree, (element) => element.type?.name === 'Button')[0].props.onClick()
+
+      assert.equal(approved.length, 1)
+      assert.equal(approved[0].decisions.market.batchSize, batchSize)
+      assert.equal(approved[0].summary.actualProduction, Number(range(tree, 'Tuotantomäärä').props.value))
+      results.push({
+        batchSize,
+        capacity: approved[0].summary.plantCapacity,
+        actual: approved[0].summary.actualProduction,
+      })
+    }
+  }
+  assert.deepEqual(results.slice(0, 2), results.slice(2, 4))
+  assert.deepEqual(results.slice(0, 2), results.slice(4))
+  assert.ok(results[1].capacity > results[0].capacity)
+  assert.ok(results[1].actual > results[0].actual)
+})
+
+test('saved ACT production does not increase automatically when batch size frees capacity, including round twelve', () => {
+  for (const round of [1, 12]) {
+    const results = []
+    for (const batchSize of [5, 20]) {
+      hooks.reset()
+      window.localStorage.setItem('lean-challenge-check-production-decision', JSON.stringify({ round, batchSize }))
+      window.localStorage.setItem('lean-challenge-act-decision', JSON.stringify({
+        round, price: 25000, productionQuantity: 100, addedVariations: 0,
+      }))
+      const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+      gameState.round = round
+      gameState.market.batchSize = 10
+      const approved = []
+      const tree = hooks.render(ActPage, props({
+        gameState,
+        onAdvanceRound: (forecast) => approved.push(forecast),
+      }))
+      findElements(tree, (element) => element.type?.name === 'Button')[0].props.onClick()
+      assert.equal(Number(range(tree, 'Tuotantomäärä').props.value), 100)
+      assert.equal(approved[0].summary.actualProduction, 100)
+      results.push(approved[0].summary.plantCapacity)
+    }
+    assert.ok(results[1] > results[0])
+  }
+})

@@ -1,4 +1,5 @@
 import { buildLegacyFinancialHistory } from '../../entities/factory-settings/financialHistory.js'
+import { getGameCompletion } from '../../entities/game-round/completion.js'
 
 export const TEACHER_TEST_GAME_MODE = 'teacher-test'
 export const TEACHER_TEST_SESSION_STORAGE_KEY = 'lean-challenge-teacher-test-session-v1'
@@ -15,6 +16,7 @@ const PHASE_BY_PATH = {
   '/check': 'CHECK',
   '/act': 'ACT',
   '/investments': 'ACT',
+  '/game/report': 'REPORT',
 }
 
 function resolveStorage(storage) {
@@ -102,6 +104,13 @@ function loadGameSession(storage, mode, key) {
         buildLegacyFinancialHistory(session.factorySettings)
       session.initialGameState.initialFinancialHistory = structuredClone(history)
       session.gameState.initialFinancialHistory = structuredClone(history)
+    }
+
+    const completion = getGameCompletion(session.gameState, session.factorySettings.game.totalRounds)
+    if (completion) {
+      session.gameState.completion = completion
+      session.pathname = '/game/report'
+      session.phase = 'REPORT'
     }
 
     return structuredClone(session)

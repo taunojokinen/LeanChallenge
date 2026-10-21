@@ -1,5 +1,9 @@
 export const appRoutes = [
   {
+    path: '/game/report',
+    pageKey: 'game-report',
+  },
+  {
     path: '/',
     pageKey: 'landing',
   },

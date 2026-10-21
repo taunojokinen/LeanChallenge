@@ -1,3 +1,5 @@
+import { getGameCompletion } from './completion.js'
+
 function requireCanonicalClosingState(forecast) {
   const canonical = forecast?.closingState?.canonical
 
@@ -46,6 +48,10 @@ function appendHistory(history, historyEntry) {
 }
 
 export function advanceRoundState({ gameState, forecast, totalRounds, checkProductionDecision }) {
+  if (getGameCompletion(gameState, totalRounds)) {
+    throw new Error('Cannot advance a completed game')
+  }
+
   const canonical = requireCanonicalClosingState(forecast)
   const currentRound = Number(gameState?.round)
 
@@ -64,6 +70,12 @@ export function advanceRoundState({ gameState, forecast, totalRounds, checkProdu
     ...(gameState.initialFinancialHistory ? { initialFinancialHistory: gameState.initialFinancialHistory } : {}),
     round: nextRound,
     history: appendHistory(gameState.history, historyEntry),
+    ...(isGameComplete ? {
+      completion: {
+        reason: isGameOver ? 'bankruptcy' : 'round-limit',
+        confirmedRound: currentRound,
+      },
+    } : {}),
   }
 
   // CHECK's next-round batch-size decision is made during the round being confirmed

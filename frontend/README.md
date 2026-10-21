@@ -38,6 +38,30 @@ palauttaa sen suljettaessa ja vierittää sisältöä pienissä näkymissä.
 
 ---
 
+## Pelin päättyminen ja loppuraportti
+
+Viimeisen kierroksen ACT-painike on **Päätä peli ja näytä loppuraportti**.
+Vahvistus tallentaa kierroksen toteuman ja pelin `completion`-tilan
+(`round-limit` tai `bankruptcy`) ja avaa reitin `/game/report`.
+Kierrosta 13 ei käynnistetä. Myös oman pääoman laskeminen nollaan tai
+negatiiviseksi päättää pelin ja avaa raportin.
+
+Loppuraportin vasen SVG-graafi näyttää aina KNL:n. Oikean graafin nuolilla
+vaihdetaan liikevaihdon, tuloksen ja oman pääoman välillä. Graafit käyttävät
+vain `gameState.history`-taulukon vahvistettuja kierroksia; KNL johdetaan
+tallennetuista tehtaan K-, N- ja L-tekijöistä samalla apurilla kuin muualla
+pelissä. Puuttuvia tietoja ei täytetä nollilla, ja puuttuva kierros katkaisee
+viivan. Graafien alla näkyvät viimeisen vahvistetun kierroksen neljä
+tunnuslukua. Kierrostiedot voi avata myös taulukkona.
+
+Quest ja opettajan testipeli säilyttävät historian, päättymistilan ja
+raporttireitin nykyisessä sessionStorage-tallennuksessa. Sivun päivitys
+palauttaa raportin; välilehden sulkemisen yli säilyvää peliarkistoa ei ole.
+Myös aiemmin päättyneet sessiot tunnistetaan viimeisestä vahvistetusta
+kierroksesta. Päättyneen pelin päätössivut ohjataan raporttiin ja uusi
+vahvistus estetään pelimallissa. **Aloita uusi peli** luo uuden session
+samoilla pelimuodon asetuksilla.
+
 # 2. Tehdas
 
 Tehtaassa on kolme peräkkäistä työvaihetta:
@@ -394,6 +418,16 @@ Poka-Yoke
 CHECK-sivulla arvioidaan DO-vaiheessa suunniteltujen Lean-toimenpiteiden vaikutuksia ennen niiden lopullista hyväksymistä.
 
 CHECK opettaa pelaajalle Lean-toimenpiteiden, KNL:n ja kapasiteetin välisiä syy-seuraussuhteita.
+
+Eräkoon, henkilöstön, varaston ja kapasiteetin esikatselu lasketaan kuluvan
+suunnittelukierroksen lähtötilasta, ei vahvistetusta päättävästä tilasta.
+Esikatselu ei vahvista kierrosta eikä kutsu `advanceRoundState`-funktiota.
+Sama toiminta pätee kierroksilla 1–12 ja myös konkurssiin päättyvällä kierroksella.
+CHECK ja ACT käyttävät yhteistä tuotantosuunnitelman alustusta ja
+kapasiteettirajauksen sisältävää ennusteapuria. Tallennettu ACT-tuotantomäärä,
+hinta ja asiakkuuspäätös otetaan huomioon molemmissa näkymissä.
+Kapasiteetin kasvu ei automaattisesti nosta tallennettua ACT-tuotantomäärää.
+Eräkoon, asetusaikojen, kysynnän ja tuotannon laskentasäännöt eivät muutu.
 
 ## Näytettävät tiedot
 

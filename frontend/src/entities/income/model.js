@@ -1,5 +1,6 @@
 import { normalizeFinancialHistoryEntry } from '../factory-settings/financialHistory.js'
 import { relativePercentChange } from '../history/relativeChange.js'
+import { formatPercentChange } from '../../shared/lib/formatPercentChange.js'
 const EURO_FORMATTER = new Intl.NumberFormat('fi-FI', {
   maximumFractionDigits: 0,
 })
@@ -29,19 +30,6 @@ function derivePreviousAmount(currentAmount, deltaPct) {
   }
 
   return currentAmount / ratio
-}
-
-function formatDelta(deltaPct) {
-  if (deltaPct == null || !Number.isFinite(deltaPct)) {
-    return '—'
-  }
-
-  if (deltaPct === 0) {
-    return '0 %'
-  }
-
-  const sign = deltaPct > 0 ? '+' : ''
-  return `${sign}${deltaPct} %`
 }
 
 function formatAmount(amount, unit) {
@@ -233,7 +221,7 @@ function buildComparisonRow({
     amountText: currentAmountText,
     previousPercentageText: formatPercentage(previousPercentage),
     currentPercentageText: formatPercentage(currentPercentage),
-    deltaText: formatDelta(deltaPct),
+    deltaText: formatPercentChange(deltaPct),
     impact: getImpactClass(impactKind, deltaPct),
     kind,
     isNegative,

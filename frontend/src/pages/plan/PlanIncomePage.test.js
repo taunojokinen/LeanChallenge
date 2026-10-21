@@ -84,6 +84,27 @@ test('income panel follows later confirmed rounds and never hardcodes opening-ro
   assert.doesNotMatch(html, /Kierros -1|Kierros 0/)
 })
 
+test('income panel renders rounded Finnish changes and no result percentage for a zero baseline', () => {
+  for (const [previous, current, expected] of [
+    [-100, -7.86813523151572, '+92,1 %'],
+    [100, 91.56, '−8,4 %'],
+    [0, 100, '—'],
+  ]) {
+    const runtimeHistory = baselineHistory.entries.slice(-2).map((entry, index) => ({
+      ...entry,
+      round: index + 1,
+      incomeStatement: { ...entry.incomeStatement, result: index === 0 ? previous : current },
+    }))
+    const { html } = renderPanel(runtimeHistory)
+    const resultRow = [...html.matchAll(/<div[^>]*role="row">([\s\S]*?)<\/div>/g)].at(-1)[1]
+    const cells = [...resultRow.matchAll(/role="cell">([^<]*)<\/span>/g)]
+
+    assert.equal(cells.length, 6)
+    assert.equal(decodeText(cells[5][1]), expected)
+    assert.doesNotMatch(cells[5][1], /\.\d|,\d{2}/)
+  }
+})
+
 test('income panel has one report heading and a keyboard-focusable scroll region without duplicate KPIs', () => {
   const { html } = renderPanel()
   assert.equal([...html.matchAll(/<h1>/g)].length, 1)

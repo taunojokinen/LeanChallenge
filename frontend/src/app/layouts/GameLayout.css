@@ -19,6 +19,10 @@
   padding: var(--space-9) var(--space-10);
 }
 
+.game-layout-body.is-complete {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .teacher-test-game-banner {
   display: flex;
   align-items: center;

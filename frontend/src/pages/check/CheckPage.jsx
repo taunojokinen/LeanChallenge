@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import Button from '../../shared/ui/Button/Button.jsx'
 import Card from '../../shared/ui/Card/Card.jsx'
-import { calculateRoundForecast } from '../../entities/forecast/model.js'
-import { advanceRoundState } from '../../entities/game-round/advanceRound.js'
+import { loadActDecision } from '../../features/act/decisionStore.js'
+import { createInitialProductionPlan, calculateProductionForecast } from '../../features/act/productionForecast.js'
 import { loadFiveSDecision } from '../../features/five-s/decisionStore.js'
 import { loadProjectsDecision } from '../../features/projects/decisionStore.js'
 import { loadInvestmentsDecision } from '../../features/investments/decisionStore.js'
@@ -93,6 +93,7 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
       gameState: nextGameState,
       staffing: nextStaffing,
       batchSize: initialBatchSize,
+      actDecision: loadActDecision(round),
     }
   }, [factorySettings, gameState])
 
@@ -112,41 +113,13 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
       return null
     }
 
-    // Only the staffing decision affects this baseline forecast; batchSize is applied separately
-    // below (via previewForecast) since calculateScenario resolves current/forecast from the same
-    // market decisions and batchSize must not retroactively change the confirmed round's own capacity.
-    return calculateRoundForecast(decisionGameState, {
-      staffing,
-    }, factorySettings)
-  }, [decisionGameState, factorySettings, staffing])
-
-  // The round-N forecast including this round's own batch-size decision. Despite its name and
-  // the advanceRoundState plumbing, this represents THIS planning round's (gameState.round) own
-  // forecast, not round+1 - see the round labels above. Planned production is owned by ACT, so no
-  // productionQuantity override is passed here - it naturally falls back to a demand-driven value
-  // for capacity/minimum-FG purposes.
-  const previewForecast = useMemo(() => {
-    if (!decisionGameState || !forecast) {
-      return null
+    const planningState = {
+      ...decisionGameState,
+      checkStaffingDecision: { round: decisionRound, staffing },
     }
-
-    try {
-      const { nextGameState: previewGameState } = advanceRoundState({
-        gameState: decisionGameState,
-        forecast,
-        totalRounds: factorySettings?.game?.totalRounds ?? 12,
-        checkProductionDecision: {
-          round: decisionGameState.round,
-          batchSize,
-        },
-      })
-
-      return calculateRoundForecast(previewGameState, {}, factorySettings)
-    } catch {
-      return null
-    }
-  }, [batchSize, decisionGameState, factorySettings, forecast])
-  const capacityForecast = previewForecast ?? forecast
+    const plan = createInitialProductionPlan(planningState, batchSize, decisionData.actDecision, factorySettings)
+    return calculateProductionForecast(planningState, plan, factorySettings)
+  }, [batchSize, decisionData, decisionGameState, decisionRound, factorySettings, staffing])
 
   // Persist every edit to the round-scoped decision stores so choices survive navigation and reload.
   const persistStaffing = (nextStaffing) => {
@@ -212,8 +185,8 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
     )
   }
 
-  const factorySpace = capacityForecast.forecast.space
-  const previewInventory = previewForecast?.forecast.inventory
+  const factorySpace = forecast.forecast.space
+  const previewInventory = forecast.forecast.inventory
   const { planningRound } = resolveCheckRoundLabels(decisionGameState.round)
 
   const departments = [
@@ -234,13 +207,13 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
           <article className="check-primary-card">
             <h2>Henkilöstö ja kapasiteetti</h2>
             <p className="check-card-intro">
-              Henkilöstöpäätökset kierrokselle {planningRound}; kapasiteettiennuste kierrokselle {capacityForecast.round}.
+              Henkilöstöpäätökset kierrokselle {planningRound}; kapasiteettiennuste kierrokselle {forecast.round}.
             </p>
             <div className="check-department-list">
               {departments.map((department) => {
-                const employeeCount = capacityForecast.forecast.staffing[department.key]
-                const capacity = capacityForecast.forecast.capacityByDepartment[department.key]
-                const isBottleneck = capacityForecast.summary.bottleneckKey === department.key
+                const employeeCount = forecast.forecast.staffing[department.key]
+                const capacity = forecast.forecast.capacityByDepartment[department.key]
+                const isBottleneck = forecast.summary.bottleneckKey === department.key
                 const adjustable = department.key !== 'machining'
                 const sliderMax = adjustable
                   ? getStaffingSliderMax(department.key, staffing, forecast, factorySettings)
@@ -317,7 +290,7 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
           <article className="check-primary-card">
             <h2>Eräkoko ja varasto</h2>
             <p className="check-card-intro">
-              Eräkoon tuotantovaikutus näkyy kierroksen {capacityForecast.round} ennusteessa.
+              Eräkoon tuotantovaikutus näkyy kierroksen {forecast.round} ennusteessa.
             </p>
             <div className="check-batch-control">
               <span>Eräkoko</span>
@@ -376,7 +349,7 @@ function CheckPage({ onNavigate, gameState, factorySettings }) {
                   </span>
                 </dt>
                 <dd className={(previewInventory?.openingFreeFactorySpace ?? 0) < 0 ? 'is-negative' : ''}>
-                  {previewForecast ? `${Math.round(previewInventory?.openingFreeFactorySpace ?? 0)} m²` : '-'}
+                  {`${Math.round(previewInventory.openingFreeFactorySpace)} m²`}
                 </dd>
               </div>
             </dl>

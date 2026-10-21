@@ -270,3 +270,58 @@ test('legacy sessions keep their original finance and financial baseline rather 
     assert.deepEqual(load(storage).gameState.initialFinancialHistory, baseline)
   }
 })
+
+test('both modes restore all twelve confirmed rounds, completion and the final report route', () => {
+  for (const mode of ['teacher-test', 'quest']) {
+    const storage = createSessionStorage()
+    const settings = structuredClone(DEFAULT_FACTORY_SETTINGS)
+    settings.initialState.finance.equity = 100000000
+    const initialGameState = createInitialGameState(settings)
+    const create = mode === 'teacher-test' ? createTeacherTestGameSession : createQuestGameSession
+    const save = mode === 'teacher-test' ? saveTeacherTestGameSession : saveQuestGameSession
+    const load = mode === 'teacher-test' ? loadTeacherTestGameSession : loadQuestGameSession
+    let gameState = initialGameState
+
+    for (let round = 1; round <= 12; round++) {
+      const forecast = calculateRoundForecast(gameState, {}, settings)
+      const result = advanceRoundState({ gameState, forecast, totalRounds: 12 })
+      assert.equal(result.isGameComplete, round === 12)
+      gameState = result.nextGameState
+    }
+
+    save(create({ factorySettings: settings, initialGameState, gameState, pathname: '/game/report' }), storage)
+    const restored = load(storage)
+    assert.deepEqual(restored.gameState, gameState)
+    assert.equal(restored.gameState.round, 12)
+    assert.deepEqual(restored.gameState.history.map((entry) => entry.round),
+      Array.from({ length: 12 }, (_, index) => index + 1))
+    assert.equal(restored.pathname, '/game/report')
+    assert.equal(restored.phase, 'REPORT')
+    assert.equal(restored.mode, mode)
+    assert.deepEqual(restored.gameState.completion, { reason: 'round-limit', confirmedRound: 12 })
+  }
+})
+
+test('bankruptcy and legacy completed sessions restore as locked final reports in both modes', () => {
+  for (const mode of ['teacher-test', 'quest']) {
+    const storage = createSessionStorage()
+    const settings = DEFAULT_FACTORY_SETTINGS
+    const initialGameState = createInitialGameState(settings)
+    const create = mode === 'teacher-test' ? createTeacherTestGameSession : createQuestGameSession
+    const save = mode === 'teacher-test' ? saveTeacherTestGameSession : saveQuestGameSession
+    const load = mode === 'teacher-test' ? loadTeacherTestGameSession : loadQuestGameSession
+    for (const [round, equity, reason] of [[3, -100, 'bankruptcy'], [12, 100, 'round-limit']]) {
+      const gameState = {
+        ...initialGameState, round,
+        history: [{ round, finance: { equity } }],
+      }
+      save(create({ factorySettings: settings, initialGameState, gameState, pathname: '/act' }), storage)
+      const restored = load(storage)
+      assert.equal(restored.pathname, '/game/report')
+      assert.deepEqual(restored.gameState.completion, { reason, confirmedRound: round })
+      assert.throws(() => advanceRoundState({
+        gameState: restored.gameState, forecast: {}, totalRounds: 12,
+      }), /completed game/)
+    }
+  }
+})

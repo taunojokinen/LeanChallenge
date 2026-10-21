@@ -88,6 +88,78 @@ test('round twelve is confirmed without creating round thirteen', () => {
   assert.equal(result.isGameComplete, true)
   assert.equal(result.isGameOver, result.nextGameState.finance.equity <= 0)
   assert.equal(result.nextGameState.history.length, 1)
+  assert.deepEqual(result.nextGameState.completion, { reason: 'round-limit', confirmedRound: 12 })
+  assert.throws(() => advanceRoundState({
+    gameState: result.nextGameState, forecast, totalRounds: 12,
+  }), /completed game/)
+})
+
+test('batch-size production effects are identical in rounds 1-12 when initial conditions match', () => {
+  const initial = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+  initial.finance.equity = 100000000
+  const reference = [10, 20].map((batchSize) => calculateRoundForecast(initial, {
+    market: { batchSize, productionQuantity: 150 },
+  }, DEFAULT_FACTORY_SETTINGS))
+
+  assert.equal(reference[0].forecast.knl.machining.totalChangeovers, 15)
+  assert.equal(reference[1].forecast.knl.machining.totalChangeovers, 7.5)
+  assert.equal(reference[0].summary.actualProduction, 142)
+  assert.equal(reference[1].summary.actualProduction, 150)
+
+  for (let round = 1; round <= 12; round++) {
+    const gameState = { ...structuredClone(initial), round }
+    for (const [index, batchSize] of [10, 20].entries()) {
+      const forecast = calculateRoundForecast(gameState, {
+        market: { batchSize, productionQuantity: 150 },
+      }, DEFAULT_FACTORY_SETTINGS)
+      const result = advanceRoundState({ gameState, forecast, totalRounds: 12 })
+
+      assert.deepEqual(forecast.forecast.knl.machining, reference[index].forecast.knl.machining)
+      assert.deepEqual(forecast.forecast.capacityByDepartment, reference[index].forecast.capacityByDepartment)
+      assert.equal(forecast.summary.actualProduction, reference[index].summary.actualProduction)
+      assert.equal(result.historyEntry.production.actualProduction, reference[index].summary.actualProduction)
+      assert.equal(result.isGameComplete, round === 12)
+      assert.equal(result.nextGameState.round, round === 12 ? 12 : round + 1)
+    }
+  }
+})
+
+test('round completion does not apply a next-round batch override or change the confirmed production', () => {
+  const initial = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+  initial.finance.equity = 100000000
+  initial.market.batchSize = 10
+
+  for (const round of [1, 11, 12]) {
+    const gameState = { ...structuredClone(initial), round }
+    const baseline = calculateRoundForecast(gameState, {}, DEFAULT_FACTORY_SETTINGS)
+    const results = [10, 20].map((batchSize) =>
+      advanceRoundState({
+        gameState, forecast: baseline, totalRounds: 12,
+        checkProductionDecision: { round, batchSize },
+      }))
+
+    assert.equal(results[0].nextGameState.market.batchSize, 10)
+    assert.equal(results[1].nextGameState.market.batchSize, round === 12 ? 10 : 20)
+    assert.deepEqual(results[0].historyEntry, results[1].historyEntry)
+    assert.equal(results[0].nextGameState.round, round === 12 ? 12 : round + 1)
+  }
+})
+
+test('another department can prevent factory capacity growth despite fewer machining setups on rounds one and twelve', () => {
+  const initial = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+  for (const round of [1, 12]) {
+    const gameState = { ...structuredClone(initial), round }
+    const forecasts = [10, 20].map((batchSize) => calculateRoundForecast(gameState, {
+      market: { batchSize, productionQuantity: 90 },
+    }, DEFAULT_FACTORY_SETTINGS))
+
+    assert.ok(forecasts[1].forecast.capacityByDepartment.machining > forecasts[0].forecast.capacityByDepartment.machining)
+    for (const forecast of forecasts) {
+      assert.equal(forecast.summary.bottleneckKey, 'assembly')
+      assert.equal(forecast.summary.plantCapacity, 150)
+      assert.equal(forecast.summary.actualProduction, 90)
+    }
+  }
 })
 
 test('non-positive closing equity marks game over without changing formulas', () => {
@@ -110,6 +182,10 @@ test('non-positive closing equity marks game over without changing formulas', ()
   assert.equal(result.isGameOver, true)
   assert.equal(result.isGameComplete, true)
   assert.equal(result.nextGameState.round, 1)
+  assert.deepEqual(result.nextGameState.completion, { reason: 'bankruptcy', confirmedRound: 1 })
+  assert.throws(() => advanceRoundState({
+    gameState: result.nextGameState, forecast: losingForecast, totalRounds: 12,
+  }), /completed game/)
 })
 
 test('round chain carries finance, lean, machines, and variations into round two', () => {
@@ -763,4 +839,3 @@ test('E/F: confirming ACT realizes the planning round with the canonical actualP
   assert.equal(realizedGameState.market.batchSize, selectedBatchSize)
   assert.equal(realizedGameState.round, 2)
 })
-

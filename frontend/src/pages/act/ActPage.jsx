@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import Button from '../../shared/ui/Button/Button.jsx'
 import Card from '../../shared/ui/Card/Card.jsx'
 import { calculateRoundForecast } from '../../entities/forecast/model.js'
+import { buildCanonicalFinancialHistory, normalizeFinancialHistoryEntry } from '../../entities/factory-settings/financialHistory.js'
+import { relativePercentChange } from '../../entities/history/relativeChange.js'
 import { loadFiveSDecision } from '../../features/five-s/decisionStore.js'
 import { loadProjectsDecision } from '../../features/projects/decisionStore.js'
 import { loadInvestmentsDecision } from '../../features/investments/decisionStore.js'
@@ -20,7 +22,7 @@ const DECIMAL_FORMATTER = new Intl.NumberFormat('fi-FI', {
 
 function formatCurrency(value) {
   const rounded = Math.round(Number(value) || 0)
-  const sign = rounded < 0 ? '-' : ''
+  const sign = rounded < 0 ? '−' : ''
   return `${sign}${EURO_FORMATTER.format(Math.abs(rounded))} €`
 }
 
@@ -28,8 +30,13 @@ function formatContainers(value) {
   return `${DECIMAL_FORMATTER.format(Number(value) || 0)} konttia`
 }
 
-function formatKnl(ratio) {
-  return `${DECIMAL_FORMATTER.format((Number(ratio) || 0) * 100)} %`
+function formatChange(value) {
+  if (value == null || !Number.isFinite(value)) {
+    return '—'
+  }
+
+  const sign = value > 0 ? '+' : ''
+  return `${sign}${DECIMAL_FORMATTER.format(value)} %`
 }
 
 function clamp(value, min, max) {
@@ -46,6 +53,21 @@ function toNonNegativeInteger(value, fallback = 0) {
   return Math.round(numericValue)
 }
 
+function getPreviousIncome(gameState, factorySettings) {
+  if (!gameState) {
+    return null
+  }
+
+  const baselineEntries = buildCanonicalFinancialHistory(gameState, factorySettings)
+  const entriesByRound = new Map(baselineEntries.map((entry) => [Number(entry.round), entry]))
+  for (const entry of gameState.history ?? []) {
+    entriesByRound.set(Number(entry.round), entry)
+  }
+
+  const previousEntry = entriesByRound.get(Number(gameState.round) - 1)
+  return previousEntry ? normalizeFinancialHistoryEntry(previousEntry).incomeStatement : null
+}
+
 function createInitialActState(gameState, factorySettings) {
   if (!gameState) {
     return {
@@ -55,6 +77,7 @@ function createInitialActState(gameState, factorySettings) {
       addedVariations: 0,
       useFinishedGoodsInventoryForDeliveries: false,
       batchSize: null,
+      previousIncome: null,
     }
   }
 
@@ -89,28 +112,55 @@ function createInitialActState(gameState, factorySettings) {
   return {
     decisionGameState,
     price,
-    productionQuantity:
+    productionQuantity: clamp(
       actDecision?.productionQuantity ??
-      gameState.market?.productionQuantity ??
-      Math.min(baseForecast.summary.demand, baseForecast.summary.plantCapacity),
-    addedVariations,
+        gameState.market?.productionQuantity ??
+        Math.min(baseForecast.summary.demand, baseForecast.summary.plantCapacity),
+      0,
+      baseForecast.summary.plantCapacity,
+    ),
+    addedVariations: baseForecast.decisions.market.addedVariations,
     useFinishedGoodsInventoryForDeliveries: actDecision?.useFinishedGoodsInventoryForDeliveries ?? false,
     batchSize,
+    previousIncome: getPreviousIncome(gameState, factorySettings),
   }
 }
 
-function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statusMessage: roundStatusMessage }) {
+function Stepper({ value, minimum, maximum, onChange, label }) {
+  return (
+    <div className="act-stepper">
+      <button
+        type="button"
+        aria-label={`Vähennä: ${label}`}
+        disabled={value <= minimum}
+        onClick={() => onChange(value - 1)}
+      >
+        −
+      </button>
+      <output aria-live="polite">{value}</output>
+      <button
+        type="button"
+        aria-label={`Lisää: ${label}`}
+        disabled={value >= maximum}
+        onClick={() => onChange(value + 1)}
+      >
+        +
+      </button>
+    </div>
+  )
+}
+
+function ActPage({ gameState, factorySettings, onAdvanceRound, statusMessage: roundStatusMessage }) {
   const [initialActState] = useState(() => createInitialActState(gameState, factorySettings))
   const [decisionGameState] = useState(initialActState.decisionGameState)
-  const [price, setPrice] = useState(initialActState.price)
+  const [price] = useState(initialActState.price)
   const [productionQuantity, setProductionQuantity] = useState(initialActState.productionQuantity)
   const [addedVariations, setAddedVariations] = useState(initialActState.addedVariations)
   const [useFinishedGoodsInventoryForDeliveries, setUseFinishedGoodsInventoryForDeliveries] = useState(
     initialActState.useFinishedGoodsInventoryForDeliveries,
   )
-  // Read-only: batch size is CHECK's production decision for THIS planning round - it already
-  // drives capacity/K_changeover and the minimum-FG calculation identically; ACT never edits it.
   const [batchSize] = useState(initialActState.batchSize)
+  const previousIncome = initialActState.previousIncome
 
   const forecast = useMemo(() => {
     if (!decisionGameState) {
@@ -150,24 +200,18 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
     : productionQuantity
 
   useEffect(() => {
-    if (!forecast) {
+    if (!forecast || productionQuantity <= forecast.summary.plantCapacity || !decisionGameState) {
       return
     }
 
-    if (productionQuantity > forecast.summary.plantCapacity) {
-      const clampedQuantity = forecast.summary.plantCapacity
-
-      if (decisionGameState) {
-        saveActDecision({
-          round: decisionGameState.round,
-          price,
-          productionQuantity: clampedQuantity,
-          addedVariations,
-          useFinishedGoodsInventoryForDeliveries,
-          savedAt: new Date().toISOString(),
-        })
-      }
-    }
+    saveActDecision({
+      round: decisionGameState.round,
+      price,
+      productionQuantity: forecast.summary.plantCapacity,
+      addedVariations,
+      useFinishedGoodsInventoryForDeliveries,
+      savedAt: new Date().toISOString(),
+    })
   }, [addedVariations, decisionGameState, forecast, price, productionQuantity, useFinishedGoodsInventoryForDeliveries])
 
   const updateAndPersist = (nextValues) => {
@@ -182,17 +226,6 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
       addedVariations: nextValues.addedVariations,
       useFinishedGoodsInventoryForDeliveries: nextValues.useFinishedGoodsInventoryForDeliveries,
       savedAt: new Date().toISOString(),
-    })
-  }
-
-  const handlePriceChange = (rawValue) => {
-    const nextPrice = Math.max(1, toNonNegativeInteger(rawValue, price))
-    setPrice(nextPrice)
-    updateAndPersist({
-      price: nextPrice,
-      productionQuantity: effectiveProductionQuantity,
-      addedVariations,
-      useFinishedGoodsInventoryForDeliveries,
     })
   }
 
@@ -266,220 +299,151 @@ function ActPage({ onNavigate, gameState, factorySettings, onAdvanceRound, statu
 
   if (!forecast) {
     return (
-      <section className="act-page" aria-label="ACT-vaiheen päätöksenteko latautuu">
-        <h1>ACT - Päätä ja vahvista</h1>
+      <section className="act-page" aria-label="ACT-vaiheen päätösnäkymä">
+        <h1>ACT – Päätä ja vahvista</h1>
         <p>Ladataan ACT-näkymää...</p>
       </section>
     )
   }
 
-  const overallKnl =
-    (forecast.forecast.knl.machining.knl +
-      forecast.forecast.knl.assembly.knl +
-      forecast.forecast.knl.shipping.knl) /
-    3
+  const qualityPct = forecast.forecast.knl.totalQualityAverage
+  const allowedNewVariations = forecast.decisions.market.allowedNewVariations
+  const revenueChange = relativePercentChange(forecast.forecast.finance.revenue, previousIncome?.revenue)
+  const resultChange = relativePercentChange(forecast.forecast.finance.result, previousIncome?.result)
+  const productionMaximum = forecast.summary.plantCapacity
+  const variationMinimum = 0
 
   return (
     <section className="act-page" aria-label="ACT-vaiheen päätösnäkymä">
       <header className="act-header">
-        <h1>ACT - Päätä ja vahvista</h1>
-        <p>
-          Sovita tuotantomäärä ja markkinapäätökset tehtaan kapasiteettiin. Hyväksy lopuksi
-          seuraavan kierroksen suunnitelma.
-        </p>
+        <h1>ACT – Päätä ja vahvista</h1>
       </header>
 
-      <Card>
-        <article className="act-section">
-          <h2>CHECK-yhteenveto</h2>
-          <p>Tehtaan ennustettu kapasiteetti: {formatContainers(forecast.summary.plantCapacity)}</p>
-          <p>Pullonkaula: {forecast.summary.bottleneckLabel}</p>
-          <p>Koonta-henkilöstö: {forecast.forecast.staffing.assembly}</p>
-          <p>Lähettämö-henkilöstö: {forecast.forecast.staffing.shipping}</p>
-          <p>KNL: {formatKnl(overallKnl)}</p>
-          <p>Vapaa tehdastila: {Math.round(forecast.summary.freeFactorySpace)} m2</p>
-        </article>
-      </Card>
-
-      <div className="act-grid">
+      <div className="act-primary-grid">
         <Card>
-          <article className="act-section">
-            <h2>1. Myyntihinta</h2>
-            <label className="act-input-row">
-              <span>Hinta (€/kontti)</span>
+          <article className="act-card">
+            <h2>Tuotantopäätös</h2>
+            <dl className="act-metrics">
+              <div><dt>Kysyntä</dt><dd>{formatContainers(forecast.summary.demand)}</dd></div>
+              <div><dt>Kapasiteetti</dt><dd>{formatContainers(forecast.summary.plantCapacity)}</dd></div>
+              <div><dt>Varastosta käytettävissä</dt><dd>{formatContainers(forecast.summary.sellableOpeningFinishedGoodsInventory)}</dd></div>
+            </dl>
+
+            <div className="act-decision-control">
+              <div className="act-control-heading">
+                <label htmlFor="act-production-quantity">Tuotantomäärä</label>
+                <Stepper
+                  value={effectiveProductionQuantity}
+                  minimum={0}
+                  maximum={productionMaximum}
+                  onChange={handleProductionQuantityChange}
+                  label="tuotantomäärä"
+                />
+              </div>
               <input
-                type="number"
-                min="1"
-                step="100"
-                value={price}
-                onChange={(event) => handlePriceChange(event.target.value)}
-              />
-            </label>
-            <p>Ennustettu kysyntä: {formatContainers(forecast.summary.demand)}</p>
-            <p>Ennustettu liikevaihto: {formatCurrency(forecast.summary.revenue)}</p>
-            <p>Ennustettu tulos: {formatCurrency(forecast.summary.result)}</p>
-          </article>
-        </Card>
-
-        <Card>
-          <article className="act-section">
-            <h2>2. Kysyntä vs. kapasiteetti</h2>
-            <p>Kysyntä: {formatContainers(forecast.summary.demand)}</p>
-            <p>Valmistuskapasiteetti: {formatContainers(forecast.summary.plantCapacity)}</p>
-            <p>Suunniteltu tuotantomäärä: {formatContainers(forecast.summary.productionQuantity)}</p>
-            <p>Käyttämätön kapasiteetti: {formatContainers(forecast.summary.unusedCapacity)}</p>
-            <p>Kysyntävaje: {formatContainers(forecast.summary.lostSalesUnits)}</p>
-          </article>
-        </Card>
-
-        <Card>
-          <article className="act-section">
-            <h2>3. Tuotevariaatiot</h2>
-            <p>Aktiiviset variaatiot: {forecast.decisions.market.activeVariationCount}</p>
-            <label className="act-input-row">
-              <span>Uudet variaatiot (max {forecast.decisions.market.allowedNewVariations})</span>
-              <input
-                type="number"
+                id="act-production-quantity"
+                aria-label="Tuotantomäärä"
+                type="range"
                 min="0"
-                max={forecast.decisions.market.allowedNewVariations}
-                step="1"
-                value={addedVariations}
-                onChange={(event) => handleAddedVariationsChange(event.target.value)}
-              />
-            </label>
-            <p>Käytössä olevat variaatiot yhteensä: {forecast.decisions.market.totalVariations}</p>
-            <p>Tuotantoajot / variaatio (read-only): {forecast.decisions.market.runsPerVariation}</p>
-            <p>Vaihdot: {forecast.forecast.switches}</p>
-          </article>
-        </Card>
-
-        <Card>
-          <article className="act-section">
-            <h2>4. Tuotantomäärä</h2>
-            <label className="act-input-row">
-              <span>Suunniteltu tuotantomäärä (0 - {forecast.summary.plantCapacity})</span>
-              <input
-                type="number"
-                min="0"
-                max={forecast.summary.plantCapacity}
+                max={productionMaximum}
                 step="1"
                 value={effectiveProductionQuantity}
                 onChange={(event) => handleProductionQuantityChange(event.target.value)}
               />
+            </div>
+
+            <label className="act-checkbox">
+              <input
+                type="checkbox"
+                checked={useFinishedGoodsInventoryForDeliveries}
+                disabled={forecast.summary.sellableOpeningFinishedGoodsInventory <= 0}
+                onChange={(event) => handleUseFinishedGoodsInventoryForDeliveriesChange(event.target.checked)}
+              />
+              <span>Täydennä toimitukset valmistuotevarastosta</span>
             </label>
-            <p>Toteutuva tuotanto: {formatContainers(forecast.summary.actualProduction)}</p>
-            <p>Toimitukset: {formatContainers(forecast.summary.deliveries)}</p>
-            <p>Menetetty myynti: {formatContainers(forecast.summary.lostSalesUnits)}</p>
+            <div className="act-metric-highlight">
+              <span>Toimitukset yhteensä</span>
+              <strong>{formatContainers(forecast.summary.deliveries)}</strong>
+            </div>
           </article>
         </Card>
 
         <Card>
-          <article className="act-section">
-            <h2>Toimitukset ja valmisvarasto</h2>
-            <h3>TOIMITUKSET</h3>
-            <p>Kysyntä: {formatContainers(forecast.summary.demand)}</p>
-            <p>Suunniteltu tuotanto: {formatContainers(forecast.summary.requestedProductionQuantity)}</p>
-            <p>Tuotantokapasiteetti: {formatContainers(forecast.summary.plantCapacity)}</p>
-            <p>Toteutuva tuotanto: {formatContainers(forecast.summary.actualProduction)}</p>
-            <p>Vajaus kysyntään: {formatContainers(forecast.summary.demandShortfall)}</p>
+          <article className="act-card">
+            <h2>Uudet asiakkuudet</h2>
+            <p className="act-quality">Tuotannon laatuprosentti: <strong>{DECIMAL_FORMATTER.format(qualityPct)} %</strong></p>
+            {allowedNewVariations === 0 ? (
+              <p className="act-quality-message">Laatu ei riitä uusien asiakkaiden vaatimuksiin.</p>
+            ) : (
+              <>
+                <p className="act-quality-message">
+                  {allowedNewVariations === 1
+                    ? 'Laatuasi pidetään markkinoilla hyvänä. 1 uusi asiakas on kiinnostunut tuotteistasi.'
+                    : 'Laatuasi pidetään markkinoilla erinomaisena. 2 uutta asiakasta on kiinnostunut tuotteistasi.'}
+                </p>
+                <div className="act-decision-control">
+                  <div className="act-control-heading">
+                    <label htmlFor="act-new-customers">Uudet asiakkuudet</label>
+                    <Stepper
+                      value={addedVariations}
+                      minimum={variationMinimum}
+                      maximum={allowedNewVariations}
+                      onChange={handleAddedVariationsChange}
+                      label="uudet asiakkuudet"
+                    />
+                  </div>
+                  <input
+                    id="act-new-customers"
+                    aria-label="Uudet asiakkuudet"
+                    type="range"
+                    min={variationMinimum}
+                    max={allowedNewVariations}
+                    step="1"
+                    value={addedVariations}
+                    onChange={(event) => handleAddedVariationsChange(event.target.value)}
+                  />
+                </div>
+                <div className="act-metric-highlight">
+                  <span>Tuotevariaatiot yhteensä</span>
+                  <strong>{forecast.decisions.market.totalVariations}</strong>
+                </div>
+              </>
+            )}
+          </article>
+        </Card>
 
-            <h3>VALMISVARASTO</h3>
-            <p>Alkuvarasto: {formatContainers(forecast.summary.openingFinishedGoodsInventory)}</p>
-            <p>
-              Minimivarasto (CHECK:n valitsemalla eräkoolla {formatContainers(batchSize)}):{' '}
-              {formatContainers(forecast.summary.minimumFinishedGoodsInventory)}
-            </p>
-            <p>Myytävissä varastosta: {formatContainers(forecast.summary.sellableOpeningFinishedGoodsInventory)}</p>
-
-            <fieldset className="act-fieldset">
-              <legend>Täydennetäänkö toimituksia valmisvarastosta?</legend>
-              <label className="act-radio-row">
-                <input
-                  type="radio"
-                  name="use-finished-goods-inventory"
-                  checked={!useFinishedGoodsInventoryForDeliveries}
-                  onChange={() => handleUseFinishedGoodsInventoryForDeliveriesChange(false)}
-                />
-                Ei
-              </label>
-              <label className="act-radio-row">
-                <input
-                  type="radio"
-                  name="use-finished-goods-inventory"
-                  checked={useFinishedGoodsInventoryForDeliveries}
-                  disabled={forecast.summary.sellableOpeningFinishedGoodsInventory <= 0}
-                  onChange={() => handleUseFinishedGoodsInventoryForDeliveriesChange(true)}
-                />
-                Kyllä
-              </label>
-              {forecast.summary.sellableOpeningFinishedGoodsInventory <= 0 ? (
-                <p className="act-highlight">Varastosta ei ole myytävissä olevaa määrää tällä hetkellä.</p>
+        <Card>
+          <article className="act-card">
+            <h2>Päätösten vaikutukset</h2>
+            <dl className="act-impact-list">
+              <div>
+                <dt>Liikevaihtoennuste</dt>
+                <dd>{formatCurrency(forecast.forecast.finance.revenue)}</dd>
+              </div>
+              <div>
+                <dt>Liikevaihdon muutos edelliseen kierrokseen</dt>
+                <dd className={revenueChange == null ? '' : revenueChange > 0 ? 'is-positive' : revenueChange < 0 ? 'is-negative' : ''}>
+                  {formatChange(revenueChange)}
+                </dd>
+              </div>
+              <div>
+                <dt>Tulosennuste</dt>
+                <dd>{formatCurrency(forecast.forecast.finance.result)}</dd>
+              </div>
+              {previousIncome?.result !== 0 ? (
+                <div>
+                  <dt>Tuloksen muutos edelliseen kierrokseen</dt>
+                  <dd className={resultChange == null ? '' : resultChange > 0 ? 'is-positive' : resultChange < 0 ? 'is-negative' : ''}>
+                    {formatChange(resultChange)}
+                  </dd>
+                </div>
               ) : null}
-            </fieldset>
-
-            <p>Varastosta toimitetaan: {formatContainers(forecast.summary.inventorySales)}</p>
-            <p>Toimitukset yhteensä: {formatContainers(forecast.summary.deliveries)}</p>
-            <p>Loppuvarasto: {formatContainers(forecast.summary.finishedGoodsInventory)}</p>
-          </article>
-        </Card>
-
-        <Card>
-          <article className="act-section">
-            <h2>5. Kannattavuusennuste</h2>
-            <p>Liikevaihto: {formatCurrency(forecast.forecast.finance.revenue)}</p>
-            <p>Raaka-ainekustannukset: {formatCurrency(forecast.forecast.finance.materials)}</p>
-            <p>Henkilöstökustannukset: {formatCurrency(forecast.forecast.finance.labor)}</p>
-            <p>Kiinteät kustannukset: {formatCurrency(forecast.forecast.finance.fixedCosts)}</p>
-            <p>Varaston muutos: {formatCurrency(forecast.forecast.finance.inventoryChange)}</p>
-            <p>Poistot: {formatCurrency(forecast.forecast.finance.depreciation)}</p>
-            <p>Korkokulut: {formatCurrency(forecast.forecast.finance.interest)}</p>
-            <p>
-              <strong>Tulos: {formatCurrency(forecast.forecast.finance.result)}</strong>
-            </p>
-          </article>
-        </Card>
-
-        <Card>
-          <article className="act-section">
-            <h2>Varasto</h2>
-            <p>Variaatiot: {forecast.decisions.market.totalVariations}</p>
-            <p>Tuotantoajot / variaatio: {forecast.decisions.market.runsPerVariation}</p>
-            <p>
-              Keskimääräinen valmistuotevarasto: {formatContainers(forecast.forecast.inventory.averageFinishedGoodsInventory)}
-            </p>
-            <p>Valmistuotevaraston arvo: {formatCurrency(forecast.forecast.inventory.finishedGoodsValue)}</p>
-            <p>Varaston tilantarve: {Math.round(forecast.forecast.inventory.finishedGoodsArea)} m2</p>
-            <p>Vapaa tehdastila: {Math.round(forecast.forecast.space.freeFactorySpace)} m2</p>
+            </dl>
           </article>
         </Card>
       </div>
 
-      <Card>
-        <article className="act-section">
-          <h2>Yhteenveto seuraavasta kierroksesta</h2>
-          <p>Myyntihinta: {formatCurrency(price)}</p>
-          <p>Variaatiot: {forecast.decisions.market.totalVariations}</p>
-          <p>Kysyntä: {formatContainers(forecast.summary.demand)}</p>
-          <p>Tuotantomäärä: {formatContainers(forecast.summary.productionQuantity)}</p>
-          <p>Valmistuskapasiteetti: {formatContainers(forecast.summary.plantCapacity)}</p>
-          <p>Käyttämätön kapasiteetti: {formatContainers(forecast.summary.unusedCapacity)}</p>
-          <p>Toimitukset: {formatContainers(forecast.summary.deliveries)}</p>
-          <p>Liikevaihto: {formatCurrency(forecast.summary.revenue)}</p>
-          <p>Tulos: {formatCurrency(forecast.summary.result)}</p>
-          <p>Pullonkaula: {forecast.summary.bottleneckLabel}</p>
-          {forecast.summary.lostSalesUnits > 0 ? (
-            <p className="act-highlight">Menetetty myynti: {formatContainers(forecast.summary.lostSalesUnits)}</p>
-          ) : null}
-          {forecast.summary.unusedCapacity > 0 ? (
-            <p className="act-highlight">Käyttämätön kapasiteetti: {formatContainers(forecast.summary.unusedCapacity)}</p>
-          ) : null}
-        </article>
-      </Card>
-
       <section className="act-actions" aria-label="ACT-vaiheen navigointi">
-        <Button type="button" onClick={() => onNavigate('/check')}>
-          ← PALAA CHECK-VAIHEESEEN
-        </Button>
         <Button type="button" onClick={handleApprove}>
           HYVÄKSY PÄÄTÖKSET JA SIIRRY SEURAAVALLE KIERROKSELLE →
         </Button>

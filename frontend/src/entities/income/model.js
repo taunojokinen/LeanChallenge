@@ -1,4 +1,5 @@
 import { normalizeFinancialHistoryEntry } from '../factory-settings/financialHistory.js'
+import { relativePercentChange } from '../history/relativeChange.js'
 const EURO_FORMATTER = new Intl.NumberFormat('fi-FI', {
   maximumFractionDigits: 0,
 })
@@ -8,16 +9,6 @@ const INTEGER_FORMATTER = new Intl.NumberFormat('fi-FI', {
 })
 
 import { selectLatestConfirmedRounds } from '../history/confirmedRounds.js'
-
-function derivePreviousAmount(currentAmount, deltaPct) {
-  const ratio = 1 + deltaPct / 100
-
-  if (ratio === 0) {
-    return currentAmount
-  }
-
-  return currentAmount / ratio
-}
 
 function deriveDeltaPctFromAmounts(currentAmount, previousAmount) {
   const previous = Number(previousAmount)
@@ -30,7 +21,21 @@ function deriveDeltaPctFromAmounts(currentAmount, previousAmount) {
   return Number((((current - previous) / previous) * 100).toFixed(1))
 }
 
+function derivePreviousAmount(currentAmount, deltaPct) {
+  const ratio = 1 + deltaPct / 100
+
+  if (ratio === 0) {
+    return currentAmount
+  }
+
+  return currentAmount / ratio
+}
+
 function formatDelta(deltaPct) {
+  if (deltaPct == null || !Number.isFinite(deltaPct)) {
+    return '—'
+  }
+
   if (deltaPct === 0) {
     return '0 %'
   }
@@ -282,7 +287,7 @@ export function buildIncomeStatementRows(snapshot) {
     : previousGrossMargin - previousFixedCosts - previousDepreciation - previousFinancingCosts
 
   const grossMarginDeltaPct = deriveDeltaPctFromAmounts(grossMarginAmount, previousGrossMargin)
-  const resultDeltaPct = deriveDeltaPctFromAmounts(resultAmount, previousResult)
+  const resultDeltaPct = relativePercentChange(resultAmount, previousResult)
 
   const salesDeltaPct = previousRows
     ? deriveDeltaPctFromAmounts(rows.sales.amount, previousRows.sales?.amount)

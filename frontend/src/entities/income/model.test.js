@@ -186,6 +186,66 @@ test('zero previous values produce finite change values', () => {
   })
 })
 
+test('result change percentage uses the absolute previous result across negative-to-positive changes', () => {
+  const row = buildIncomeStatementRows({
+    rows: {
+      sales: { amount: 10, deltaPct: 0 },
+      revenue: { amount: 1000, deltaPct: 0 },
+      inventoryChange: { amount: 0, deltaPct: 0 },
+      materials: { amount: 200, deltaPct: 0 },
+      labor: { amount: 100, deltaPct: 0 },
+      fixedCosts: { amount: 50, deltaPct: 0 },
+      depreciation: { amount: 25, deltaPct: 0 },
+      financingCosts: { amount: 25, deltaPct: 0 },
+      result: { amount: 50 },
+    },
+    previousRows: {
+      sales: { amount: 10 },
+      revenue: { amount: 900 },
+      inventoryChange: { amount: 0 },
+      materials: { amount: 200 },
+      labor: { amount: 100 },
+      fixedCosts: { amount: 50 },
+      depreciation: { amount: 25 },
+      financingCosts: { amount: 25 },
+      result: { amount: -100 },
+    },
+  }).find((item) => item.key === 'result')
+
+  assert.equal(row.deltaText, '+150 %')
+  assert.equal(row.impact, 'positive')
+})
+
+test('result change percentage is omitted when the previous result is zero', () => {
+  const row = buildIncomeStatementRows({
+    rows: {
+      sales: { amount: 10, deltaPct: 0 },
+      revenue: { amount: 1000, deltaPct: 0 },
+      inventoryChange: { amount: 0, deltaPct: 0 },
+      materials: { amount: 200, deltaPct: 0 },
+      labor: { amount: 100, deltaPct: 0 },
+      fixedCosts: { amount: 50, deltaPct: 0 },
+      depreciation: { amount: 25, deltaPct: 0 },
+      financingCosts: { amount: 25, deltaPct: 0 },
+      result: { amount: 50 },
+    },
+    previousRows: {
+      sales: { amount: 10 },
+      revenue: { amount: 900 },
+      inventoryChange: { amount: 0 },
+      materials: { amount: 200 },
+      labor: { amount: 100 },
+      fixedCosts: { amount: 50 },
+      depreciation: { amount: 25 },
+      financingCosts: { amount: 25 },
+      result: { amount: 0 },
+    },
+  }).find((item) => item.key === 'result')
+
+  assert.equal(row.deltaText, '—')
+  assert.equal(row.impact, 'neutral')
+})
+
 test('real round-one confirmation selects canonical round zero and runtime round one', async () => {
   const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
   const forecast = calculateRoundForecast(

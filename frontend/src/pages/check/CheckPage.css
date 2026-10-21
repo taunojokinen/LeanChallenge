@@ -294,27 +294,26 @@
   padding-top: 0.25rem;
 }
 
-.check-page__footer .ui-button {
-  max-width: 100%;
-  min-height: 2.75rem;
-  padding: 0.7rem 1.4rem;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  border-color: rgba(93, 226, 246, 0.45);
-  border-radius: 999px;
-  background: linear-gradient(180deg, #1cb7cf 0%, #128aa5 100%);
-  color: #f7fbfd;
-  font: inherit;
-  font-weight: 600;
-}
-
-.check-page__footer .ui-button:hover {
-  background: #14687d;
-}
-
 .check-page__footer .ui-button:focus-visible {
   outline: 2px solid #5de2f6;
   outline-offset: 3px;
+}
+
+.check-page__footer .ui-button {
+  border-color: rgba(93, 226, 246, 0.5);
+  border-radius: 0.55rem;
+  background: linear-gradient(180deg, #1cb7cf 0%, #128aa5 100%);
+  color: #f7fbfd;
+  font-weight: 700;
+}
+
+.check-page__footer .ui-button:hover:not(:disabled) {
+  background: #14687d;
+}
+
+.check-page__footer .ui-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .visually-hidden {

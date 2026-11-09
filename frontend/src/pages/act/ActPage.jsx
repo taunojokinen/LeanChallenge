@@ -270,12 +270,25 @@ function ActPage({ gameState, factorySettings, onAdvanceRound, statusMessage: ro
     )
   }
 
-  const qualityPct = forecast.forecast.knl.totalQualityAverage
+  const qualityPct = forecast.forecast.knl.openingQualityAverage ?? forecast.forecast.knl.totalQualityAverage
   const allowedNewVariations = forecast.decisions.market.allowedNewVariations
+  const variationRules = factorySettings?.variationRules ?? {}
+  const goodQualityThreshold = Number(variationRules.minimumQualityForOneAdditionalVariation ?? 0.75) * 100
+  const excellentQualityThreshold = Number(variationRules.oneVariationMinQuality ?? 0.8) * 100
+  const goodQualityReached = qualityPct >= goodQualityThreshold
+  const excellentQualityReached = qualityPct >= excellentQualityThreshold
+  const nextQualityTarget = !goodQualityReached
+    ? goodQualityThreshold
+    : !excellentQualityReached
+      ? excellentQualityThreshold
+      : null
+  const qualityGapPct = nextQualityTarget != null
+    ? Math.max(0, nextQualityTarget - qualityPct)
+    : 0
   const revenueChange = relativePercentChange(forecast.forecast.finance.revenue, previousIncome?.revenue)
   const resultChange = relativePercentChange(forecast.forecast.finance.result, previousIncome?.result)
   const productionMaximum = forecast.summary.plantCapacity
-  const variationMinimum = 0
+  const customerOptions = [0, 1, 2]
 
   return (
     <section className="act-page" aria-label="ACT-vaiheen päätösnäkymä">
@@ -334,45 +347,59 @@ function ActPage({ gameState, factorySettings, onAdvanceRound, statusMessage: ro
 
         <Card>
           <article className="act-card">
-            <h2>Uudet asiakkuudet</h2>
-            <p className="act-quality">Tuotannon laatuprosentti: <strong>{DECIMAL_FORMATTER.format(qualityPct)} %</strong></p>
-            {allowedNewVariations === 0 ? (
-              <p className="act-quality-message">Laatu ei riitä uusien asiakkaiden vaatimuksiin.</p>
-            ) : (
-              <>
-                <p className="act-quality-message">
-                  {allowedNewVariations === 1
-                    ? 'Laatuasi pidetään markkinoilla hyvänä. 1 uusi asiakas on kiinnostunut tuotteistasi.'
-                    : 'Laatuasi pidetään markkinoilla erinomaisena. 2 uutta asiakasta on kiinnostunut tuotteistasi.'}
-                </p>
-                <div className="act-decision-control">
-                  <div className="act-control-heading">
-                    <label htmlFor="act-new-customers">Uudet asiakkuudet</label>
-                    <Stepper
-                      value={addedVariations}
-                      minimum={variationMinimum}
-                      maximum={allowedNewVariations}
-                      onChange={handleAddedVariationsChange}
-                      label="uudet asiakkuudet"
-                    />
-                  </div>
-                  <input
-                    id="act-new-customers"
-                    aria-label="Uudet asiakkuudet"
-                    type="range"
-                    min={variationMinimum}
-                    max={allowedNewVariations}
-                    step="1"
-                    value={addedVariations}
-                    onChange={(event) => handleAddedVariationsChange(event.target.value)}
-                  />
+            <h2>Panosta laatuun, jos haluat kasvattaa liiketoimintaasi nopeammin!</h2>
+            <p className="act-quality">Laatu kierroksen alussa: <strong>{DECIMAL_FORMATTER.format(qualityPct)} %</strong></p>
+
+            <ul className="act-quality-tiers">
+              <li className={`act-quality-tier${goodQualityReached ? ' is-achieved' : ''}`}>
+                <span className="act-quality-tier-icon" aria-hidden="true">{goodQualityReached ? '✓' : '○'}</span>
+                <div className="act-quality-tier-body">
+                  <span className="act-quality-tier-name">Hyvä laatu ≥ {DECIMAL_FORMATTER.format(goodQualityThreshold)} %</span>
+                  <span className="act-quality-tier-rule">Enintään 1 uusi asiakas / kierros</span>
+                  {!goodQualityReached && (
+                    <span className="act-quality-tier-status">Puuttuu {DECIMAL_FORMATTER.format(qualityGapPct)} %-yksikköä</span>
+                  )}
                 </div>
-                <div className="act-metric-highlight">
-                  <span>Tuotevariaatiot yhteensä</span>
-                  <strong>{forecast.decisions.market.totalVariations}</strong>
+              </li>
+              <li className={`act-quality-tier${excellentQualityReached ? ' is-achieved' : ''}`}>
+                <span className="act-quality-tier-icon" aria-hidden="true">{excellentQualityReached ? '✓' : '○'}</span>
+                <div className="act-quality-tier-body">
+                  <span className="act-quality-tier-name">Erinomainen laatu ≥ {DECIMAL_FORMATTER.format(excellentQualityThreshold)} %</span>
+                  <span className="act-quality-tier-rule">Enintään 2 uutta asiakasta / kierros</span>
+                  {goodQualityReached && !excellentQualityReached && (
+                    <span className="act-quality-tier-status">Puuttuu {DECIMAL_FORMATTER.format(qualityGapPct)} %-yksikköä</span>
+                  )}
                 </div>
-              </>
-            )}
+              </li>
+            </ul>
+
+            <fieldset className="act-customer-choice">
+              <legend>Uudet asiakkuudet</legend>
+              <div className="act-customer-options" role="radiogroup" aria-label="Uudet asiakkuudet">
+                {customerOptions.map((option) => {
+                  const disabled = option > allowedNewVariations
+                  const selected = addedVariations === option
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      disabled={disabled}
+                      className={`act-customer-option${selected ? ' is-selected' : ''}`}
+                      onClick={() => handleAddedVariationsChange(option)}
+                    >
+                      {option === 0 ? '0 asiakasta' : option === 1 ? '1 asiakas' : '2 asiakasta'}
+                    </button>
+                  )
+                })}
+              </div>
+            </fieldset>
+
+            <div className="act-metric-highlight">
+              <span>Tuotevariaatiot yhteensä</span>
+              <strong>{forecast.decisions.market.totalVariations}</strong>
+            </div>
           </article>
         </Card>
 

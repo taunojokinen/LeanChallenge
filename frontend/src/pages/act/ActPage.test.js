@@ -134,7 +134,7 @@ test('ACT renders three decision cards and omits removed price and summary panel
 
   assert.match(html, /ACT – Päätä ja vahvista/)
   assert.match(html, /Tuotantopäätös/)
-  assert.match(html, /Uudet asiakkuudet/)
+  assert.match(html, /Panosta laatuun, jos haluat kasvattaa liiketoimintaasi nopeammin!/)
   assert.match(html, /Päätösten vaikutukset/)
   assert.equal(findElements(tree, (element) =>
     String(element.props.className ?? '').split(' ').includes('act-card')).length, 3)
@@ -145,46 +145,113 @@ test('ACT renders three decision cards and omits removed price and summary panel
   assert.doesNotMatch(html, /PALAA CHECK-VAIHEESEEN/)
 })
 
-test('quality thresholds hide customer controls below 75 and use model caps at higher levels', () => {
+function customerOption(tree, label) {
+  const match = findElements(tree, (element) =>
+    element.type === 'button' && element.props.children === label
+      && String(element.props.className ?? '').includes('act-customer-option'))[0]
+  assert.ok(match, `Missing customer option: ${label}`)
+  return match
+}
+
+// Quality follows the canonical KNL L factors: raise the opening-of-round level by
+// persisting SPC (machining) and poka-yoke (assembly/shipping) hours into the game state.
+function withOpeningQualityHours(hours) {
+  const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+  gameState.lean.methods.machining.spc = hours
+  gameState.lean.methods.assembly['poka-yoke'] = hours
+  gameState.lean.methods.shipping['poka-yoke'] = hours
+  return gameState
+}
+
+test('new-customer options follow the opening-of-round quality level', () => {
+  // Below 75 %: all positive options disabled.
   let tree = hooks.render(ActPage, props())
   let html = renderToStaticMarkup(tree)
 
-  assert.match(html, /Laatu ei riitä uusien asiakkaiden vaatimuksiin\./)
-  assert.match(html, /Tuotannon laatuprosentti: <strong>70,0 %<\/strong>/)
-  assert.equal(findElements(tree, (element) =>
-    element.type === 'input' && element.props.type === 'range'
-      && element.props['aria-label'] === 'Uudet asiakkuudet').length, 0)
+  assert.match(html, /Laatu kierroksen alussa: <strong>70,0 %<\/strong>/)
+  assert.match(html, /Hyvä laatu ≥ 75,0 %/)
+  assert.match(html, /Erinomainen laatu ≥ 80,0 %/)
+  assert.match(html, /Puuttuu 5,0 %-yksikköä/)
+  assert.equal(customerOption(tree, '0 asiakasta').props.disabled, false)
+  assert.equal(customerOption(tree, '1 asiakas').props.disabled, true)
+  assert.equal(customerOption(tree, '2 asiakasta').props.disabled, true)
 
-  const goodQualitySettings = structuredClone(DEFAULT_FACTORY_SETTINGS)
-  goodQualitySettings.lean.performance.defaultBasePct = 75
-  tree = hooks.render(ActPage, props({
-    gameState: createInitialGameState(goodQualitySettings),
-    factorySettings: goodQualitySettings,
-  }))
-  html = renderToStaticMarkup(tree)
-  assert.match(html, /1 uusi asiakas on kiinnostunut tuotteistasi/)
-  assert.equal(Number(range(tree, 'Uudet asiakkuudet').props.max), 1)
-
+  // Exactly 75 % (good threshold): 1 allowed, 2 disabled.
   hooks.reset()
-  const excellentQualitySettings = structuredClone(DEFAULT_FACTORY_SETTINGS)
-  excellentQualitySettings.lean.performance.defaultBasePct = 80
-  tree = hooks.render(ActPage, props({
-    gameState: createInitialGameState(excellentQualitySettings),
-    factorySettings: excellentQualitySettings,
-  }))
+  tree = hooks.render(ActPage, props({ gameState: withOpeningQualityHours(128.78) }))
   html = renderToStaticMarkup(tree)
-  assert.match(html, /2 uutta asiakasta on kiinnostunut tuotteistasi/)
-  assert.equal(Number(range(tree, 'Uudet asiakkuudet').props.max), 2)
-  button(tree, 'uudet asiakkuudet', 'Lisää: uudet asiakkuudet').props.onClick()
-  tree = hooks.render(ActPage, props({
-    gameState: createInitialGameState(excellentQualitySettings),
-    factorySettings: excellentQualitySettings,
-  }))
-  assert.equal(Number(range(tree, 'Uudet asiakkuudet').props.value), 1)
+  assert.match(html, /Laatu kierroksen alussa: <strong>75,0 %<\/strong>/)
+  assert.equal(customerOption(tree, '1 asiakas').props.disabled, false)
+  assert.equal(customerOption(tree, '2 asiakasta').props.disabled, true)
+  assert.match(html, /Puuttuu 5,0 %-yksikköä/)
+
+  // Between thresholds (77,3 %): still 1 allowed.
+  hooks.reset()
+  tree = hooks.render(ActPage, props({ gameState: withOpeningQualityHours(200) }))
+  html = renderToStaticMarkup(tree)
+  assert.match(html, /Laatu kierroksen alussa: <strong>77,3 %<\/strong>/)
+  assert.equal(customerOption(tree, '1 asiakas').props.disabled, false)
+  assert.equal(customerOption(tree, '2 asiakasta').props.disabled, true)
+  assert.match(html, /Puuttuu 2,7 %-yksikköä/)
+
+  // Exactly 80 % (excellent threshold): all options enabled, selection persists.
+  hooks.reset()
+  const excellentState = withOpeningQualityHours(294.8)
+  tree = hooks.render(ActPage, props({ gameState: excellentState }))
+  html = renderToStaticMarkup(tree)
+  assert.match(html, /Laatu kierroksen alussa: <strong>80,0 %<\/strong>/)
+  assert.doesNotMatch(html, /Puuttuu/)
+  assert.equal(customerOption(tree, '2 asiakasta').props.disabled, false)
+
+  customerOption(tree, '2 asiakasta').props.onClick()
+  hooks.reset()
+  tree = hooks.render(ActPage, props({ gameState: excellentState }))
+  assert.equal(customerOption(tree, '2 asiakasta').props['aria-checked'], true)
   assert.equal(
     JSON.parse(window.localStorage.getItem('lean-challenge-act-decision')).addedVariations,
-    1,
+    2,
   )
+})
+
+test('same-round quality investments do not raise this round\'s new-customer cap', () => {
+  // Opening quality is 70 %, but this round's DO decisions would push the forecast
+  // quality above 80 %. The cap must still follow the opening level (0 new customers).
+  const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS)
+  window.localStorage.setItem('lean-challenge-five-s-decision', JSON.stringify({
+    round: gameState.round,
+    investedHours: { machining: 600, assembly: 600, shipping: 600 },
+  }))
+  window.localStorage.setItem('lean-challenge-projects-decision', JSON.stringify({
+    round: gameState.round,
+    selections: [
+      { department: 'machining', method: 'spc', investedHours: 500, cost: 50000 },
+      { department: 'assembly', method: 'poka-yoke', investedHours: 500, cost: 50000 },
+      { department: 'shipping', method: 'poka-yoke', investedHours: 500, cost: 50000 },
+    ],
+  }))
+
+  const tree = hooks.render(ActPage, props({ gameState }))
+  const html = renderToStaticMarkup(tree)
+
+  assert.match(html, /Laatu kierroksen alussa: <strong>70,0 %<\/strong>/)
+  assert.equal(customerOption(tree, '1 asiakas').props.disabled, true)
+  assert.equal(customerOption(tree, '2 asiakasta').props.disabled, true)
+
+  // Next round: the same hours persisted into the opening state unlock 2 customers.
+  hooks.reset()
+  window.localStorage.removeItem('lean-challenge-five-s-decision')
+  window.localStorage.removeItem('lean-challenge-projects-decision')
+  window.localStorage.removeItem('lean-challenge-act-decision')
+  const nextRoundState = withOpeningQualityHours(500)
+  nextRoundState.lean.fiveS.departments.machining.effectiveHours = 600
+  nextRoundState.lean.fiveS.departments.assembly.effectiveHours = 600
+  nextRoundState.lean.fiveS.departments.shipping.effectiveHours = 600
+  nextRoundState.round = 2
+  const nextTree = hooks.render(ActPage, props({ gameState: nextRoundState }))
+  const nextHtml = renderToStaticMarkup(nextTree)
+
+  assert.match(nextHtml, /Laatu kierroksen alussa: <strong>8[4-9],\d %<\/strong>/)
+  assert.equal(customerOption(nextTree, '2 asiakasta').props.disabled, false)
 })
 
 test('production controls respect model capacity, persist changes and approve the matching forecast', () => {

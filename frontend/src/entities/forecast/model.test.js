@@ -298,7 +298,7 @@ test('default factory settings keep the baseline forecast unchanged', () => {
   assert.equal(forecastWithSettings.summary.result, forecastWithoutSettings.summary.result)
 })
 
-test('5S divisor override changes forecast KNL without changing demand inputs directly', () => {
+test('5S divisor override no longer affects forecast KNL or demand inputs', () => {
   const gameState = createGameState()
   const customSettings = cloneSettings({
     lean: {
@@ -315,9 +315,10 @@ test('5S divisor override changes forecast KNL without changing demand inputs di
 
   // 2026-09 KNL rework: 5S hours are now split into exact thirds across K/N/L (spec-mandated,
   // not configurable), so contributionDivisor no longer feeds the canonical KNL calculation.
-  // It still affects the (separate, out-of-scope) allowed-new-variations quality average.
+  // 2026-11: the new-customer quality percentage now also follows the canonical KNL L
+  // factors, so contributionDivisor no longer affects totalQualityAverage either.
   assert.equal(forecast.forecast.knl.machining.knl, defaultForecast.forecast.knl.machining.knl)
-  assert.notEqual(forecast.forecast.knl.totalQualityAverage, defaultForecast.forecast.knl.totalQualityAverage)
+  assert.equal(forecast.forecast.knl.totalQualityAverage, defaultForecast.forecast.knl.totalQualityAverage)
   assert.equal(forecast.forecast.demand, defaultForecast.forecast.demand)
 })
 

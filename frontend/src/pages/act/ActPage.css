@@ -161,8 +161,7 @@
   accent-color: #5de2f6;
 }
 
-.act-quality,
-.act-quality-message {
+.act-quality {
   margin: 0;
   color: #b5d3e3;
   line-height: 1.45;
@@ -170,6 +169,130 @@
 
 .act-quality strong {
   color: #5de2f6;
+}
+
+.act-quality-tiers {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.act-quality-tier {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid rgba(93, 226, 246, 0.22);
+  border-radius: 0.55rem;
+  background: rgba(9, 32, 55, 0.55);
+}
+
+.act-quality-tier.is-achieved {
+  border-color: rgba(93, 226, 246, 0.65);
+  background: rgba(18, 59, 86, 0.85);
+  box-shadow: 0 0 0 1px rgba(93, 226, 246, 0.25), 0 0 12px rgba(93, 226, 246, 0.12);
+}
+
+.act-quality-tier-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 1.4rem;
+  height: 1.4rem;
+  margin-top: 0.1rem;
+  border-radius: 50%;
+  border: 1px solid rgba(93, 226, 246, 0.45);
+  color: #7d9db1;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.act-quality-tier.is-achieved .act-quality-tier-icon {
+  border-color: #5de2f6;
+  background: #5de2f6;
+  color: #092037;
+}
+
+.act-quality-tier-body {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.act-quality-tier-name {
+  color: #f3f8fc;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.act-quality-tier-rule {
+  color: #b5d3e3;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.act-quality-tier-status {
+  color: #7d9db1;
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.act-customer-choice {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.act-customer-choice legend {
+  padding: 0;
+  color: #dcebf3;
+  font-weight: 600;
+}
+
+.act-customer-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.act-customer-option {
+  flex: 1 1 7rem;
+  min-width: 0;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid rgba(93, 226, 246, 0.35);
+  border-radius: 0.55rem;
+  background: #123b56;
+  color: #dcebf3;
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.act-customer-option:hover:not(:disabled) {
+  border-color: rgba(93, 226, 246, 0.7);
+}
+
+.act-customer-option.is-selected {
+  border-color: #5de2f6;
+  background: linear-gradient(180deg, #1cb7cf 0%, #128aa5 100%);
+  color: #f7fbfd;
+  box-shadow: 0 0 0 1px rgba(93, 226, 246, 0.35), 0 0 10px rgba(93, 226, 246, 0.18);
+}
+
+.act-customer-option:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.act-customer-option:focus-visible {
+  outline: 2px solid #5de2f6;
+  outline-offset: 3px;
 }
 
 .act-metric-highlight {

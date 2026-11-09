@@ -652,12 +652,14 @@ function calculateScenario({
   staffingDecision,
   applyDoDecisions,
   factorySettings,
+  // Optional opening-of-round quality hours ({ methodHours, fiveSHours } per department).
+  // When provided, the new-customer quality percentage is computed from these hours
+  // instead of the scenario's own (possibly DO-decision-boosted) levels, so this round's
+  // development decisions cannot raise this round's new-customer cap.
+  qualityHoursOverride = null,
 }) {
   const settings = factorySettings ?? DEFAULT_FACTORY_SETTINGS
   const leanSettings = settings.lean ?? DEFAULT_FACTORY_SETTINGS.lean
-  const fiveSSettings = leanSettings.fiveS ?? DEFAULT_FACTORY_SETTINGS.lean.fiveS
-  const qualitySettings = leanSettings.quality ?? DEFAULT_FACTORY_SETTINGS.lean.quality
-  const performanceSettings = leanSettings.performance ?? DEFAULT_FACTORY_SETTINGS.lean.performance
   const inventorySettings = settings.inventory ?? DEFAULT_FACTORY_SETTINGS.inventory
   const factorySettingsSection = settings.factory ?? DEFAULT_FACTORY_SETTINGS.factory
   const productionSettings = settings.production ?? DEFAULT_FACTORY_SETTINGS.production
@@ -704,10 +706,6 @@ function calculateScenario({
   const additionalFinishedGoodsStorageCapacity = finishedGoodsSpacePerContainer > 0
     ? Math.floor(Math.max(0, openingSpace.freeArea) / finishedGoodsSpacePerContainer)
     : Number.MAX_SAFE_INTEGER
-  const fiveSContributionDivisor = Math.max(1, toNumber(fiveSSettings.contributionDivisor, 3))
-  const qualityMaxPct = normalizePercentValue(qualitySettings.maxPct, MAX_COMPONENT_PCT)
-  const defaultLearningBasePct = toNumber(performanceSettings.defaultBasePct, 70)
-  const learningCurveHours = toNumber(qualitySettings.curveHours, 1200)
 
   const fiveSHoursByDepartment = {
     machining: toNumber(fiveSSnapshot.departments.find((item) => item.key === 'machining')?.fiveSEffectiveHours),
@@ -735,34 +733,6 @@ function calculateScenario({
     ).nextEffectiveHours
   }
 
-  const projectedQualityAverage =
-    (calculateLearningComponent(defaultLearningBasePct, (projects.mergedLevels.machining?.spc || 0) + fiveSHoursByDepartment.machining / fiveSContributionDivisor, qualityMaxPct, learningCurveHours) +
-      calculateLearningComponent(defaultLearningBasePct, (projects.mergedLevels.assembly?.['poka-yoke'] || 0) + fiveSHoursByDepartment.assembly / fiveSContributionDivisor, qualityMaxPct, learningCurveHours) +
-      calculateLearningComponent(defaultLearningBasePct, (projects.mergedLevels.shipping?.['poka-yoke'] || 0) + fiveSHoursByDepartment.shipping / fiveSContributionDivisor, qualityMaxPct, learningCurveHours)) /
-    3
-
-  const allowedNewVariations = calculateAllowedNewVariations(projectedQualityAverage, settings)
-  const requestedNewVariations =
-    market.addedVariations != null ? market.addedVariations : market.newVariations
-  const selectedNewVariations = clamp(toNonNegativeInt(requestedNewVariations), 0, allowedNewVariations)
-  const activeVariationCount = Math.max(1, toNonNegativeInt(market.activeVariationCount, 1))
-  const totalVariations = activeVariationCount + selectedNewVariations
-  const runsPerVariation = Math.max(
-    1,
-    toNonNegativeInt(market.runsPerVariation, inventorySettings.productionRunsPerVariationDefault ?? 2),
-  )
-  const productionRuns = totalVariations * runsPerVariation
-  const switches = productionRuns
-
-  // Demand is independent of capacity, so it can be resolved before department metrics
-  // and used as the "planned production" reference when no explicit ACT decision exists.
-  const demandPerVariation = calculateDemandPerVariation(market.price, settings)
-  const demand = Math.max(0, Math.round(demandPerVariation * totalVariations))
-  const hasPlannedProduction = market.productionQuantity != null
-  const requestedProductionQuantity = hasPlannedProduction
-    ? Math.max(0, toNonNegativeInt(market.productionQuantity))
-    : demand
-
   const initialBatchSize = toNumber(productionSettings.initialBatchSize, 20)
   const minBatchSize = toNumber(productionSettings.minBatchSize, 1)
   const maxBatchSize = toNumber(productionSettings.maxBatchSize, 20)
@@ -771,16 +741,11 @@ function calculateScenario({
     : initialBatchSize
   const machiningBatchSize = clamp(Math.round(requestedBatchSize), minBatchSize, maxBatchSize)
 
-  const machiningMetrics = calculateDepartmentMetrics({
-    key: 'machining',
-    machineCount,
-    staffing,
-    fiveSEffectiveHours: fiveSHoursByDepartment.machining,
-    methodHours: projects.mergedLevels.machining || {},
-    requestedProductionQuantity,
-    batchSize: machiningBatchSize,
-    settings,
-  })
+  // Department L (quality) factors do not depend on production quantity, so they can be
+  // resolved before demand. Machining's K_changeover does depend on quantity, but that
+  // only affects capacity, not quality.
+  const demandPerVariation = calculateDemandPerVariation(market.price, settings)
+  const hasPlannedProduction = market.productionQuantity != null
 
   const assemblyMetrics = calculateDepartmentMetrics({
     key: 'assembly',
@@ -797,6 +762,78 @@ function calculateScenario({
     staffing,
     fiveSEffectiveHours: fiveSHoursByDepartment.shipping,
     methodHours: projects.mergedLevels.shipping || {},
+    settings,
+  })
+
+  // Production quality follows the canonical KNL model: the average of the departments'
+  // L (quality) factors. New-customer rules use this same percentage. Machining's L is
+  // quantity-independent, so a provisional machining pass with quantity 0 yields the
+  // correct L even before demand is known.
+  const provisionalMachiningMetrics = calculateDepartmentMetrics({
+    key: 'machining',
+    machineCount,
+    staffing,
+    fiveSEffectiveHours: fiveSHoursByDepartment.machining,
+    methodHours: projects.mergedLevels.machining || {},
+    requestedProductionQuantity: 0,
+    batchSize: machiningBatchSize,
+    settings,
+  })
+
+  const projectedQualityAverage =
+    (provisionalMachiningMetrics.lPct + assemblyMetrics.lPct + shippingMetrics.lPct) / 3
+
+  // The new-customer cap is based on the quality level in force at the START of the
+  // round: this round's 5S/SPC/poka-yoke investments only pay off from the next round on.
+  let qualityForNewVariations = projectedQualityAverage
+  if (qualityHoursOverride) {
+    const openingQualityAverage = ['machining', 'assembly', 'shipping']
+      .map((departmentKey) => {
+        const opening = qualityHoursOverride[departmentKey] ?? {}
+        const metrics = calculateDepartmentMetrics({
+          key: departmentKey,
+          machineCount,
+          staffing,
+          fiveSEffectiveHours: toNumber(opening.fiveSHours),
+          methodHours: opening.methodHours || {},
+          requestedProductionQuantity: 0,
+          batchSize: machiningBatchSize,
+          settings,
+        })
+        return metrics.lPct
+      })
+      .reduce((sum, lPct) => sum + lPct, 0) / 3
+    qualityForNewVariations = openingQualityAverage
+  }
+
+  const allowedNewVariations = calculateAllowedNewVariations(qualityForNewVariations, settings)
+  const requestedNewVariations =
+    market.addedVariations != null ? market.addedVariations : market.newVariations
+  const selectedNewVariations = clamp(toNonNegativeInt(requestedNewVariations), 0, allowedNewVariations)
+  const activeVariationCount = Math.max(1, toNonNegativeInt(market.activeVariationCount, 1))
+  const totalVariations = activeVariationCount + selectedNewVariations
+  const runsPerVariation = Math.max(
+    1,
+    toNonNegativeInt(market.runsPerVariation, inventorySettings.productionRunsPerVariationDefault ?? 2),
+  )
+  const productionRuns = totalVariations * runsPerVariation
+  const switches = productionRuns
+
+  // Demand is independent of capacity; without an explicit ACT production decision the
+  // demand doubles as the "planned production" reference.
+  const demand = Math.max(0, Math.round(demandPerVariation * totalVariations))
+  const requestedProductionQuantity = hasPlannedProduction
+    ? Math.max(0, toNonNegativeInt(market.productionQuantity))
+    : demand
+
+  const machiningMetrics = calculateDepartmentMetrics({
+    key: 'machining',
+    machineCount,
+    staffing,
+    fiveSEffectiveHours: fiveSHoursByDepartment.machining,
+    methodHours: projects.mergedLevels.machining || {},
+    requestedProductionQuantity,
+    batchSize: machiningBatchSize,
     settings,
   })
 
@@ -956,6 +993,7 @@ function calculateScenario({
       assembly: assemblyMetrics,
       shipping: shippingMetrics,
       totalQualityAverage: projectedQualityAverage,
+      openingQualityAverage: qualityForNewVariations,
     },
     factoryKnl: calculateFactoryKnl({
       machining: machiningMetrics,
@@ -1038,6 +1076,23 @@ function calculateScenario({
       buildingDepreciation,
     },
   }
+}
+
+// Opening-of-round development hours for the new-customer quality rule: the snapshots
+// already hold the levels in force at the start of the round, before any DO decisions.
+function openingMethodHours(projectsSnapshot, departmentKey) {
+  const department = projectsSnapshot?.departments?.find((item) => item.key === departmentKey)
+  const hours = {}
+  department?.methods?.forEach((method) => {
+    hours[method.key] = toNumber(method.effectiveHours)
+  })
+  return hours
+}
+
+function openingFiveSHours(fiveSSnapshot, departmentKey) {
+  return toNumber(
+    fiveSSnapshot?.departments?.find((item) => item.key === departmentKey)?.fiveSEffectiveHours,
+  )
 }
 
 function buildCurrentStateFromProductionSnapshot(productionSnapshot) {
@@ -1354,6 +1409,23 @@ export function calculateRoundForecast(gameState, decisions = {}, factorySetting
     staffingDecision: decisions.staffing || gameState.checkStaffingDecision?.staffing || null,
     applyDoDecisions: true,
     factorySettings: settings,
+    // New-customer eligibility is governed by the quality level in force at the start of
+    // the round (no DO decisions applied), so this round's development investments cannot
+    // raise this round's cap.
+    qualityHoursOverride: {
+      machining: {
+        methodHours: openingMethodHours(normalizedInputs.projectsSnapshot, 'machining'),
+        fiveSHours: openingFiveSHours(normalizedInputs.fiveSSnapshot, 'machining'),
+      },
+      assembly: {
+        methodHours: openingMethodHours(normalizedInputs.projectsSnapshot, 'assembly'),
+        fiveSHours: openingFiveSHours(normalizedInputs.fiveSSnapshot, 'assembly'),
+      },
+      shipping: {
+        methodHours: openingMethodHours(normalizedInputs.projectsSnapshot, 'shipping'),
+        fiveSHours: openingFiveSHours(normalizedInputs.fiveSSnapshot, 'shipping'),
+      },
+    },
   })
 
   const departmentLabels = {

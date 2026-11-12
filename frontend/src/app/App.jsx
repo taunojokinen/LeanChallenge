@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import '../App.css'
 import GameLayout from './layouts/GameLayout.jsx'
 import LandingPage from '../pages/landing/LandingPage.jsx'
 import LoginPage from '../pages/login/LoginPage.jsx'
@@ -26,6 +27,7 @@ import GameIntroDialog from '../features/game-intro/GameIntroDialog.jsx'
 import { isGameIntroHidden } from '../features/game-intro/preferences.js'
 import {
   TEACHER_TEST_GAME_MODE,
+  CLASSROOM_GAME_MODE,
   clearTeacherTestGameSession,
   createTeacherTestGameSession,
   isTeacherTestGamePath,
@@ -35,7 +37,15 @@ import {
   createQuestGameSession,
   loadQuestGameSession,
   saveQuestGameSession,
+  clearClassroomGameSession,
+  createClassroomGameSession,
+  loadClassroomGameSession,
+  saveClassroomGameSession,
 } from '../features/session/teacherTestGameSession.js'
+import { buildFactorySettingsFromSetup } from '../entities/factory-settings/setupToFactorySettings.js'
+import { fetchCurrentTeacher, logoutTeacher } from '../shared/api/authApi.js'
+import { fetchTeacherGames, createTeacherGame } from '../shared/api/teacherGamesApi.js'
+import { fetchSetups } from '../shared/api/gamesApi.js'
 
 function normalizePath(pathname, shouldReplace = false) {
   const currentPath = pathname || '/'
@@ -100,7 +110,7 @@ const placeholderContentByPageKey = {
 }
 
 function App() {
-  const [restoredSession] = useState(() => loadTeacherTestGameSession() ?? loadQuestGameSession())
+  const [restoredSession] = useState(() => loadTeacherTestGameSession() ?? loadClassroomGameSession() ?? loadQuestGameSession())
   const [showGameIntro, setShowGameIntro] = useState(() => !restoredSession && !isGameIntroHidden())
   const [pathname, setPathname] = useState(() => normalizePath(window.location.pathname, true))
   const [lastGamePathname, setLastGamePathname] = useState(
@@ -116,6 +126,19 @@ function App() {
   const [gameState, setGameState] = useState(
     () => restoredSession?.gameState ?? structuredClone(initialGameState),
   )
+  const [playerName, setPlayerName] = useState(() => restoredSession?.playerName ?? '')
+  const [selectedSetupName, setSelectedSetupName] = useState(() => restoredSession?.setupName ?? '')
+  const [classroomSessionId, setClassroomSessionId] = useState(() => restoredSession?.classroomSessionId ?? null)
+  const [teacher, setTeacher] = useState(null)
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+  const [teacherGames, setTeacherGames] = useState([])
+  const [teacherGamesError, setTeacherGamesError] = useState('')
+  const [isLoadingGames, setIsLoadingGames] = useState(false)
+  const [setups, setSetups] = useState([])
+  const [newGameName, setNewGameName] = useState('')
+  const [newGameSetupId, setNewGameSetupId] = useState(null)
+  const [createGameError, setCreateGameError] = useState('')
+  const [isCreatingGame, setIsCreatingGame] = useState(false)
   const [roundStatus, setRoundStatus] = useState('')
   const completion = getGameCompletion(gameState, factorySettings.game.totalRounds)
   const effectivePathname = resolveGamePath(pathname, completion)
@@ -140,6 +163,41 @@ function App() {
     [factorySettings, gameState],
   )
 
+  // Tarkistetaan opettajan kirjautumistila sivun latautuessa
+  useEffect(() => {
+    fetchCurrentTeacher()
+      .then((data) => setTeacher(data))
+      .finally(() => setIsCheckingAuth(false))
+  }, [])
+
+  // Haetaan opettajan pelit ja vaikeustasot kun kirjautuminen on varmistettu
+  useEffect(() => {
+    if (!teacher) return
+
+    let cancelled = false
+
+    fetchTeacherGames()
+      .then((games) => {
+        if (!cancelled) setTeacherGames(games)
+      })
+      .catch((error) => {
+        if (!cancelled) setTeacherGamesError(error.message)
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingGames(false)
+      })
+
+    fetchSetups()
+      .then((data) => {
+        if (!cancelled) setSetups(data)
+      })
+      .catch(() => {
+        // Vaikeustasojen haku epäonnistui — lomake ei toimi, mutta pelilista näkyy
+      })
+
+    return () => { cancelled = true }
+  }, [teacher])
+
   useEffect(() => {
     if (window.location.pathname !== effectivePathname) {
       window.history.replaceState({}, '', effectivePathname)
@@ -149,20 +207,29 @@ function App() {
   useEffect(() => {
     try {
       const createSession = gameMode === TEACHER_TEST_GAME_MODE
-        ? createTeacherTestGameSession : createQuestGameSession
+        ? createTeacherTestGameSession
+        : gameMode === CLASSROOM_GAME_MODE
+          ? createClassroomGameSession
+          : createQuestGameSession
       const saveSession = gameMode === TEACHER_TEST_GAME_MODE
-        ? saveTeacherTestGameSession : saveQuestGameSession
+        ? saveTeacherTestGameSession
+        : gameMode === CLASSROOM_GAME_MODE
+          ? saveClassroomGameSession
+          : saveQuestGameSession
       saveSession(createSession({
         factorySettings,
         initialGameState,
         gameState,
+        playerName,
+        setupName: selectedSetupName,
+        classroomSessionId,
         pathname: completion ? '/game/report'
           : isTeacherTestGamePath(effectivePathname) ? effectivePathname : lastGamePathname,
       }))
     } catch (error) {
       console.error('Pelisession tallennus epäonnistui.', error)
     }
-  }, [completion, effectivePathname, factorySettings, gameMode, gameState, initialGameState, lastGamePathname])
+  }, [completion, effectivePathname, factorySettings, gameMode, gameState, initialGameState, lastGamePathname, playerName, selectedSetupName, classroomSessionId])
 
   useEffect(() => {
     const handlePopState = () => {
@@ -233,6 +300,7 @@ function App() {
     resetGameDecisionStorage()
     clearTeacherTestGameSession()
     clearQuestGameSession()
+    clearClassroomGameSession()
     setGameMode(mode)
     setFactorySettings(sessionSettings)
     setInitialGameState(startState)
@@ -246,16 +314,59 @@ function App() {
     startNewGameSession('quest', DEFAULT_FACTORY_SETTINGS, '/login')
   }
 
-  const handleStartQuest = () => {
-    startNewGameSession('quest', DEFAULT_FACTORY_SETTINGS)
+  const handleStartQuest = (setup) => {
+    const settings = setup ? buildFactorySettingsFromSetup(setup) : DEFAULT_FACTORY_SETTINGS
+    setSelectedSetupName(setup?.name ?? '')
+    startNewGameSession('quest', settings)
   }
 
   const handleStartTeacherTest = (settingsSnapshot) => {
     startNewGameSession(TEACHER_TEST_GAME_MODE, settingsSnapshot)
   }
 
+  const handleJoinClassroomGame = ({ playerName: name, game }) => {
+    const settings = buildFactorySettingsFromSetup(game.setup)
+    setPlayerName(name)
+    setClassroomSessionId(game.sessionId ?? null)
+    startNewGameSession(CLASSROOM_GAME_MODE, settings)
+  }
+
   const handleRestartGame = () => {
     startNewGameSession(gameMode, factorySettings)
+  }
+
+  const handleTeacherLogin = (teacherData) => {
+    setTeacher(teacherData)
+    setIsLoadingGames(true)
+    setTeacherGamesError('')
+  }
+
+  const handleTeacherLogout = async () => {
+    await logoutTeacher()
+    setTeacher(null)
+    setTeacherGames([])
+    setTeacherGamesError('')
+    setNewGameName('')
+    setNewGameSetupId(null)
+    setCreateGameError('')
+    navigateTo('/login')
+  }
+
+  const handleCreateGame = async (event) => {
+    event.preventDefault()
+    setCreateGameError('')
+    setIsCreatingGame(true)
+
+    try {
+      const newGame = await createTeacherGame(newGameName.trim(), newGameSetupId)
+      setTeacherGames((prev) => [newGame, ...prev])
+      setNewGameName('')
+      setNewGameSetupId(null)
+    } catch (error) {
+      setCreateGameError(error.message)
+    } finally {
+      setIsCreatingGame(false)
+    }
   }
 
   if (pageKey === 'login') {
@@ -263,8 +374,93 @@ function App() {
       <LoginPage
         onBackToLanding={() => navigateTo('/')}
         onStartQuest={handleStartQuest}
-        onOpenTeacherSettings={() => navigateTo('/teacher/settings')}
+        onJoinClassroomGame={handleJoinClassroomGame}
+        onTeacherLogin={handleTeacherLogin}
       />
+    )
+  }
+
+  if (pageKey === 'teacher-dashboard') {
+    if (isCheckingAuth) {
+      return null
+    }
+
+    if (!teacher) {
+      navigateTo('/login')
+      return null
+    }
+
+    return (
+      <div className="teacher-dashboard">
+        <h1>Tervetuloa, {teacher.displayName}</h1>
+
+        <section className="teacher-create-game" aria-labelledby="create-game-title">
+          <h2 id="create-game-title">Luo uusi peli</h2>
+
+          <form onSubmit={handleCreateGame} className="teacher-create-form">
+            <div className="teacher-field-group">
+              <label htmlFor="game-name">Pelin nimi</label>
+              <input
+                id="game-name"
+                type="text"
+                value={newGameName}
+                onChange={(e) => setNewGameName(e.target.value)}
+                placeholder="Syötä pelin nimi"
+                required
+              />
+            </div>
+
+            <div className="teacher-field-group">
+              <label htmlFor="game-setup">Vaikeustaso</label>
+              <select
+                id="game-setup"
+                value={newGameSetupId ?? ''}
+                onChange={(e) => setNewGameSetupId(Number(e.target.value))}
+                required
+              >
+                <option value="" disabled>Valitse vaikeustaso</option>
+                {setups.map((setup) => (
+                  <option key={setup.id} value={setup.id}>{setup.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {createGameError ? (
+              <p className="teacher-games-notice teacher-games-notice--error" role="alert">{createGameError}</p>
+            ) : null}
+
+            <button type="submit" disabled={isCreatingGame || !newGameName.trim() || !newGameSetupId}>
+              {isCreatingGame ? 'Luodaan…' : 'Luo peli'}
+            </button>
+          </form>
+        </section>
+
+        <section className="teacher-games" aria-labelledby="teacher-games-title">
+          <h2 id="teacher-games-title">Omat pelit</h2>
+
+          {isLoadingGames ? (
+            <p className="teacher-games-notice" role="status">Ladataan pelejä…</p>
+          ) : teacherGamesError ? (
+            <p className="teacher-games-notice teacher-games-notice--error" role="alert">{teacherGamesError}</p>
+          ) : teacherGames.length === 0 ? (
+            <p className="teacher-games-notice">Ei pelejä vielä.</p>
+          ) : (
+            <ul className="teacher-games-list">
+              {teacherGames.map((game) => (
+                <li key={game.id} className="teacher-game-card">
+                  <strong>{game.name}</strong>
+                  <span className="teacher-game-code">Koodi: {game.joinCode}</span>
+                  <span className="teacher-game-setup">{game.setupName}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <button type="button" onClick={handleTeacherLogout}>
+          Kirjaudu ulos
+        </button>
+      </div>
     )
   }
 
@@ -288,7 +484,7 @@ function App() {
         phase={phase}
         kpis={gameHeaderKpis}
         pageKey={pageKey}
-        userName="Pelaaja"
+        userName={playerName || 'Pelaaja'}
         onLogout={handleLogout}
         onNavigate={navigateTo}
         gameMode={gameMode}

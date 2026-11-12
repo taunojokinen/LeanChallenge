@@ -16,6 +16,10 @@ export const appRoutes = [
     pageKey: 'teacher-settings',
   },
   {
+    path: '/teacher/dashboard',
+    pageKey: 'teacher-dashboard',
+  },
+  {
     path: '/plan',
     pageKey: 'plan-root',
   },

@@ -1,17 +1,89 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { APP_NAME, APP_TAGLINE } from '../../config/appConfig.js'
 import Button from '../../shared/ui/Button/Button.jsx'
+import { fetchGameByJoinCode, fetchSetups } from '../../shared/api/gamesApi.js'
+import { loginTeacher } from '../../shared/api/authApi.js'
 import './LoginPage.css'
 
-function LoginPage({ onBackToLanding, onStartQuest, onOpenTeacherSettings }) {
+function LoginPage({ onBackToLanding, onStartQuest, onJoinClassroomGame, onTeacherLogin }) {
   const [view, setView] = useState('entry')
   const [playerName, setPlayerName] = useState('')
   const [gameCode, setGameCode] = useState('')
   const [joinMessage, setJoinMessage] = useState('')
+  const [joinError, setJoinError] = useState('')
+  const [isJoining, setIsJoining] = useState(false)
+  const [setups, setSetups] = useState([])
+  const [selectedSetupId, setSelectedSetupId] = useState(null)
+  const [setupsError, setSetupsError] = useState('')
+  const [isLoadingSetups, setIsLoadingSetups] = useState(false)
+  const [teacherUsername, setTeacherUsername] = useState('')
+  const [teacherPassword, setTeacherPassword] = useState('')
+  const [teacherError, setTeacherError] = useState('')
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
 
-  const handleJoinSubmit = (event) => {
+  // Haetaan vaikeustasot kun Quest-valintanäkymä avataan
+  useEffect(() => {
+    if (view !== 'quest') return
+
+    let cancelled = false
+
+    fetchSetups()
+      .then((data) => {
+        if (cancelled) return
+        setSetups(data)
+        // Kisälli (normaali) oletusvalinnaksi
+        const defaultSetup = data.find((s) => s.name === 'Kisälli') ?? data[0]
+        setSelectedSetupId(defaultSetup?.id ?? null)
+      })
+      .catch((error) => {
+        if (cancelled) return
+        setSetupsError(error.message)
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingSetups(false)
+      })
+
+    return () => { cancelled = true }
+  }, [view])
+
+  const handleJoinSubmit = async (event) => {
     event.preventDefault()
-    setJoinMessage('Peliin liittyminen otetaan käyttöön myöhemmin. Tarkistamme pelikoodin ennen peliin pääsyä.')
+    setJoinError('')
+    setJoinMessage('')
+    setIsJoining(true)
+
+    try {
+      const game = await fetchGameByJoinCode(gameCode, playerName)
+      onJoinClassroomGame({ playerName: playerName.trim(), game })
+    } catch (error) {
+      setJoinError(error.message)
+    } finally {
+      setIsJoining(false)
+    }
+  }
+
+  const handleStartQuestWithSetup = () => {
+    const selectedSetup = setups.find((s) => s.id === selectedSetupId)
+    if (selectedSetup) {
+      onStartQuest(selectedSetup)
+    }
+  }
+
+  const handleTeacherLoginSubmit = async (event) => {
+    event.preventDefault()
+    setTeacherError('')
+    setIsLoggingIn(true)
+
+    try {
+      const teacher = await loginTeacher(teacherUsername.trim(), teacherPassword)
+      onTeacherLogin(teacher)
+      window.history.pushState({}, '', '/teacher/dashboard')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    } catch (error) {
+      setTeacherError(error.message)
+    } finally {
+      setIsLoggingIn(false)
+    }
   }
 
   return (
@@ -46,7 +118,7 @@ function LoginPage({ onBackToLanding, onStartQuest, onOpenTeacherSettings }) {
             </header>
 
             <div className="login-options">
-              <button className="login-option-card" type="button" onClick={onStartQuest}>
+              <button className="login-option-card" type="button" onClick={() => { setIsLoadingSetups(true); setSetupsError(''); setView('quest') }}>
                 <span className="login-option-copy">
                   <strong>Pelaa Quest</strong>
                   <span>Aloita itsenäinen peli heti, ilman kirjautumista.</span>
@@ -73,12 +145,64 @@ function LoginPage({ onBackToLanding, onStartQuest, onOpenTeacherSettings }) {
               Etusivulle
             </Button>
           </section>
+        ) : view === 'quest' ? (
+          <section className="login-card" aria-labelledby="quest-setup-title">
+            <div className="login-card-header">
+              <p className="login-eyebrow">QUEST</p>
+              <h2 id="quest-setup-title">Valitse vaikeustaso</h2>
+              <p>Valitse pelin vaikeustaso ennen aloittamista.</p>
+            </div>
+
+            {isLoadingSetups ? (
+              <p className="login-notice" role="status">Ladataan vaikeustasoja…</p>
+            ) : setupsError ? (
+              <p className="login-notice login-notice--error" role="alert">{setupsError}</p>
+            ) : (
+              <div className="login-setup-options" role="radiogroup" aria-label="Vaikeustaso">
+                {setups.map((setup) => (
+                  <label
+                    key={setup.id}
+                    className={`login-setup-option${selectedSetupId === setup.id ? ' login-setup-option--selected' : ''}`}
+                  >
+                    <input
+                      type="radio"
+                      name="setup"
+                      value={setup.id}
+                      checked={selectedSetupId === setup.id}
+                      onChange={() => setSelectedSetupId(setup.id)}
+                      className="login-setup-radio"
+                    />
+                    <span className="login-setup-label">
+                      <strong>{setup.name}</strong>
+                      <span className="login-setup-description">
+                        {setup.name === 'Oppipoika' && 'Helppo — sopii ensikertalaisille'}
+                        {setup.name === 'Kisälli' && 'Normaali — tasapainoinen haaste'}
+                        {setup.name === 'Mestari' && 'Vaikea — kokeneille pelaajille'}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            <Button
+              className="login-submit-button"
+              type="button"
+              onClick={handleStartQuestWithSetup}
+              disabled={isLoadingSetups || !!setupsError || !selectedSetupId}
+            >
+              Aloita peli
+            </Button>
+            <Button className="login-back-button" type="button" onClick={() => setView('entry')}>
+              Takaisin
+            </Button>
+          </section>
         ) : view === 'join' ? (
           <form className="login-card" onSubmit={handleJoinSubmit}>
             <div className="login-card-header">
               <p className="login-eyebrow">PELIN ALOITUS</p>
               <h2>Liity peliin</h2>
-              <p>Peliin liittyminen ei ole vielä käytössä. Pelikoodi tarkistetaan ennen peliin pääsyä.</p>
+              <p>Syötä nimesi ja opettajalta saamasi pelikoodi.</p>
             </div>
 
             <div className="login-field-group">
@@ -113,41 +237,64 @@ function LoginPage({ onBackToLanding, onStartQuest, onOpenTeacherSettings }) {
               </div>
             </div>
 
+            {joinError ? <p className="login-notice login-notice--error" role="alert">{joinError}</p> : null}
             {joinMessage ? <p className="login-notice" role="status">{joinMessage}</p> : null}
 
-            <Button className="login-submit-button" type="submit">Liity peliin</Button>
+            <Button className="login-submit-button" type="submit" disabled={isJoining}>
+              {isJoining ? 'Liitytään…' : 'Liity peliin'}
+            </Button>
             <Button className="login-back-button" type="button" onClick={() => setView('entry')}>
               Takaisin
             </Button>
           </form>
         ) : (
-          <section className="login-card" aria-labelledby="teacher-login-title">
+          <form className="login-card" onSubmit={handleTeacherLoginSubmit}>
             <div className="login-card-header">
               <p className="login-eyebrow">OPETTAJAN TYÖTILA</p>
               <h2 id="teacher-login-title">Opettajan kirjautuminen</h2>
             </div>
 
-            <p className="login-notice" role="status">
-              Opettajan tunnistautuminen otetaan käyttöön myöhemmin Firebase Authenticationilla. Tunnuksia ei kysytä eikä tallenneta tässä vaiheessa.
-            </p>
-
-            <div className="login-upcoming">
-              <h3>Tulossa</h3>
-              <ul>
-                <li>Uusien pelien avaaminen ja vaikeusasetukset</li>
-                <li>Pelikoodien luominen ja opiskelijoiden etenemisen seuranta</li>
-                <li>Omien pelien hallinta sekä Questin pelaaminen</li>
-                <li>Liittyminen omaan peliin pelaajana</li>
-              </ul>
+            <div className="login-field-group">
+              <label className="login-field-label" htmlFor="teacher-username">Käyttäjätunnus</label>
+              <div className="login-input-shell">
+                <input
+                  id="teacher-username"
+                  name="username"
+                  type="text"
+                  value={teacherUsername}
+                  onChange={(event) => setTeacherUsername(event.target.value)}
+                  placeholder="Käyttäjätunnus"
+                  autoComplete="username"
+                  required
+                />
+              </div>
             </div>
 
-            <Button className="login-submit-button" type="button" onClick={onOpenTeacherSettings}>
-              Avaa opettajan asetukset
+            <div className="login-field-group">
+              <label className="login-field-label" htmlFor="teacher-password">Salasana</label>
+              <div className="login-input-shell">
+                <input
+                  id="teacher-password"
+                  name="password"
+                  type="password"
+                  value={teacherPassword}
+                  onChange={(event) => setTeacherPassword(event.target.value)}
+                  placeholder="Salasana"
+                  autoComplete="current-password"
+                  required
+                />
+              </div>
+            </div>
+
+            {teacherError ? <p className="login-notice login-notice--error" role="alert">{teacherError}</p> : null}
+
+            <Button className="login-submit-button" type="submit" disabled={isLoggingIn}>
+              {isLoggingIn ? 'Kirjaudutaan…' : 'Kirjaudu sisään'}
             </Button>
             <Button className="login-back-button" type="button" onClick={() => setView('entry')}>
               Takaisin
             </Button>
-          </section>
+          </form>
         )}
       </main>
     </div>

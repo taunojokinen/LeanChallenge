@@ -16,3 +16,169 @@
   font-size: var(--font-size-sm);
   cursor: pointer;
 }
+
+.teacher-dashboard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100svh;
+  gap: var(--space-5);
+  padding: var(--space-10);
+  text-align: center;
+}
+
+.teacher-dashboard h1 {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-2xl);
+}
+
+.teacher-dashboard p {
+  color: var(--color-text-secondary);
+}
+
+.teacher-dashboard button {
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 1.1rem;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  background: var(--color-primary-accent);
+  color: var(--color-text-on-accent);
+}
+
+.teacher-create-game {
+  width: 100%;
+  max-width: 32rem;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.teacher-create-game h2 {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xl);
+  margin: 0;
+}
+
+.teacher-create-form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.teacher-field-group {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.teacher-field-group label {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.teacher-field-group input,
+.teacher-field-group select {
+  min-height: 3rem;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-surface, #fff);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-md);
+}
+
+.teacher-field-group input:focus,
+.teacher-field-group select:focus {
+  outline: 2px solid var(--color-primary-accent);
+  outline-offset: 1px;
+}
+
+.teacher-create-form button[type="submit"] {
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 1.1rem;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  background: var(--color-primary-accent);
+  color: var(--color-text-on-accent);
+}
+
+.teacher-create-form button[type="submit"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.teacher-games {
+  width: 100%;
+  max-width: 32rem;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.teacher-games h2 {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xl);
+  margin: 0;
+}
+
+.teacher-games-notice {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  padding: var(--space-4);
+  border-left: 3px solid var(--color-primary-accent);
+  background: rgba(53, 200, 216, 0.1);
+}
+
+.teacher-games-notice--error {
+  border-left-color: #e05555;
+  background: rgba(224, 85, 85, 0.1);
+}
+
+.teacher-games-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.teacher-game-card {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  text-align: left;
+  background: var(--color-bg-surface, #fff);
+}
+
+.teacher-game-card strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.teacher-game-code {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-family: monospace;
+  letter-spacing: 0.02em;
+}
+
+.teacher-game-setup {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-style: italic;
+}
+
+@media (max-width: 480px) {
+  .teacher-game-card {
+    padding: var(--space-4);
+  }
+
+  .teacher-game-card strong {
+    font-size: var(--font-size-md);
+  }
+}

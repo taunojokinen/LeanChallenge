@@ -2,9 +2,11 @@ import { buildLegacyFinancialHistory } from '../../entities/factory-settings/fin
 import { getGameCompletion } from '../../entities/game-round/completion.js'
 
 export const TEACHER_TEST_GAME_MODE = 'teacher-test'
+export const CLASSROOM_GAME_MODE = 'classroom'
 export const TEACHER_TEST_SESSION_STORAGE_KEY = 'lean-challenge-teacher-test-session-v1'
 export const TEACHER_TEST_SESSION_VERSION = 1
 export const QUEST_SESSION_STORAGE_KEY = 'lean-challenge-quest-session-v1'
+export const CLASSROOM_SESSION_STORAGE_KEY = 'lean-challenge-classroom-session-v1'
 
 const PHASE_BY_PATH = {
   '/plan/cockpit': 'PLAN',
@@ -46,6 +48,9 @@ function createGameSession({
   initialGameState,
   gameState = initialGameState,
   pathname = '/plan/cockpit',
+  playerName = '',
+  setupName = '',
+  classroomSessionId = null,
 }, mode) {
   const normalizedPathname = pathname === '/plan' ? '/plan/cockpit' : pathname
 
@@ -58,6 +63,9 @@ function createGameSession({
     pathname: normalizedPathname,
     phase: PHASE_BY_PATH[normalizedPathname] ?? null,
     round: gameState.round,
+    playerName,
+    setupName,
+    classroomSessionId,
     savedAt: new Date().toISOString(),
   }
 }
@@ -146,6 +154,22 @@ export function loadQuestGameSession(storage) {
 
 export function clearQuestGameSession(storage) {
   resolveStorage(storage)?.removeItem(QUEST_SESSION_STORAGE_KEY)
+}
+
+export function createClassroomGameSession(options) {
+  return createGameSession(options, CLASSROOM_GAME_MODE)
+}
+
+export function saveClassroomGameSession(session, storage) {
+  return saveGameSession(session, storage, CLASSROOM_GAME_MODE, CLASSROOM_SESSION_STORAGE_KEY)
+}
+
+export function loadClassroomGameSession(storage) {
+  return loadGameSession(storage, CLASSROOM_GAME_MODE, CLASSROOM_SESSION_STORAGE_KEY)
+}
+
+export function clearClassroomGameSession(storage) {
+  resolveStorage(storage)?.removeItem(CLASSROOM_SESSION_STORAGE_KEY)
 }
 
 export function clearTeacherTestGameSession(storage) {

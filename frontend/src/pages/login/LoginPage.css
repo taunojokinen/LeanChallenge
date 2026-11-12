@@ -235,6 +235,56 @@
   line-height: 1.5;
 }
 
+.login-notice--error {
+  border-left-color: #e05555;
+  background: rgba(224, 85, 85, 0.1);
+}
+
+.login-setup-options {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.login-setup-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.login-setup-option:hover {
+  border-color: var(--color-primary-accent);
+}
+
+.login-setup-option--selected {
+  border-color: var(--color-primary-accent);
+  background: rgba(53, 200, 216, 0.08);
+}
+
+.login-setup-radio {
+  margin-top: 0.2em;
+  accent-color: var(--color-primary-accent);
+}
+
+.login-setup-label {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.login-setup-label strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-md);
+}
+
+.login-setup-description {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
 .login-upcoming {
   display: grid;
   gap: var(--space-3);

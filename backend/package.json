@@ -1,0 +1,22 @@
+{
+  "name": "leanchallenge-backend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Lean Challenge -pelin backend-API",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js"
+  },
+  "dependencies": {
+    "argon2": "^0.45.2",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}

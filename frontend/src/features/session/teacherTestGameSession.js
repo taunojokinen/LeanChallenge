@@ -1,4 +1,4 @@
-import { buildLegacyFinancialHistory } from '../../entities/factory-settings/financialHistory.js'
+import { buildLegacyFinancialHistory } from '../../../../shared/factory-settings/financialHistory.js'
 import { getGameCompletion } from '../../../../shared/game-round/completion.js'
 
 export const TEACHER_TEST_GAME_MODE = 'teacher-test'

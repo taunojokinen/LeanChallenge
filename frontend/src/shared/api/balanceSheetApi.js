@@ -1,7 +1,7 @@
 import snapshot from '../../mocks/balanceSheetSnapshot.json'
 import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
-import { createInitialGameState } from '../../entities/factory-settings/initialGameState.js'
-import { buildInitialBalanceSheetHistory } from '../../entities/factory-settings/financialHistory.js'
+import { createInitialGameState } from '../../../../shared/factory-settings/initialGameState.js'
+import { buildInitialBalanceSheetHistory } from '../../../../shared/factory-settings/financialHistory.js'
 
 export async function getBalanceSheetSnapshot() {
   return Promise.resolve(snapshot)

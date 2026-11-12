@@ -1,4 +1,4 @@
-import { normalizeFinancialHistoryEntry } from '../factory-settings/financialHistory.js'
+import { normalizeFinancialHistoryEntry } from '../../../../shared/factory-settings/financialHistory.js'
 import { relativePercentChange } from '../history/relativeChange.js'
 import { formatPercentChange } from '../../shared/lib/formatPercentChange.js'
 const EURO_FORMATTER = new Intl.NumberFormat('fi-FI', {

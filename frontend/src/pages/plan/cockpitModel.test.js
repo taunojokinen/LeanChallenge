@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createInitialGameState } from '../../entities/factory-settings/initialGameState.js'
+import { createInitialGameState } from '../../../../shared/factory-settings/initialGameState.js'
 import { calculateRoundForecast } from '../../../../shared/forecast/model.js'
 import { calculateFactoryKnl } from '../../../../shared/forecast/factoryKnl.js'
 import { calculateKNL } from '../../../../shared/forecast/knl.js'

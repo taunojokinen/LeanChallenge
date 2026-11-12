@@ -8,8 +8,8 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createServer } from 'vite'
 import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
-import { createInitialGameState } from '../../entities/factory-settings/initialGameState.js'
-import { buildInitialIncomeHistory } from '../../entities/factory-settings/financialHistory.js'
+import { createInitialGameState } from '../../../../shared/factory-settings/initialGameState.js'
+import { buildInitialIncomeHistory } from '../../../../shared/factory-settings/financialHistory.js'
 import { buildIncomeHistoryView, buildIncomeStatementRows } from '../../entities/income/model.js'
 
 let server

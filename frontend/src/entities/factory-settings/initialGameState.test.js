@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
-import { createInitialGameState } from './initialGameState.js'
+import { createInitialGameState } from '../../../../shared/factory-settings/initialGameState.js'
 import { calculateRoundForecast } from '../../../../shared/forecast/model.js'
 import { getFiveSLevel } from '../../../../shared/five-s/model.js'
 import forecastInitialState from '../../../../shared/test-fixtures/forecastInitialState.json' with { type: 'json' }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import investmentsSnapshot from '../../mocks/investmentsSnapshot.json' with { type: 'json' }
 import balanceSheetSnapshot from '../../mocks/balanceSheetSnapshot.json' with { type: 'json' }
 import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
-import { createInitialGameState } from '../factory-settings/initialGameState.js'
+import { createInitialGameState } from '../../../../shared/factory-settings/initialGameState.js'
 import { calculateRoundForecast } from '../../../../shared/forecast/model.js'
 import {
   applyFactoryExpansion,

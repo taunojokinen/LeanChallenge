@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createServer } from 'vite'
-import { createInitialGameState } from '../../entities/factory-settings/initialGameState.js'
+import { createInitialGameState } from '../../../../shared/factory-settings/initialGameState.js'
 import { saveDevelopmentDecision } from '../../features/development/decisionAdapter.js'
 import { normalizeDevelopmentHours } from '../../entities/development/model.js'
 

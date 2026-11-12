@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { calculateAllowedNewVariations, calculateRoundForecast } from '../../../../shared/forecast/model.js'
-import { createInitialGameState } from './initialGameState.js'
+import { createInitialGameState } from '../../../../shared/factory-settings/initialGameState.js'
 import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 import {
   TEACHER_SETTING_DEFINITIONS,

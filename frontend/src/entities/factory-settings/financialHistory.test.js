@@ -1,8 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
-import { createInitialGameState } from './initialGameState.js'
-import { createInitialFactoryState } from './initialFactoryState.js'
+import { createInitialGameState } from '../../../../shared/factory-settings/initialGameState.js'
+import { createInitialFactoryState } from '../../../../shared/factory-settings/initialFactoryState.js'
 import { calculateFinancingStructure } from '../../../../shared/factory-settings/financingStructure.js'
 import { calculateRoundForecast } from '../../../../shared/forecast/model.js'
 import {
@@ -10,7 +10,7 @@ import {
   buildCanonicalFinancialHistory,
   buildInitialBalanceSheetHistory,
   buildInitialIncomeHistory,
-} from './financialHistory.js'
+} from '../../../../shared/factory-settings/financialHistory.js'
 import { buildIncomeHistoryView } from '../income/model.js'
 import { buildBalanceSheetHistoryView } from '../balance-sheet/model.js'
 import { buildFactorySettingsSnapshot, createDefaultTeacherPreferences, getTeacherSliderStepCount } from './teacherGameSettings.js'

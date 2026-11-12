@@ -8,7 +8,7 @@ const DECIMAL_FORMATTER = new Intl.NumberFormat('fi-FI', {
 })
 
 import { selectLatestConfirmedRounds } from '../history/confirmedRounds.js'
-import { normalizeFinancialHistoryEntry } from '../factory-settings/financialHistory.js'
+import { normalizeFinancialHistoryEntry } from '../../../../shared/factory-settings/financialHistory.js'
 
 function formatCurrency(amount) {
   return `${EURO_FORMATTER.format(amount)} €`

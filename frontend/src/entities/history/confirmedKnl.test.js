@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createInitialGameState } from '../factory-settings/initialGameState.js'
+import { createInitialGameState } from '../../../../shared/factory-settings/initialGameState.js'
 import { buildInitialKnlHistory, selectConfirmedKnlRounds } from './confirmedKnl.js'
 import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 import { calculateRoundForecast } from '../../../../shared/forecast/model.js'

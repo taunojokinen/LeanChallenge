@@ -1,4 +1,4 @@
-import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
+import { DEFAULT_FACTORY_SETTINGS } from './defaultFactorySettings.js'
 
 function toNonNegativeInt(value, fallback = 0) {
   const numeric = Number(value)

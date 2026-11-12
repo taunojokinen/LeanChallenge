@@ -2,7 +2,7 @@ import { DEFAULT_FACTORY_SETTINGS } from '../../../shared/factory-settings/defau
 import {
   buildCanonicalFinancialHistory,
   normalizeFinancialHistoryEntry,
-} from '../entities/factory-settings/financialHistory.js'
+} from '../../../shared/factory-settings/financialHistory.js'
 import { selectConfirmedKnlRounds } from '../entities/history/confirmedKnl.js'
 import { selectLatestConfirmedRounds } from '../entities/history/confirmedRounds.js'
 import { relativePercentChange } from '../entities/history/relativeChange.js'

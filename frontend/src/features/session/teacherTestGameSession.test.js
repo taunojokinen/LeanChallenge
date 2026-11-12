@@ -1,11 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createInitialGameState } from '../../entities/factory-settings/initialGameState.js'
-import { createInitialFactoryState } from '../../entities/factory-settings/initialFactoryState.js'
+import { createInitialGameState } from '../../../../shared/factory-settings/initialGameState.js'
+import { createInitialFactoryState } from '../../../../shared/factory-settings/initialFactoryState.js'
 import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 import { calculateRoundForecast } from '../../../../shared/forecast/model.js'
 import { buildInitialKnlHistory } from '../../entities/history/confirmedKnl.js'
-import { buildInitialBalanceSheetHistory, buildCanonicalFinancialHistory } from '../../entities/factory-settings/financialHistory.js'
+import { buildInitialBalanceSheetHistory, buildCanonicalFinancialHistory } from '../../../../shared/factory-settings/financialHistory.js'
 import { advanceRoundState } from '../../../../shared/game-round/advanceRound.js'
 import {
   buildFactorySettingsSnapshot,

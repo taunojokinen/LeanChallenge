@@ -6,7 +6,7 @@ import investmentsSnapshot from '../../mocks/investmentsSnapshot.json' with { ty
 import balanceSheetSnapshot from '../../mocks/balanceSheetSnapshot.json' with { type: 'json' }
 import productionSnapshot from '../../mocks/productionSnapshot.json' with { type: 'json' }
 import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
-import { createInitialGameState } from '../factory-settings/initialGameState.js'
+import { createInitialGameState } from '../../../../shared/factory-settings/initialGameState.js'
 import { advanceRoundState } from '../../../../shared/game-round/advanceRound.js'
 import {
   calculateAllowedNewVariations,

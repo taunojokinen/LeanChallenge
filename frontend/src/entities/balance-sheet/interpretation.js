@@ -1,4 +1,4 @@
-import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
+import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 import { calculateAnnualConfirmedInventoryTurnover } from '../history/financialMetrics.js'
 import { canFinanceInvestment } from '../investments/model.js'
 

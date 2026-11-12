@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { DEFAULT_FACTORY_SETTINGS } from './defaultFactorySettings.js'
-import { calculateFinancingStructure } from './financingStructure.js'
+import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
+import { calculateFinancingStructure } from '../../../../shared/factory-settings/financingStructure.js'
 
 test('financing structure round-0 case uses target cash and raw-material share', () => {
   const result = calculateFinancingStructure({

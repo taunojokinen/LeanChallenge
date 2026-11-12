@@ -1,7 +1,7 @@
 import { loadFiveSDecision, saveFiveSDecision } from '../five-s/decisionStore.js'
 import { loadProjectsDecision, saveProjectsDecision } from '../projects/decisionStore.js'
 import { calculateProjectCost } from '../../entities/lean-projects/model.js'
-import { DEFAULT_FACTORY_SETTINGS } from '../../entities/factory-settings/defaultFactorySettings.js'
+import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 import {
   DEVELOPMENT_DEPARTMENTS, developmentKey, normalizeDevelopmentHours,
   isDevelopmentHoursValid,

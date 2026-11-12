@@ -1,4 +1,4 @@
-import { DEFAULT_FACTORY_SETTINGS } from './defaultFactorySettings.js'
+import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 
 export const TEACHER_SETTINGS_STORAGE_KEY = 'lean-challenge-teacher-settings-v1'
 export const TEACHER_SETTINGS_VERSION = 4

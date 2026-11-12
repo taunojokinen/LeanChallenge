@@ -1,4 +1,4 @@
-import { DEFAULT_FACTORY_SETTINGS } from './defaultFactorySettings.js'
+import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 
 // Muuntaa backendin setup-taulun arvot frontendin factorySettings-muotoon.
 // Backend palauttaa numeric-sarakkeet merkkijonoina, joten ne muunnetaan numeroiksi.

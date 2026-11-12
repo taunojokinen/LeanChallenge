@@ -1,4 +1,4 @@
-import { DEFAULT_FACTORY_SETTINGS } from '../entities/factory-settings/defaultFactorySettings.js'
+import { DEFAULT_FACTORY_SETTINGS } from '../../../shared/factory-settings/defaultFactorySettings.js'
 import {
   buildCanonicalFinancialHistory,
   normalizeFinancialHistoryEntry,

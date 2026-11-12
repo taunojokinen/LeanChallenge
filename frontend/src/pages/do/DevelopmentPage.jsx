@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { DEFAULT_FACTORY_SETTINGS } from '../../entities/factory-settings/defaultFactorySettings.js'
+import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 import { buildDevelopmentViewModel, updateDevelopmentHours } from '../../entities/development/model.js'
 import { loadDevelopmentDecision, saveDevelopmentDecision } from '../../features/development/decisionAdapter.js'
 import DevelopmentHelp from '../../features/development/DevelopmentHelp.jsx'

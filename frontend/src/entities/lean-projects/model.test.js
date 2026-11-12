@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import snapshot from '../../mocks/projectsSnapshot.json' with { type: 'json' }
-import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
+import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 import {
   METHOD_DEVELOPMENT_FIXED_HOURS,
   buildProjectsViewModel,

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { buildBalanceSheetHistoryView, buildBalanceSheetViewModel } from '../../entities/balance-sheet/model.js'
 import { getInitialBalanceSheetHistory } from '../../shared/api/balanceSheetApi.js'
-import { DEFAULT_FACTORY_SETTINGS } from '../../entities/factory-settings/defaultFactorySettings.js'
+import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 import { buildBalanceInterpretation } from '../../entities/balance-sheet/interpretation.js'
 import BalanceInterpretation from './BalanceInterpretation.jsx'
 import './PlanBalanceSheetPage.css'

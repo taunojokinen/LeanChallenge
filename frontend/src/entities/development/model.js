@@ -1,4 +1,4 @@
-import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
+import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 import { calculateNextFiveSState } from '../five-s/model.js'
 import { calculateDevelopedKnlValue } from '../../../../shared/forecast/knlDevelopment.js'
 

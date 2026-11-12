@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { buildIncomeHistoryView, buildIncomeStatementRows } from '../../entities/income/model.js'
 import { getInitialIncomeHistory } from '../../shared/api/incomeApi.js'
-import { DEFAULT_FACTORY_SETTINGS } from '../../entities/factory-settings/defaultFactorySettings.js'
+import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 import './PlanIncomePage.css'
 
 function PlanIncomePage({ gameState, factorySettings = DEFAULT_FACTORY_SETTINGS }) {

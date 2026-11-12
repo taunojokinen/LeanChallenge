@@ -1,9 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { DEFAULT_FACTORY_SETTINGS } from './defaultFactorySettings.js'
+import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 import { createInitialGameState } from './initialGameState.js'
 import { createInitialFactoryState } from './initialFactoryState.js'
-import { calculateFinancingStructure } from './financingStructure.js'
+import { calculateFinancingStructure } from '../../../../shared/factory-settings/financingStructure.js'
 import { calculateRoundForecast } from '../forecast/model.js'
 import {
   assertCanonicalFinancialHistoryEntry,

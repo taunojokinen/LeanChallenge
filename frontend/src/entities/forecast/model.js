@@ -1,6 +1,6 @@
 import { calculateNextFiveSState } from '../five-s/model.js'
-import { calculateFinancingStructure } from '../factory-settings/financingStructure.js'
-import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
+import { calculateFinancingStructure } from '../../../../shared/factory-settings/financingStructure.js'
+import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 import {
   calculateFactorySpace,
   calculateMinimumFinishedGoodsContainers,

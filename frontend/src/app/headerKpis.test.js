@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { DEFAULT_FACTORY_SETTINGS } from '../entities/factory-settings/defaultFactorySettings.js'
+import { DEFAULT_FACTORY_SETTINGS } from '../../../shared/factory-settings/defaultFactorySettings.js'
 import { createInitialGameState } from '../entities/factory-settings/initialGameState.js'
 import { buildGameHeaderKpis } from './headerKpis.js'
 import { buildConfirmedCockpitViewModel } from '../pages/plan/cockpitModel.js'

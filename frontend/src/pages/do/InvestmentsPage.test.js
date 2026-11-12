@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createServer } from 'vite'
 import { createInitialGameState } from '../../entities/factory-settings/initialGameState.js'
-import { DEFAULT_FACTORY_SETTINGS } from '../../entities/factory-settings/defaultFactorySettings.js'
+import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 import investmentsSnapshot from '../../mocks/investmentsSnapshot.json' with { type: 'json' }
 import { buildInvestmentsViewModel } from '../../entities/investments/model.js'
 

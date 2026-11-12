@@ -26,6 +26,130 @@ function createRoundOneForecast(overrides = {}) {
   return { gameState: effectiveGameState, forecast }
 }
 
+test('deterministic baseline forecast and canonical next state match the migration reference', () => {
+  const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS, {
+    historySeed: 123456789,
+  })
+  const forecast = calculateRoundForecast(
+    gameState,
+    {
+      market: {
+        price: 25500,
+        addedVariations: 1,
+        productionQuantity: 200,
+      },
+    },
+    DEFAULT_FACTORY_SETTINGS,
+  )
+  const result = advanceRoundState({ gameState, forecast, totalRounds: 12 })
+
+  assert.deepEqual({
+    round: gameState.round,
+    historySeed: gameState.historySeed,
+    demand: forecast.summary.demand,
+    actualProduction: forecast.summary.actualProduction,
+    deliveries: forecast.summary.deliveries,
+    machiningKnl: forecast.forecast.knl.machining.knl,
+    result: forecast.summary.result,
+  }, {
+    round: 1,
+    historySeed: 123456789,
+    demand: 180,
+    actualProduction: 150,
+    deliveries: 150,
+    machiningKnl: 0.4327615384615385,
+    result: -257132.8087158203,
+  })
+  assert.deepEqual({
+    round: result.nextGameState.round,
+    market: result.nextGameState.market,
+    production: result.nextGameState.production,
+    inventory: result.nextGameState.inventory,
+    bankLoans: result.nextGameState.finance.bankLoans,
+    equity: result.nextGameState.finance.equity,
+  }, {
+    round: 2,
+    market: {
+      price: 25500,
+      activeVariations: 20,
+      productionRunsPerVariation: 2,
+      batchSize: 20,
+    },
+    production: { machiningMachines: 4 },
+    inventory: { finishedGoodsContainers: 100 },
+    bankLoans: 3168762.0579833975,
+    equity: 1816842.1912841806,
+  })
+})
+
+test('deterministic investment and Lean forecast match the migration reference', () => {
+  const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS, {
+    historySeed: 123456789,
+  })
+  gameState.fiveSDecision = {
+    round: 1,
+    investedHours: { machining: 100, assembly: 80, shipping: 60 },
+  }
+  gameState.projectsDecision = {
+    round: 1,
+    selections: [{ department: 'machining', method: 'smed', investedHours: 20 }],
+  }
+  gameState.investmentsDecision = {
+    round: 1,
+    investments: [
+      { type: 'new-machine', quantity: 1, cost: 500000 },
+      { type: 'factory-expansion', quantity: 1, cost: 1000000 },
+    ],
+  }
+  const forecast = calculateRoundForecast(
+    gameState,
+    {
+      market: {
+        price: 25500,
+        addedVariations: 1,
+        productionQuantity: 200,
+      },
+    },
+    DEFAULT_FACTORY_SETTINGS,
+  )
+  const result = advanceRoundState({ gameState, forecast, totalRounds: 12 })
+
+  assert.deepEqual({
+    newMachines: forecast.forecast.investments.newMachines,
+    machiningCapacity: forecast.forecast.capacityByDepartment.machining,
+    result: forecast.summary.result,
+    machiningFiveSHours: forecast.closingState.lean.fiveS.departments.machining.effectiveHours,
+    assemblyFiveSHours: forecast.closingState.lean.fiveS.departments.assembly.effectiveHours,
+    shippingFiveSHours: forecast.closingState.lean.fiveS.departments.shipping.effectiveHours,
+    machiningSmedHours: forecast.closingState.lean.methods.machining.smed,
+  }, {
+    newMachines: 1,
+    machiningCapacity: 199,
+    result: -330382.8087158203,
+    machiningFiveSHours: 100,
+    assemblyFiveSHours: 80,
+    shippingFiveSHours: 60,
+    machiningSmedHours: 20,
+  })
+  assert.deepEqual({
+    round: result.nextGameState.round,
+    machines: result.nextGameState.production.machiningMachines,
+    totalAreaM2: result.nextGameState.factory.totalAreaM2,
+    machiningFiveSHours: result.nextGameState.lean.fiveS.departments.machining.effectiveHours,
+    machiningSmedHours: result.nextGameState.lean.methods.machining.smed,
+    equity: result.nextGameState.finance.equity,
+    bankLoans: result.nextGameState.finance.bankLoans,
+  }, {
+    round: 2,
+    machines: 5,
+    totalAreaM2: 5250,
+    machiningFiveSHours: 100,
+    machiningSmedHours: 20,
+    equity: 1743592.1912841806,
+    bankLoans: 4682412.0579833975,
+  })
+})
+
 test('advances round one to round two from canonical closing state', () => {
   const { gameState, forecast } = createRoundOneForecast()
   const result = advanceRoundState({
@@ -186,6 +310,34 @@ test('non-positive closing equity marks game over without changing formulas', ()
   assert.throws(() => advanceRoundState({
     gameState: result.nextGameState, forecast: losingForecast, totalRounds: 12,
   }), /completed game/)
+})
+
+test('calculated negative closing equity ends the game as bankruptcy', () => {
+  const gameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS, {
+    historySeed: 123456789,
+  })
+  gameState.finance.equity = 1
+  const forecast = calculateRoundForecast(
+    gameState,
+    {
+      market: {
+        price: 25500,
+        addedVariations: 1,
+        productionQuantity: 200,
+      },
+    },
+    DEFAULT_FACTORY_SETTINGS,
+  )
+  const result = advanceRoundState({ gameState, forecast, totalRounds: 12 })
+
+  assert.equal(forecast.summary.result, -257132.8087158203)
+  assert.equal(forecast.closingState.finance.equity, -257131.8087158203)
+  assert.equal(result.isGameComplete, true)
+  assert.equal(result.isGameOver, true)
+  assert.deepEqual(result.nextGameState.completion, {
+    reason: 'bankruptcy',
+    confirmedRound: 1,
+  })
 })
 
 test('round chain carries finance, lean, machines, and variations into round two', () => {

@@ -50,10 +50,13 @@ test('100h of machining 5S investment on a zero-baseline game splits into exact 
 })
 
 test('createInitialGameState clones factory inputs and uses the round-zero closing finance', () => {
-  const initialGameState = createInitialGameState()
+  const initialGameState = createInitialGameState(DEFAULT_FACTORY_SETTINGS, {
+    historySeed: 123456789,
+  })
 
   assert.notStrictEqual(initialGameState, DEFAULT_FACTORY_SETTINGS.initialState)
   assert.equal(initialGameState.round, 1)
+  assert.equal(initialGameState.historySeed, 123456789)
   assert.deepStrictEqual(initialGameState.market, {
     price: 25000,
     activeVariations: 20,

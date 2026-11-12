@@ -1,18 +1,18 @@
-import { calculateNextFiveSState } from '../../../../shared/five-s/model.js'
-import { calculateFinancingStructure } from '../../../../shared/factory-settings/financingStructure.js'
-import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
+import { calculateNextFiveSState } from '../five-s/model.js'
+import { calculateFinancingStructure } from '../factory-settings/financingStructure.js'
+import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
 import {
   calculateFactorySpace,
   calculateMinimumFinishedGoodsContainers,
-} from '../../../../shared/factory-space/model.js'
-import { buildCanonicalCarryoverState } from '../../../../shared/forecast/carryover.js'
-import { calculateFactoryKnl } from '../../../../shared/forecast/factoryKnl.js'
-import { calculateKNL } from '../../../../shared/forecast/knl.js'
+} from '../factory-space/model.js'
+import { buildCanonicalCarryoverState } from './carryover.js'
+import { calculateFactoryKnl } from './factoryKnl.js'
+import { calculateKNL } from './knl.js'
 import {
   calculateDevelopedKnlValue,
   calculateKChangeover,
   splitFiveSHoursAcrossKnl,
-} from '../../../../shared/forecast/knlDevelopment.js'
+} from './knlDevelopment.js'
 
 const HOURS_PER_MACHINE_PER_ROUND = 1040
 const HOURS_PER_WORKER_PER_ROUND = 1040
@@ -80,7 +80,7 @@ function normalizePercentValue(value, fallback = 95) {
   return numeric
 }
 
-export { calculateKNL } from '../../../../shared/forecast/knl.js'
+export { calculateKNL } from './knl.js'
 
 export function calculateDemandPerVariation(price, factorySettings = DEFAULT_FACTORY_SETTINGS) {
   const settings = factorySettings ?? DEFAULT_FACTORY_SETTINGS

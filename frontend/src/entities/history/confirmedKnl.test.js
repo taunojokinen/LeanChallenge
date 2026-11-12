@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { createInitialGameState } from '../factory-settings/initialGameState.js'
 import { buildInitialKnlHistory, selectConfirmedKnlRounds } from './confirmedKnl.js'
 import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
-import { calculateRoundForecast } from '../forecast/model.js'
+import { calculateRoundForecast } from '../../../../shared/forecast/model.js'
 import { advanceRoundState } from '../game-round/advanceRound.js'
 import { calculateFactoryKnl, calculateKnlFromMetrics } from '../../../../shared/forecast/factoryKnl.js'
 

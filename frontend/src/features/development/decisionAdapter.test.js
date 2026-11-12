@@ -5,7 +5,7 @@ import { normalizeDevelopmentHours } from '../../entities/development/model.js'
 import { loadFiveSDecision, saveFiveSDecision } from '../five-s/decisionStore.js'
 import { loadProjectsDecision, saveProjectsDecision } from '../projects/decisionStore.js'
 import { createInitialGameState } from '../../entities/factory-settings/initialGameState.js'
-import { calculateRoundForecast } from '../../entities/forecast/model.js'
+import { calculateRoundForecast } from '../../../../shared/forecast/model.js'
 import { advanceRoundState } from '../../entities/game-round/advanceRound.js'
 import { updateDevelopmentHours, sumDevelopmentHours } from '../../entities/development/model.js'
 

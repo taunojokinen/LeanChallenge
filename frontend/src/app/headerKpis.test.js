@@ -4,7 +4,7 @@ import { DEFAULT_FACTORY_SETTINGS } from '../../../shared/factory-settings/defau
 import { createInitialGameState } from '../entities/factory-settings/initialGameState.js'
 import { buildGameHeaderKpis } from './headerKpis.js'
 import { buildConfirmedCockpitViewModel } from '../pages/plan/cockpitModel.js'
-import { calculateRoundForecast } from '../entities/forecast/model.js'
+import { calculateRoundForecast } from '../../../shared/forecast/model.js'
 import { advanceRoundState } from '../entities/game-round/advanceRound.js'
 import { buildCanonicalFinancialHistory, buildInitialIncomeHistory } from '../entities/factory-settings/financialHistory.js'
 import { buildIncomeHistoryView, buildIncomeStatementRows } from '../entities/income/model.js'

@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 import { createInitialGameState } from '../factory-settings/initialGameState.js'
-import { buildFiveSSnapshotFromGameState } from '../forecast/model.js'
+import { buildFiveSSnapshotFromGameState } from '../../../../shared/forecast/model.js'
 import { buildDevelopmentViewModel, normalizeDevelopmentHours } from '../development/model.js'
 import fiveSSnapshotFixture from '../../mocks/fiveSSnapshot.json' with { type: 'json' }
 import {

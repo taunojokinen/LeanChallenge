@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 import { createInitialGameState } from './initialGameState.js'
-import { calculateRoundForecast } from '../forecast/model.js'
+import { calculateRoundForecast } from '../../../../shared/forecast/model.js'
 
 function assertFinite(value, label) {
   assert.equal(Number.isFinite(Number(value)), true, `${label} should be finite`)

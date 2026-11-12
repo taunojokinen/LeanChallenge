@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { createServer } from 'vite'
 import { createInitialGameState } from '../../entities/factory-settings/initialGameState.js'
 import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
-import { calculateRoundForecast } from '../../entities/forecast/model.js'
+import { calculateRoundForecast } from '../../../../shared/forecast/model.js'
 
 const HOOKS_MODULE = 'virtual:act-page-test-hooks'
 const originalWindow = globalThis.window

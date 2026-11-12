@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Button from '../../shared/ui/Button/Button.jsx'
 import Card from '../../shared/ui/Card/Card.jsx'
-import { calculateRoundForecast } from '../../entities/forecast/model.js'
+import { calculateRoundForecast } from '../../../../shared/forecast/model.js'
 import { buildCanonicalFinancialHistory, normalizeFinancialHistoryEntry } from '../../entities/factory-settings/financialHistory.js'
 import { relativePercentChange } from '../../entities/history/relativeChange.js'
 import { formatPercentChange } from '../../shared/lib/formatPercentChange.js'

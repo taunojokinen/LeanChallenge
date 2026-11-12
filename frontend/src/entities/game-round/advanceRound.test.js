@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 import { createInitialGameState } from '../factory-settings/initialGameState.js'
-import { calculateRoundForecast } from '../forecast/model.js'
+import { calculateRoundForecast } from '../../../../shared/forecast/model.js'
 import { advanceRoundState } from './advanceRound.js'
 
 function createRoundOneForecast(overrides = {}) {

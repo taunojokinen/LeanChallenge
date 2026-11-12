@@ -1,4 +1,4 @@
-import { calculateRoundForecast } from '../../entities/forecast/model.js'
+import { calculateRoundForecast } from '../../../../shared/forecast/model.js'
 
 export function createInitialProductionPlan(gameState, batchSize, actDecision, factorySettings) {
   const price = actDecision?.price ?? gameState.market?.price ?? 25000

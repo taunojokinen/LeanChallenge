@@ -13,7 +13,7 @@ import {
   calculateDemandPerVariation,
   calculateKNL,
   calculateRoundForecast,
-} from './model.js'
+} from '../../../../shared/forecast/model.js'
 
 function createGameState(overrides = {}) {
   return {

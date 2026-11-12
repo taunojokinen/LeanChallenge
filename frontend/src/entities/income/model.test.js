@@ -5,7 +5,7 @@ import { createInitialGameState } from '../factory-settings/initialGameState.js'
 import { buildInitialIncomeHistory } from '../factory-settings/financialHistory.js'
 import { getInitialIncomeHistory } from '../../shared/api/incomeApi.js'
 import { buildIncomeForecastView, buildIncomeHistoryView, buildIncomeStatementRows } from './model.js'
-import { calculateRoundForecast } from '../forecast/model.js'
+import { calculateRoundForecast } from '../../../../shared/forecast/model.js'
 import { advanceRoundState } from '../game-round/advanceRound.js'
 
 function runtimeEntry(round, result, deliveries) {

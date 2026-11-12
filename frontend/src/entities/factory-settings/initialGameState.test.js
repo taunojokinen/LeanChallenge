@@ -2,8 +2,9 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 import { createInitialGameState } from './initialGameState.js'
-import { calculateRoundForecast } from '../forecast/model.js'
+import { calculateRoundForecast } from '../../../../shared/forecast/model.js'
 import { getFiveSLevel } from '../../../../shared/five-s/model.js'
+import forecastInitialState from '../../../../shared/test-fixtures/forecastInitialState.json' with { type: 'json' }
 
 function cloneSettings(overrides = {}) {
   return {
@@ -54,6 +55,7 @@ test('createInitialGameState clones factory inputs and uses the round-zero closi
     historySeed: 123456789,
   })
 
+  assert.deepEqual(initialGameState, forecastInitialState)
   assert.notStrictEqual(initialGameState, DEFAULT_FACTORY_SETTINGS.initialState)
   assert.equal(initialGameState.round, 1)
   assert.equal(initialGameState.historySeed, 123456789)

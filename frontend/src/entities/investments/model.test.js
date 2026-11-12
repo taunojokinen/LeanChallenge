@@ -4,7 +4,7 @@ import investmentsSnapshot from '../../mocks/investmentsSnapshot.json' with { ty
 import balanceSheetSnapshot from '../../mocks/balanceSheetSnapshot.json' with { type: 'json' }
 import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 import { createInitialGameState } from '../factory-settings/initialGameState.js'
-import { calculateRoundForecast } from '../forecast/model.js'
+import { calculateRoundForecast } from '../../../../shared/forecast/model.js'
 import {
   applyFactoryExpansion,
   applyNewMachineCount,

@@ -1,0 +1,227 @@
+{
+  "round": 1,
+  "market": {
+    "price": 25000,
+    "activeVariations": 20,
+    "productionRunsPerVariation": 2
+  },
+  "production": {
+    "machiningMachines": 4
+  },
+  "staffing": {
+    "machining": 20,
+    "assembly": 38,
+    "shipping": 5
+  },
+  "lean": {
+    "fiveS": {
+      "focusBudgetHours": 400,
+      "departments": {
+        "machining": {
+          "effectiveHours": 0,
+          "weight": 0.42
+        },
+        "assembly": {
+          "effectiveHours": 0,
+          "weight": 0.35
+        },
+        "shipping": {
+          "effectiveHours": 0,
+          "weight": 0.23
+        }
+      }
+    },
+    "methods": {
+      "machining": {
+        "smed": 0,
+        "tpm": 0,
+        "spc": 0
+      },
+      "assembly": {
+        "method-development": 0,
+        "tpm": 0,
+        "poka-yoke": 0
+      },
+      "shipping": {
+        "method-development": 0,
+        "tpm": 0,
+        "poka-yoke": 0
+      }
+    }
+  },
+  "factory": {
+    "totalAreaM2": 4250,
+    "dispatchM2": 250,
+    "officeAndSocialM2": 200,
+    "expansionsCount": 0
+  },
+  "inventory": {
+    "finishedGoodsContainers": 100
+  },
+  "finance": {
+    "cash": 50000,
+    "bankLoans": 3002481.044921874,
+    "overdraft": 0,
+    "equity": 2073975.000000001,
+    "otherLiabilities": 900000,
+    "machineryBookValue": 427615.78125,
+    "buildingsBookValue": 2778840.263671875,
+    "finishedGoodsInventoryBookValue": 2000000,
+    "rawMaterialInventoryBookValue": 720000,
+    "inventoryBookValue": 2720000,
+    "fixedAssets": 3206456.044921875,
+    "totalAssets": 5976456.044921875,
+    "totalLiabilitiesAndEquity": 5976456.044921875,
+    "incomeStatement": {
+      "revenue": 3750000,
+      "materials": 1800000,
+      "labor": 1653750,
+      "fixedCosts": 500000,
+      "inventoryChange": 0,
+      "depreciation": 93758.408203125,
+      "interest": 34626.30919656635,
+      "result": -332134.71739969135
+    }
+  },
+  "historySeed": 123456789,
+  "initialFinancialHistory": [
+    {
+      "round": -2,
+      "incomeStatement": {
+        "salesUnits": 140,
+        "revenue": 3500000,
+        "inventoryChange": 0,
+        "materials": 1680000,
+        "labor": 1653750,
+        "fixedCosts": 500000,
+        "depreciation": 99890.625,
+        "financingCosts": 22168.515296147638,
+        "result": -455809.1402961476
+      },
+      "finance": {
+        "cash": 50000,
+        "bankLoans": 2476399.7389879585,
+        "overdraft": 0,
+        "equity": 2802584.6360120415,
+        "otherLiabilities": 840000,
+        "machineryBookValue": 473812.5,
+        "buildingsBookValue": 2923171.875,
+        "finishedGoodsInventoryBookValue": 2000000,
+        "rawMaterialInventoryBookValue": 672000,
+        "inventoryBookValue": 2672000,
+        "fixedAssets": 3396984.375,
+        "totalAssets": 6118984.375,
+        "totalLiabilitiesAndEquity": 6118984.375,
+        "incomeStatement": {
+          "revenue": 3500000,
+          "materials": 1680000,
+          "labor": 1653750,
+          "fixedCosts": 500000,
+          "inventoryChange": 0,
+          "depreciation": 99890.625,
+          "interest": 22168.515296147638,
+          "result": -455809.1402961476
+        }
+      },
+      "production": {
+        "actualProduction": 140,
+        "deliveries": 140
+      },
+      "inventory": {
+        "finishedGoodsContainers": 100
+      }
+    },
+    {
+      "round": -1,
+      "incomeStatement": {
+        "salesUnits": 145,
+        "revenue": 3625000,
+        "inventoryChange": 0,
+        "materials": 1740000,
+        "labor": 1653750,
+        "fixedCosts": 500000,
+        "depreciation": 96769.921875,
+        "financingCosts": 30954.996737349484,
+        "result": -396474.9186123495
+      },
+      "finance": {
+        "cash": 50000,
+        "bankLoans": 2770104.735725308,
+        "overdraft": 0,
+        "equity": 2406109.717399692,
+        "otherLiabilities": 870000,
+        "machineryBookValue": 450121.875,
+        "buildingsBookValue": 2850092.578125,
+        "finishedGoodsInventoryBookValue": 2000000,
+        "rawMaterialInventoryBookValue": 696000,
+        "inventoryBookValue": 2696000,
+        "fixedAssets": 3300214.453125,
+        "totalAssets": 6046214.453125,
+        "totalLiabilitiesAndEquity": 6046214.453125,
+        "incomeStatement": {
+          "revenue": 3625000,
+          "materials": 1740000,
+          "labor": 1653750,
+          "fixedCosts": 500000,
+          "inventoryChange": 0,
+          "depreciation": 96769.921875,
+          "interest": 30954.996737349484,
+          "result": -396474.9186123495
+        }
+      },
+      "production": {
+        "actualProduction": 145,
+        "deliveries": 145
+      },
+      "inventory": {
+        "finishedGoodsContainers": 100
+      }
+    },
+    {
+      "round": 0,
+      "incomeStatement": {
+        "salesUnits": 150,
+        "revenue": 3750000,
+        "inventoryChange": 0,
+        "materials": 1800000,
+        "labor": 1653750,
+        "fixedCosts": 500000,
+        "depreciation": 93758.408203125,
+        "financingCosts": 34626.30919656635,
+        "result": -332134.71739969135
+      },
+      "finance": {
+        "cash": 50000,
+        "bankLoans": 3002481.044921874,
+        "overdraft": 0,
+        "equity": 2073975.000000001,
+        "otherLiabilities": 900000,
+        "machineryBookValue": 427615.78125,
+        "buildingsBookValue": 2778840.263671875,
+        "finishedGoodsInventoryBookValue": 2000000,
+        "rawMaterialInventoryBookValue": 720000,
+        "inventoryBookValue": 2720000,
+        "fixedAssets": 3206456.044921875,
+        "totalAssets": 5976456.044921875,
+        "totalLiabilitiesAndEquity": 5976456.044921875,
+        "incomeStatement": {
+          "revenue": 3750000,
+          "materials": 1800000,
+          "labor": 1653750,
+          "fixedCosts": 500000,
+          "inventoryChange": 0,
+          "depreciation": 93758.408203125,
+          "interest": 34626.30919656635,
+          "result": -332134.71739969135
+        }
+      },
+      "production": {
+        "actualProduction": 150,
+        "deliveries": 150
+      },
+      "inventory": {
+        "finishedGoodsContainers": 100
+      }
+    }
+  ]
+}

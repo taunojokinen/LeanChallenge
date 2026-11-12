@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { createServer } from 'vite'
 import { DEFAULT_FACTORY_SETTINGS } from '../../../shared/factory-settings/defaultFactorySettings.js'
 import { createInitialGameState } from '../entities/factory-settings/initialGameState.js'
-import { calculateRoundForecast } from '../entities/forecast/model.js'
+import { calculateRoundForecast } from '../../../shared/forecast/model.js'
 import { advanceRoundState } from '../entities/game-round/advanceRound.js'
 import { buildReportSeries, formatReportValue, REPORT_METRICS } from '../entities/report/model.js'
 import {

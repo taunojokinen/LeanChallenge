@@ -1,4 +1,4 @@
-import { calculateKnlFromMetrics } from '../forecast/factoryKnl.js'
+import { calculateKnlFromMetrics } from '../../../../shared/forecast/factoryKnl.js'
 
 export const REPORT_METRICS = [
   { key: 'knl', label: 'KNL (%)', unit: '%' },

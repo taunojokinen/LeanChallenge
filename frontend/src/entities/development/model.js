@@ -1,6 +1,6 @@
 import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
 import { calculateNextFiveSState } from '../five-s/model.js'
-import { calculateDevelopedKnlValue } from '../forecast/knlDevelopment.js'
+import { calculateDevelopedKnlValue } from '../../../../shared/forecast/knlDevelopment.js'
 
 export const DEVELOPMENT_CAPACITY = 400
 export const DEVELOPMENT_DEPARTMENTS = [

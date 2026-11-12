@@ -5,14 +5,14 @@ import {
   calculateFactorySpace,
   calculateMinimumFinishedGoodsContainers,
 } from '../factory-space/model.js'
-import { buildCanonicalCarryoverState } from './carryover.js'
-import { calculateFactoryKnl } from './factoryKnl.js'
-import { calculateKNL } from './knl.js'
+import { buildCanonicalCarryoverState } from '../../../../shared/forecast/carryover.js'
+import { calculateFactoryKnl } from '../../../../shared/forecast/factoryKnl.js'
+import { calculateKNL } from '../../../../shared/forecast/knl.js'
 import {
   calculateDevelopedKnlValue,
   calculateKChangeover,
   splitFiveSHoursAcrossKnl,
-} from './knlDevelopment.js'
+} from '../../../../shared/forecast/knlDevelopment.js'
 
 const HOURS_PER_MACHINE_PER_ROUND = 1040
 const HOURS_PER_WORKER_PER_ROUND = 1040
@@ -80,7 +80,7 @@ function normalizePercentValue(value, fallback = 95) {
   return numeric
 }
 
-export { calculateKNL } from './knl.js'
+export { calculateKNL } from '../../../../shared/forecast/knl.js'
 
 export function calculateDemandPerVariation(price, factorySettings = DEFAULT_FACTORY_SETTINGS) {
   const settings = factorySettings ?? DEFAULT_FACTORY_SETTINGS

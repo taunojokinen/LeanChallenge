@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { calculateFactoryKnl } from './factoryKnl.js'
+import { calculateFactoryKnl } from '../../../../shared/forecast/factoryKnl.js'
 
 test('factory KNL uses one canonical K x N x L result', () => {
   const factory = calculateFactoryKnl({

@@ -5,7 +5,7 @@ import { buildInitialKnlHistory, selectConfirmedKnlRounds } from './confirmedKnl
 import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
 import { calculateRoundForecast } from '../forecast/model.js'
 import { advanceRoundState } from '../game-round/advanceRound.js'
-import { calculateFactoryKnl, calculateKnlFromMetrics } from '../forecast/factoryKnl.js'
+import { calculateFactoryKnl, calculateKnlFromMetrics } from '../../../../shared/forecast/factoryKnl.js'
 
 // A: while planning round 1 (gameState.round === 1, no confirmed history yet), the latest
 // confirmed round the player sees must be round 0 - the planning round itself is not yet history.

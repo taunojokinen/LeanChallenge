@@ -6,6 +6,7 @@ Opinnäytetyön pohjaprojekti.
 
 - frontend/ — käyttöliittymä
 - backend/ — palvelin ja API
+- shared/ — frontendin ja backendin yhteiset ES-moduulit, kuten laskennan apufunktiot
 
 ## Teknologiat
 

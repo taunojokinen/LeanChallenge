@@ -5,7 +5,7 @@ import {
   calculateKChangeover,
   resolveDevelopmentLevel,
   splitFiveSHoursAcrossKnl,
-} from './knlDevelopment.js'
+} from '../../../../shared/forecast/knlDevelopment.js'
 
 function approx(actual, expected, tolerance = 1e-9) {
   assert.equal(Math.abs(actual - expected) <= tolerance, true, `expected ${actual} to be within ${tolerance} of ${expected}`)

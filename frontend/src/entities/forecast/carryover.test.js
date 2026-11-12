@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
 import { createInitialGameState } from '../factory-settings/initialGameState.js'
 import { calculateRoundForecast } from './model.js'
-import { buildCanonicalCarryoverState } from './carryover.js'
+import { buildCanonicalCarryoverState } from '../../../../shared/forecast/carryover.js'
 
 test('forecast exposes a minimal canonical carryover state', () => {
   const gameState = createInitialGameState()

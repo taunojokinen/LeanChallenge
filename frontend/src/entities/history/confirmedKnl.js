@@ -1,4 +1,4 @@
-import { calculateFactoryKnl, calculateKnlFromMetrics } from '../forecast/factoryKnl.js'
+import { calculateFactoryKnl, calculateKnlFromMetrics } from '../../../../shared/forecast/factoryKnl.js'
 import { calculateRoundForecast } from '../forecast/model.js'
 import { createInitialGameState } from '../factory-settings/initialGameState.js'
 import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'

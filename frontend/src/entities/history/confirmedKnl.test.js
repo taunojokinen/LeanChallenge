@@ -4,7 +4,7 @@ import { createInitialGameState } from '../factory-settings/initialGameState.js'
 import { buildInitialKnlHistory, selectConfirmedKnlRounds } from './confirmedKnl.js'
 import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 import { calculateRoundForecast } from '../../../../shared/forecast/model.js'
-import { advanceRoundState } from '../game-round/advanceRound.js'
+import { advanceRoundState } from '../../../../shared/game-round/advanceRound.js'
 import { calculateFactoryKnl, calculateKnlFromMetrics } from '../../../../shared/forecast/factoryKnl.js'
 
 // A: while planning round 1 (gameState.round === 1, no confirmed history yet), the latest

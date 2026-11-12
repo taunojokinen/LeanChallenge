@@ -6,7 +6,7 @@ import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/de
 import { calculateRoundForecast } from '../../../../shared/forecast/model.js'
 import { buildInitialKnlHistory } from '../../entities/history/confirmedKnl.js'
 import { buildInitialBalanceSheetHistory, buildCanonicalFinancialHistory } from '../../entities/factory-settings/financialHistory.js'
-import { advanceRoundState } from '../../entities/game-round/advanceRound.js'
+import { advanceRoundState } from '../../../../shared/game-round/advanceRound.js'
 import {
   buildFactorySettingsSnapshot,
   createDefaultTeacherPreferences,

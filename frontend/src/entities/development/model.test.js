@@ -4,7 +4,7 @@ import { calculateDevelopedKnlValue } from '../../../../shared/forecast/knlDevel
 import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 import { createInitialGameState } from '../factory-settings/initialGameState.js'
 import { calculateRoundForecast } from '../../../../shared/forecast/model.js'
-import { advanceRoundState } from '../game-round/advanceRound.js'
+import { advanceRoundState } from '../../../../shared/game-round/advanceRound.js'
 import {
   normalizeDevelopmentHours, updateDevelopmentHours, sumDevelopmentHours,
   isDevelopmentHoursValid, buildDevelopmentViewModel, calculateDevelopmentPercent,

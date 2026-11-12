@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { createServer } from 'vite'
 import { createInitialGameState } from '../../entities/factory-settings/initialGameState.js'
 import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
-import { advanceRoundState } from '../../entities/game-round/advanceRound.js'
+import { advanceRoundState } from '../../../../shared/game-round/advanceRound.js'
 
 const HOOKS_MODULE = 'virtual:check-page-test-hooks'
 const originalWindow = globalThis.window

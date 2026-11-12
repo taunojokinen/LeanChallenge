@@ -5,7 +5,7 @@ import { createInitialGameState } from '../entities/factory-settings/initialGame
 import { buildGameHeaderKpis } from './headerKpis.js'
 import { buildConfirmedCockpitViewModel } from '../pages/plan/cockpitModel.js'
 import { calculateRoundForecast } from '../../../shared/forecast/model.js'
-import { advanceRoundState } from '../entities/game-round/advanceRound.js'
+import { advanceRoundState } from '../../../shared/game-round/advanceRound.js'
 import { buildCanonicalFinancialHistory, buildInitialIncomeHistory } from '../entities/factory-settings/financialHistory.js'
 import { buildIncomeHistoryView, buildIncomeStatementRows } from '../entities/income/model.js'
 import { buildInitialBalanceSheetHistory } from '../entities/factory-settings/financialHistory.js'

@@ -1,10 +1,10 @@
-import { calculateNextFiveSState } from '../five-s/model.js'
+import { calculateNextFiveSState } from '../../../../shared/five-s/model.js'
 import { calculateFinancingStructure } from '../../../../shared/factory-settings/financingStructure.js'
 import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 import {
   calculateFactorySpace,
   calculateMinimumFinishedGoodsContainers,
-} from '../factory-space/model.js'
+} from '../../../../shared/factory-space/model.js'
 import { buildCanonicalCarryoverState } from '../../../../shared/forecast/carryover.js'
 import { calculateFactoryKnl } from '../../../../shared/forecast/factoryKnl.js'
 import { calculateKNL } from '../../../../shared/forecast/knl.js'

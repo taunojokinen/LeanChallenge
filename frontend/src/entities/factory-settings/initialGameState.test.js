@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 import { createInitialGameState } from './initialGameState.js'
 import { calculateRoundForecast } from '../forecast/model.js'
-import { getFiveSLevel } from '../five-s/model.js'
+import { getFiveSLevel } from '../../../../shared/five-s/model.js'
 
 function cloneSettings(overrides = {}) {
   return {

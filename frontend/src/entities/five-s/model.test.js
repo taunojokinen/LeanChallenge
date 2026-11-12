@@ -11,7 +11,7 @@ import {
   applyFiveSDecay,
   calculateNextFiveSState,
   isFocusBudgetValid,
-} from './model.js'
+} from '../../../../shared/five-s/model.js'
 
 test('5S level thresholds map to exact integer levels', () => {
   assert.equal(getFiveSLevel(0), 0)

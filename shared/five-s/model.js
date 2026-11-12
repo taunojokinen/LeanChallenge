@@ -1,4 +1,4 @@
-import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
+import { DEFAULT_FACTORY_SETTINGS } from '../factory-settings/defaultFactorySettings.js'
 
 export const FIVE_S_MAX_EFFECTIVE_HOURS = DEFAULT_FACTORY_SETTINGS.lean.fiveS.maxHours
 

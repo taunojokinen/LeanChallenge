@@ -2,7 +2,7 @@ import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/de
 import {
   calculateFactorySpace,
   calculateMinimumFinishedGoodsContainers,
-} from '../factory-space/model.js'
+} from '../../../../shared/factory-space/model.js'
 
 const EURO_FORMATTER = new Intl.NumberFormat('fi-FI', {
   maximumFractionDigits: 0,

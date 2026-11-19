@@ -76,3 +76,9 @@ kokonaisuudessaan suoraan lähtötilaan eikä kopioida tulosfixtureen.
 yläpalkin mittari: toimitukset / kierroksen loppuvarasto × 4 (kertaa vuodessa);
 arvo on `null`, jos mittaria ei voi laskea. Nämä ovat testien vertailuyksiköt,
 eivät päätös tietokantaan tallennettavista yksiköistä.
+
+[Yhteinen kierrosvahvistuksen laskentafunktio](./shared/game-round/confirmRound.js)
+saa syötteenä asetukset, nykytilan ja kierroksen päätökset, ei asiakkaan laskemaa
+tulosta. Se palauttaa seuraavan pelitilan, historiarivin, tunnusluvut ja
+mahdollisen päättymistiedon. Backendin vastaavuustestit käyttävät yllä olevia
+ACT-vertailutuloksia. Funktiota ei vielä ole kytketty vahvistusrajapintaan.

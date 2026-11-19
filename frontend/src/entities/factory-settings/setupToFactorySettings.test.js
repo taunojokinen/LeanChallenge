@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildFactorySettingsFromSetup } from './setupToFactorySettings.js'
+import { buildFactorySettingsFromSetup } from '../../../../shared/factory-settings/setupToFactorySettings.js'
 import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 
 const KISALLI_SETUP = {

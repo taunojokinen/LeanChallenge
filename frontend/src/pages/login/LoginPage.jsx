@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { APP_NAME, APP_TAGLINE } from '../../config/appConfig.js'
 import Button from '../../shared/ui/Button/Button.jsx'
 import { fetchGameByJoinCode, fetchSetups } from '../../shared/api/gamesApi.js'
+import { fetchNewClassroomState } from '../../shared/api/classroomState.js'
 import { loginTeacher } from '../../shared/api/authApi.js'
 import './LoginPage.css'
 
@@ -9,9 +10,10 @@ function LoginPage({ onBackToLanding, onStartQuest, onJoinClassroomGame, onTeach
   const [view, setView] = useState('entry')
   const [playerName, setPlayerName] = useState('')
   const [gameCode, setGameCode] = useState('')
-  const [joinMessage, setJoinMessage] = useState('')
   const [joinError, setJoinError] = useState('')
   const [isJoining, setIsJoining] = useState(false)
+  const [pendingJoin, setPendingJoin] = useState(null)
+  const joinRequest = useRef(null)
   const [setups, setSetups] = useState([])
   const [selectedSetupId, setSelectedSetupId] = useState(null)
   const [setupsError, setSetupsError] = useState('')
@@ -46,19 +48,31 @@ function LoginPage({ onBackToLanding, onStartQuest, onJoinClassroomGame, onTeach
     return () => { cancelled = true }
   }, [view])
 
+  useEffect(() => () => joinRequest.current?.abort(), [])
+
   const handleJoinSubmit = async (event) => {
     event.preventDefault()
+    if (joinRequest.current) return
+    const request = new AbortController()
+    joinRequest.current = request
     setJoinError('')
-    setJoinMessage('')
     setIsJoining(true)
 
     try {
-      const game = await fetchGameByJoinCode(gameCode, playerName)
-      onJoinClassroomGame({ playerName: playerName.trim(), game })
+      let joined = pendingJoin
+      if (!joined) {
+        const game = await fetchGameByJoinCode(gameCode, playerName)
+        if (request.signal.aborted) return
+        joined = { sessionId: game?.sessionId }
+        setPendingJoin(joined)
+      }
+      const state = await fetchNewClassroomState(joined.sessionId, request.signal)
+      if (!request.signal.aborted) onJoinClassroomGame(state)
     } catch (error) {
-      setJoinError(error.message)
+      if (!request.signal.aborted) setJoinError(error.message)
     } finally {
-      setIsJoining(false)
+      joinRequest.current = null
+      if (!request.signal.aborted) setIsJoining(false)
     }
   }
 
@@ -216,6 +230,7 @@ function LoginPage({ onBackToLanding, onStartQuest, onJoinClassroomGame, onTeach
                   onChange={(event) => setPlayerName(event.target.value)}
                   placeholder="Kirjoita nimesi"
                   autoComplete="name"
+                  readOnly={isJoining || pendingJoin !== null}
                   required
                 />
               </div>
@@ -232,18 +247,23 @@ function LoginPage({ onBackToLanding, onStartQuest, onJoinClassroomGame, onTeach
                   onChange={(event) => setGameCode(event.target.value)}
                   placeholder="Syötä pelikoodi"
                   autoComplete="off"
+                  readOnly={isJoining || pendingJoin !== null}
                   required
                 />
               </div>
             </div>
 
             {joinError ? <p className="login-notice login-notice--error" role="alert">{joinError}</p> : null}
-            {joinMessage ? <p className="login-notice" role="status">{joinMessage}</p> : null}
-
             <Button className="login-submit-button" type="submit" disabled={isJoining}>
-              {isJoining ? 'Liitytään…' : 'Liity peliin'}
+              {pendingJoin
+                ? (isJoining ? 'Haetaan pelitilaa…' : 'Yritä tilahakua uudelleen')
+                : (isJoining ? 'Liitytään…' : 'Liity peliin')}
             </Button>
-            <Button className="login-back-button" type="button" onClick={() => setView('entry')}>
+            <Button className="login-back-button" type="button" disabled={isJoining} onClick={() => {
+              setPendingJoin(null)
+              setJoinError('')
+              setView('entry')
+            }}>
               Takaisin
             </Button>
           </form>

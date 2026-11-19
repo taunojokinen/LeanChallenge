@@ -30,21 +30,33 @@ test('classroom cookie is usable locally and secure in production', () => {
 
 test('joining issues isolated cookies and session authorization checks id, expiry and revocation', async () => {
   const originalQuery = pool.query
+  const originalConnect = pool.connect
   const originalEnv = process.env.NODE_ENV
   const sessions = new Map()
+  const states = new Map()
   let nextId = 9007199254740993n
   let lookupCount = 0
   let failLookup = false
   process.env.NODE_ENV = 'production'
   pool.query = async (sql, params) => {
     if (sql.includes('FROM games g')) {
-      return { rows: [{ id: '1', name: 'Test', join_code: 'LEAN-TEST', setup_id: '1' }] }
-    }
-    if (sql.includes('INSERT INTO game_sessions')) {
-      assert.match(sql, /NOW\(\) \+ INTERVAL '30 days'/)
-      const id = String(nextId++)
-      sessions.set(id, { hash: params[2], player: params[1], expired: false, revoked: false })
-      return { rows: [{ id }] }
+      return {
+        rows: [{
+          id: '1',
+          name: 'Test',
+          join_code: 'LEAN-TEST',
+          setup_id: '1',
+          fixed_costs_quarter: '400000',
+          initial_equity: '2073975',
+          new_machine_price: '500000',
+          setup_time_hours: '40',
+          initial_batch_size: '20',
+          factory_area_m2: '4250',
+          knl_time_constant_hours: '300',
+          good_quality_threshold: '75',
+          excellent_quality_threshold: '80',
+        }],
+      }
     }
     if (sql.includes('SELECT id FROM game_sessions')) {
       lookupCount++
@@ -57,6 +69,47 @@ test('joining issues isolated cookies and session authorization checks id, expir
         ? [{ id: params[0] }] : [] }
     }
     throw new Error('Unexpected query')
+  }
+  pool.connect = async () => {
+    let snapshot
+    return {
+      async query(sql, params = []) {
+        if (sql === 'BEGIN') {
+          snapshot = {
+            sessions: new Map(sessions),
+            states: new Map(states),
+          }
+          return { rows: [] }
+        }
+        if (sql.includes('INSERT INTO game_sessions')) {
+          assert.match(sql, /NOW\(\) \+ INTERVAL '30 days'/)
+          const id = String(nextId++)
+          sessions.set(id, { hash: params[2], player: params[1], expired: false, revoked: false })
+          return { rows: [{ id }] }
+        }
+        if (sql.includes('INSERT INTO public.classroom_game_states')) {
+          const id = params[0]
+          assert.equal(states.has(id), false)
+          const initialGameState = JSON.parse(params[2])
+          states.set(id, {
+            factorySettings: JSON.parse(params[1]),
+            initialGameState,
+            currentGameState: initialGameState,
+          })
+          return { rows: [] }
+        }
+        if (sql === 'COMMIT') return { rows: [] }
+        if (sql === 'ROLLBACK') {
+          sessions.clear()
+          states.clear()
+          for (const [id, session] of snapshot.sessions) sessions.set(id, session)
+          for (const [id, state] of snapshot.states) states.set(id, state)
+          return { rows: [] }
+        }
+        throw new Error(`Unexpected transaction query: ${sql}`)
+      },
+      release() {},
+    }
   }
   const server = app.listen(0, '127.0.0.1')
   try {
@@ -78,6 +131,9 @@ test('joining issues isolated cookies and session authorization checks id, expir
     assert.equal(firstBody.sessionId, '9007199254740993')
     assert.notEqual(firstBody.sessionId, secondBody.sessionId)
     assert.equal(sessions.get(firstBody.sessionId).player, sessions.get(secondBody.sessionId).player)
+    assert.equal(states.size, 2)
+    assert.deepEqual(states.get(firstBody.sessionId).initialGameState,
+      states.get(firstBody.sessionId).currentGameState)
     assert.match(firstCookie, /HttpOnly/i)
     assert.match(firstCookie, /Secure/i)
     assert.match(firstCookie, /SameSite=Lax/i)
@@ -116,6 +172,7 @@ test('joining issues isolated cookies and session authorization checks id, expir
   } finally {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
     pool.query = originalQuery
+    pool.connect = originalConnect
     if (originalEnv === undefined) delete process.env.NODE_ENV
     else process.env.NODE_ENV = originalEnv
   }

@@ -2,7 +2,26 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { DEFAULT_FACTORY_SETTINGS } from '../../shared/factory-settings/defaultFactorySettings.js'
 import { createInitialGameState } from '../../shared/factory-settings/initialGameState.js'
+import { buildFactorySettingsFromSetup } from '../../shared/factory-settings/setupToFactorySettings.js'
 import forecastInitialState from '../../shared/test-fixtures/forecastInitialState.json' with { type: 'json' }
+
+const KISALLI_SETUP = {
+  id: '1',
+  name: 'Kisälli',
+  version: 1,
+  fixedCostsQuarter: '400000.00',
+  initialEquity: '2073975.00',
+  newMachinePrice: '500000.00',
+  setupTimeHours: '40.00',
+  initialBatchSize: 20,
+  factoryAreaM2: '4250.00',
+  knlTimeConstantHours: '300.00',
+  goodQualityThreshold: '75.00',
+  excellentQualityThreshold: '80.00',
+  fiveSInitialMultiplier: '2.000',
+  fiveSMultiplierTimeConstant: '300.00',
+  priceDeclinePercentPerRound: '0.00',
+}
 
 test('backend initial game state matches the complete fixed-seed frontend fixture', () => {
   const state = createInitialGameState(DEFAULT_FACTORY_SETTINGS, { historySeed: 123456789 })
@@ -16,6 +35,38 @@ test('backend initial game state matches the complete fixed-seed frontend fixtur
   assert.ok(Math.abs(state.finance.bankLoans - 3002481.044921875) < 1e-7)
   assert.ok(Math.abs(state.finance.equity - 2073975) < 1e-7)
   assert.deepEqual(state.finance, state.initialFinancialHistory.at(-1).finance)
+})
+
+test('classroom setup conversion preserves factory settings and fixed-seed initial financial history', () => {
+  const factorySettings = buildFactorySettingsFromSetup(KISALLI_SETUP)
+  const expectedSettings = structuredClone(DEFAULT_FACTORY_SETTINGS)
+  expectedSettings.costs.annualFixedCosts = 1600000
+  expectedSettings.initialState.finance.equity = 2073975
+  expectedSettings.investments.newMachine.price = 500000
+  expectedSettings.lean.smed.initialSetupTimeHours = 40
+  expectedSettings.production.initialBatchSize = 20
+  expectedSettings.initialState.factory.totalAreaM2 = 4250
+  expectedSettings.knl.knlHalfLifeHours = 300
+  expectedSettings.variationRules.minimumQualityForZeroAdditionalVariations = 0.75
+  expectedSettings.variationRules.minimumQualityForOneAdditionalVariation = 0.75
+  expectedSettings.variationRules.oneVariationMinQuality = 0.8
+  expectedSettings.variationRules.twoVariationMinQuality = 0.8
+  expectedSettings.variationRules.minimumQualityForTwoAdditionalVariations = 0.8
+
+  assert.deepEqual(factorySettings, expectedSettings)
+
+  const initialGameState = createInitialGameState(factorySettings, { historySeed: 123456789 })
+  assert.equal(initialGameState.historySeed, 123456789)
+  assert.deepEqual(
+    initialGameState,
+    createInitialGameState(factorySettings, { historySeed: 123456789 }),
+  )
+  assert.deepEqual(initialGameState.initialFinancialHistory.map(({ round }) => round), [-2, -1, 0])
+  assert.deepEqual(initialGameState.finance, initialGameState.initialFinancialHistory.at(-1).finance)
+  assert.ok(Math.abs(initialGameState.finance.equity - factorySettings.initialState.finance.equity) < 1e-7)
+  assert.equal(initialGameState.initialFinancialHistory.at(-1).incomeStatement.fixedCosts, 400000)
+  assert.notStrictEqual(initialGameState.market, factorySettings.initialState.market)
+  assert.equal(initialGameState.production.machiningMachines, factorySettings.initialState.production.machiningMachines)
 })
 
 test('custom factory settings and a zero history seed are preserved', () => {

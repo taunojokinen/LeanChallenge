@@ -210,7 +210,7 @@ function App() {
   }, [effectivePathname, pathname])
 
   useEffect(() => {
-    if (gameMode !== CLASSROOM_GAME_MODE) return
+    if (gameMode !== CLASSROOM_GAME_MODE || classroomAuthStatus !== 'checking') return
     let cancelled = false
     const verification = typeof classroomSessionId === 'string' && /^[1-9]\d*$/.test(classroomSessionId)
       ? verifyClassroomSession(classroomSessionId)
@@ -226,7 +226,7 @@ function App() {
         }
       })
     return () => { cancelled = true }
-  }, [gameMode, classroomSessionId, classroomAuthAttempt])
+  }, [gameMode, classroomSessionId, classroomAuthStatus, classroomAuthAttempt])
 
   useEffect(() => {
     try {
@@ -318,16 +318,20 @@ function App() {
     return result
   }
 
-  const startNewGameSession = (mode, settings, destination = '/plan/cockpit', sessionId = null) => {
-    const sessionSettings = structuredClone(settings)
-    const startState = createInitialGameState(sessionSettings)
+  const clearPreviousGame = () => {
     resetGameDecisionStorage()
     clearTeacherTestGameSession()
     clearQuestGameSession()
     clearClassroomGameSession()
+  }
+
+  const startNewGameSession = (mode, settings, destination = '/plan/cockpit') => {
+    const sessionSettings = structuredClone(settings)
+    const startState = createInitialGameState(sessionSettings)
+    clearPreviousGame()
     setGameMode(mode)
-    setClassroomSessionId(sessionId)
-    setClassroomAuthStatus(mode === CLASSROOM_GAME_MODE ? 'checking' : 'idle')
+    setClassroomSessionId(null)
+    setClassroomAuthStatus('idle')
     setClassroomAuthError('')
     setFactorySettings(sessionSettings)
     setInitialGameState(startState)
@@ -351,13 +355,22 @@ function App() {
     startNewGameSession(TEACHER_TEST_GAME_MODE, settingsSnapshot)
   }
 
-  const handleJoinClassroomGame = ({ playerName: name, game }) => {
-    if (typeof game.sessionId !== 'string' || !/^[1-9]\d*$/.test(game.sessionId)) {
-      throw new Error('Pelisuorituksen tunniste puuttuu.')
-    }
-    const settings = buildFactorySettingsFromSetup(game.setup)
+  const handleJoinClassroomGame = ({
+    sessionId, playerName: name, factorySettings: settings, initialGameState: initial, currentGameState,
+  }) => {
+    clearPreviousGame()
+    setGameMode(CLASSROOM_GAME_MODE)
+    setClassroomSessionId(sessionId)
+    setClassroomAuthStatus('authorized')
+    setClassroomAuthError('')
+    setFactorySettings(settings)
+    setInitialGameState(initial)
+    setGameState(currentGameState)
     setPlayerName(name)
-    startNewGameSession(CLASSROOM_GAME_MODE, settings, '/plan/cockpit', game.sessionId)
+    setSelectedSetupName('')
+    setRoundStatus('')
+    setShowGameIntro(!isGameIntroHidden())
+    navigateTo('/plan/cockpit')
   }
 
   const handleRestartGame = () => {

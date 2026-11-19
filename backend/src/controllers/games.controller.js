@@ -1,9 +1,16 @@
-import { findGameByJoinCode, createGameSession } from '../repositories/games.repository.js'
+import {
+  findGameByJoinCode,
+  createGameSessionWithInitialState,
+  findAuthorizedClassroomState,
+} from '../repositories/games.repository.js'
+import { buildFactorySettingsFromSetup } from '../../../shared/factory-settings/setupToFactorySettings.js'
+import { createInitialGameState } from '../../../shared/factory-settings/initialGameState.js'
 import {
   CLASSROOM_SESSION_COOKIE,
   classroomCookieOptions,
   createClassroomToken,
   hashClassroomToken,
+  readClassroomToken,
 } from '../auth/classroomSession.js'
 
 export async function joinGame(req, res) {
@@ -29,10 +36,25 @@ export async function joinGame(req, res) {
 
     // Luodaan peli-istunto vasta kun liittymiskoodi on varmistettu oikeaksi
     const token = createClassroomToken()
-    const session = await createGameSession({
+    const setup = {
+      fixedCostsQuarter: row.fixed_costs_quarter,
+      initialEquity: row.initial_equity,
+      newMachinePrice: row.new_machine_price,
+      setupTimeHours: row.setup_time_hours,
+      initialBatchSize: row.initial_batch_size,
+      factoryAreaM2: row.factory_area_m2,
+      knlTimeConstantHours: row.knl_time_constant_hours,
+      goodQualityThreshold: row.good_quality_threshold,
+      excellentQualityThreshold: row.excellent_quality_threshold,
+    }
+    const factorySettings = buildFactorySettingsFromSetup(setup)
+    const initialGameState = createInitialGameState(factorySettings)
+    const session = await createGameSessionWithInitialState({
       gameId: row.id,
       playerName: playerName.trim(),
       accessTokenHash: hashClassroomToken(token),
+      factorySettings,
+      initialGameState,
     })
 
     res.cookie(CLASSROOM_SESSION_COOKIE, token, classroomCookieOptions())
@@ -64,7 +86,7 @@ export async function joinGame(req, res) {
     })
   } catch (error) {
     // Älä paljasta tietokannan sisäisiä tietoja virheilmoituksessa
-    console.error('Pelin haku liittymiskoodilla epäonnistui:', error.message)
+    console.error('Pelin liittyminen epäonnistui:', error.message)
     res.status(500).json({
       status: 'error',
       message: 'Pelin hakeminen epäonnistui',
@@ -76,4 +98,44 @@ export async function joinGame(req, res) {
 export function getClassroomSession(req, res) {
   res.set('Cache-Control', 'no-store')
   res.json({ sessionId: req.classroomSessionId })
+}
+
+export async function getCurrentClassroomState(req, res) {
+  res.set('Cache-Control', 'no-store')
+  const unauthorized = () =>
+    res.status(401).json({ status: 'error', message: 'Pelisuorituksen valtuutus epäonnistui' })
+  const token = readClassroomToken(req)
+  if (!token) return unauthorized()
+
+  try {
+    const row = await findAuthorizedClassroomState(hashClassroomToken(token))
+    if (!row) return unauthorized()
+
+    if (row.state_session_id === null) {
+      return res.status(404).json({
+        status: 'error',
+        code: 'CLASSROOM_STATE_NOT_FOUND',
+        message: 'Pelisuoritukselle ei ole tallennettu pelitilaa',
+      })
+    }
+
+    return res.json({
+      sessionId: String(row.id),
+      gameId: String(row.game_id),
+      gameName: row.game_name,
+      playerName: row.player_name,
+      startedAt: row.started_at,
+      schemaVersion: row.schema_version,
+      factorySettings: row.factory_settings,
+      initialGameState: row.initial_game_state,
+      currentGameState: row.current_game_state,
+      stateVersion: String(row.state_version),
+    })
+  } catch (error) {
+    console.error('Luokkahuonepelin tilan haku epäonnistui:', error.message)
+    return res.status(503).json({
+      status: 'error',
+      message: 'Pelisuorituksen tilaa ei voitu hakea',
+    })
+  }
 }

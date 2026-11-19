@@ -23,6 +23,9 @@ import {
   saveQuestGameSession,
   loadQuestGameSession,
   clearQuestGameSession,
+  createClassroomGameSession,
+  saveClassroomGameSession,
+  loadClassroomGameSession,
 } from './teacherTestGameSession.js'
 
 function createSessionStorage() {
@@ -178,6 +181,56 @@ test('both game modes restore the same seeded history and their own settings sna
     }
     clearQuestGameSession(storage)
     assert.equal(loadQuestGameSession(storage), null)
+  }
+})
+
+test('Quest, teacher-test and classroom sessions preserve their complete initial state independently', () => {
+  const settings = structuredClone(DEFAULT_FACTORY_SETTINGS)
+  settings.costs.annualFixedCosts = 1600000
+  settings.initialState.finance.equity = 2500000
+  const initialGameState = createInitialGameState(settings, { historySeed: 987654321 })
+  const storage = createSessionStorage()
+  const modes = [
+    {
+      create: createQuestGameSession,
+      save: saveQuestGameSession,
+      load: loadQuestGameSession,
+      mode: 'quest',
+    },
+    {
+      create: createTeacherTestGameSession,
+      save: saveTeacherTestGameSession,
+      load: loadTeacherTestGameSession,
+      mode: TEACHER_TEST_GAME_MODE,
+    },
+    {
+      create: createClassroomGameSession,
+      save: saveClassroomGameSession,
+      load: loadClassroomGameSession,
+      mode: 'classroom',
+    },
+  ]
+
+  for (const { create, save, load, mode } of modes) {
+    const session = create({
+      factorySettings: settings,
+      initialGameState,
+      playerName: mode === 'classroom' ? 'Pelaaja' : '',
+      classroomSessionId: mode === 'classroom' ? '42' : null,
+    })
+    save(session, storage)
+
+    const restored = load(storage)
+    assert.equal(restored.mode, mode)
+    assert.deepEqual(restored.factorySettings, settings)
+    assert.deepEqual(restored.initialGameState, initialGameState)
+    assert.deepEqual(restored.gameState, initialGameState)
+    assert.equal(restored.gameState.historySeed, 987654321)
+    assert.deepEqual(
+      restored.gameState.initialFinancialHistory,
+      initialGameState.initialFinancialHistory,
+    )
+    assert.equal(restored.classroomSessionId, mode === 'classroom' ? '42' : null)
   }
 })
 

@@ -12,6 +12,11 @@ export function hashClassroomToken(token) {
   return createHash('sha256').update(token, 'utf8').digest()
 }
 
+export function readClassroomToken(req) {
+  const token = req.cookies?.[CLASSROOM_SESSION_COOKIE]
+  return typeof token === 'string' && /^[A-Za-z0-9_-]{43}$/.test(token) ? token : null
+}
+
 export function classroomCookieOptions() {
   return {
     httpOnly: true,
@@ -24,10 +29,9 @@ export function classroomCookieOptions() {
 
 export async function requireClassroomSession(req, res, next) {
   res.set('Cache-Control', 'no-store')
-  const token = req.cookies?.[CLASSROOM_SESSION_COOKIE]
+  const token = readClassroomToken(req)
   const id = req.params.sessionId
-  if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token) ||
-      typeof id !== 'string' || !/^[1-9]\d{0,18}$/.test(id) ||
+  if (!token || typeof id !== 'string' || !/^[1-9]\d{0,18}$/.test(id) ||
       BigInt(id) > 9223372036854775807n) {
     return res.status(401).json({ status: 'error', message: 'Pelisuorituksen valtuutus epäonnistui' })
   }

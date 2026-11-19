@@ -12,6 +12,7 @@ import { createInitialGameState } from '../../../shared/factory-settings/initial
 import { calculateRoundForecast } from '../../../shared/forecast/model.js'
 import { advanceRoundState } from '../../../shared/game-round/advanceRound.js'
 import { buildReportSeries, formatReportValue, REPORT_METRICS } from '../entities/report/model.js'
+import { GAME_DECISION_STORAGE_KEYS } from '../features/session/resetGameSession.js'
 import {
   createQuestGameSession, saveQuestGameSession, loadQuestGameSession,
   createTeacherTestGameSession, saveTeacherTestGameSession, loadTeacherTestGameSession,
@@ -19,11 +20,13 @@ import {
 } from '../features/session/teacherTestGameSession.js'
 
 const HOOKS = 'virtual:final-report-hooks'
+const LOGIN_HOOKS = `${HOOKS}-login`
 const originalWindow = globalThis.window
 const originalSessionStorage = globalThis.sessionStorage
 let server
 let cacheDir
 let hooks
+let loginHooks
 let App
 let FinalReportPage
 let ReportLineChart
@@ -44,15 +47,18 @@ before(async () => {
       enforce: 'pre',
       transform(code, id) {
         const path = id.replaceAll('\\', '/')
+        if (path.endsWith('/login/LoginPage.jsx')) {
+          return code.replace("from 'react'", `from '${LOGIN_HOOKS}'`)
+        }
         if (path.endsWith('/app/App.jsx') || path.endsWith('/game/FinalReportPage.jsx')) {
           return code.replace("from 'react'", `from '${HOOKS}'`)
         }
       },
       resolveId(id) {
-        if (id === HOOKS) return `\0${HOOKS}`
+        if (id === HOOKS || id === LOGIN_HOOKS) return `\0${id}`
       },
       load(id) {
-        if (id !== `\0${HOOKS}`) return
+        if (id !== `\0${HOOKS}` && id !== `\0${LOGIN_HOOKS}`) return
         return `
           let states = [], effects = [], dependencies = [], cursor = 0
           export function reset() { states = []; effects = []; dependencies = [] }
@@ -70,6 +76,7 @@ before(async () => {
             }]
           }
           export function useMemo(calculate) { cursor++; return calculate() }
+          export function useRef(initial) { return useState(() => ({ current: initial }))[0] }
           export function useEffect(effect, deps) {
             const index = cursor++
             const previous = dependencies[index]
@@ -83,6 +90,7 @@ before(async () => {
     }],
   })
   hooks = await server.ssrLoadModule(HOOKS)
+  loginHooks = await server.ssrLoadModule(LOGIN_HOOKS)
   App = (await server.ssrLoadModule('/src/app/App.jsx')).default
   FinalReportPage = (await server.ssrLoadModule('/src/pages/game/FinalReportPage.jsx')).default
   ReportLineChart = (await server.ssrLoadModule('/src/pages/game/ReportLineChart.jsx')).default
@@ -99,6 +107,7 @@ function memoryStorage() {
 
 beforeEach(() => {
   hooks.reset()
+  loginHooks.reset()
   storage = memoryStorage()
   listeners = new Map()
   globalThis.sessionStorage = storage
@@ -279,17 +288,27 @@ test('classroom refresh verifies the saved session and restart clears its ID', a
   try {
     const factorySettings = structuredClone(DEFAULT_FACTORY_SETTINGS)
     const initialGameState = createInitialGameState(factorySettings)
+    const forecast = calculateRoundForecast(initialGameState, {}, factorySettings)
+    const { nextGameState: gameState } = advanceRoundState({
+      gameState: initialGameState, forecast, totalRounds: factorySettings.game.totalRounds,
+    })
     saveClassroomGameSession(createClassroomGameSession({
-      factorySettings, initialGameState, classroomSessionId: '42', pathname: '/act',
+      factorySettings, initialGameState, gameState, classroomSessionId: '42', pathname: '/act',
     }), storage)
+    const draftKey = GAME_DECISION_STORAGE_KEYS.at(-1)
+    window.localStorage.setItem(draftKey, JSON.stringify({ round: 2, price: 25000 }))
     assert.ok(find(renderApp(), (element) => element.props.role === 'status').length)
     await new Promise((resolve) => setImmediate(resolve))
     let tree = renderApp()
     const layout = find(tree, (element) => element.type?.name === 'GameLayout')[0]
     assert.ok(layout)
+    assert.equal(layout.props.round, 2)
+    assert.deepEqual(loadClassroomGameSession(storage).gameState, gameState)
+    assert.ok(window.localStorage.getItem(draftKey))
     assert.equal(loadClassroomGameSession(storage).classroomSessionId, '42')
     assert.equal(requests.filter((url) => url === '/api/games/sessions/42').length, 1)
     assert.equal(requests.some((url) => url.includes('/join/')), false)
+    assert.equal(requests.includes('/api/games/sessions/current'), false)
 
     layout.props.onRestartGame()
     tree = renderApp()
@@ -321,31 +340,96 @@ test('invalid classroom authorization blocks the game and preserves the local se
   }
 })
 
-test('joining a new classroom replaces the previous session ID', async () => {
-  const originalFetch = globalThis.fetch
-  globalThis.fetch = async (url) => url === '/api/games/sessions/43'
-    ? { ok: true, json: async () => ({ sessionId: '43' }) }
-    : { ok: false, status: 401 }
-  try {
-    const factorySettings = structuredClone(DEFAULT_FACTORY_SETTINGS)
-    const initialGameState = createInitialGameState(factorySettings)
-    saveClassroomGameSession(createClassroomGameSession({
-      factorySettings, initialGameState, classroomSessionId: '42', pathname: '/act',
-    }), storage)
-    renderApp()
-    await new Promise((resolve) => setImmediate(resolve))
-    const errorPage = renderApp()
-    find(errorPage, (element) => element.type === 'button' && element.props.children === 'Palaa liittymiseen')[0]
-      .props.onClick()
-    const login = find(renderApp(), (element) => element.type?.name === 'LoginPage')[0]
-    login.props.onJoinClassroomGame({ playerName: 'Player', game: { sessionId: '43', setup: {} } })
-    renderApp()
-    await new Promise((resolve) => setImmediate(resolve))
-    assert.ok(find(renderApp(), (element) => element.type?.name === 'GameLayout').length)
-    assert.equal(loadClassroomGameSession(storage).classroomSessionId, '43')
-  } finally {
-    globalThis.fetch = originalFetch
+test('classroom join preserves local progress until a validated state arrives and retries only GET', async (t) => {
+  const factorySettings = structuredClone(DEFAULT_FACTORY_SETTINGS)
+  factorySettings.costs.annualFixedCosts = 1600000
+  const initialGameState = createInitialGameState(factorySettings, { historySeed: 0 })
+  const currentGameState = structuredClone(initialGameState)
+  currentGameState.market.price = 26000
+  const serverState = {
+    sessionId: '43', schemaVersion: 1, playerName: 'Palvelimen pelaaja',
+    factorySettings, initialGameState, currentGameState,
   }
+  const oldGameState = advanceRoundState({
+    gameState: initialGameState,
+    forecast: calculateRoundForecast(initialGameState, {}, factorySettings),
+    totalRounds: factorySettings.game.totalRounds,
+  }).nextGameState
+  saveClassroomGameSession(createClassroomGameSession({
+    factorySettings, initialGameState, gameState: oldGameState, classroomSessionId: '42', pathname: '/act',
+  }), storage)
+  const draftKey = GAME_DECISION_STORAGE_KEYS.at(-1)
+  const draft = JSON.stringify({ round: 2, price: 27000 })
+  window.localStorage.setItem(draftKey, draft)
+  window.location.pathname = '/login'
+
+  const requests = []
+  let stateResponse = { ok: false, status: 503 }
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (url === '/api/games/join/KOODI') {
+      requests.push(options.method)
+      return { ok: true, json: async () => ({ sessionId: '43', setup: {} }) }
+    }
+    if (url === '/api/games/sessions/current') {
+      requests.push(options.method ?? 'GET')
+      return stateResponse
+    }
+    if (url === '/api/games/sessions/42') {
+      return { ok: true, json: async () => ({ sessionId: '42' }) }
+    }
+    return { ok: false, status: 401 }
+  })
+
+  const login = find(renderApp(), (element) => element.type?.name === 'LoginPage')[0]
+  const randomSeed = t.mock.method(globalThis.crypto, 'getRandomValues')
+  const renderLogin = () => {
+    const tree = loginHooks.render(login.type, login.props)
+    loginHooks.flushEffects()
+    return tree
+  }
+  const submit = () => find(renderLogin(), (element) => element.type === 'form')[0]
+    .props.onSubmit({ preventDefault() {} })
+  find(renderLogin(), (element) => element.type === 'button' && element.props.className === 'login-option-card')[1]
+    .props.onClick()
+  for (const [id, value] of [['join-game-code', 'KOODI'], ['join-player-name', 'Pelaaja']]) {
+    find(renderLogin(), (element) => element.props.id === id)[0].props.onChange({ target: { value } })
+  }
+
+  await submit()
+  assert.deepEqual(requests, ['POST', 'GET'])
+  assert.ok(find(renderLogin(), (element) => element.props.children === 'Yritä tilahakua uudelleen').length)
+  assert.deepEqual(loadClassroomGameSession(storage).gameState, oldGameState)
+  assert.equal(window.localStorage.getItem(draftKey), draft)
+
+  for (const [state, message] of [
+    [{ ...serverState, sessionId: '44' }, /tunniste ei vastaa/],
+    [{ ...serverState, schemaVersion: 2 }, /versiota ei tueta/],
+    [{ ...serverState, factorySettings: {} }, /rakenne ei kelpaa/],
+    [{ ...serverState, initialGameState: {} }, /rakenne ei kelpaa/],
+    [{ ...serverState, currentGameState: { ...currentGameState, historySeed: 1 } }, /rakenne ei kelpaa/],
+  ]) {
+    stateResponse = { ok: true, json: async () => state }
+    await submit()
+    const alert = find(renderLogin(), (element) => element.props.role === 'alert')[0]
+    assert.match(alert.props.children, message)
+    assert.deepEqual(loadClassroomGameSession(storage).gameState, oldGameState)
+    assert.equal(window.localStorage.getItem(draftKey), draft)
+  }
+
+  stateResponse = { ok: true, json: async () => serverState }
+  await submit()
+  const tree = renderApp()
+  assert.ok(find(tree, (element) => element.type?.name === 'GameLayout').length)
+  assert.deepEqual(requests, ['POST', ...Array(7).fill('GET')])
+  const saved = loadClassroomGameSession(storage)
+  assert.equal(saved.classroomSessionId, '43')
+  assert.equal(saved.playerName, serverState.playerName)
+  assert.deepEqual(saved.factorySettings, factorySettings)
+  assert.deepEqual(saved.initialGameState, initialGameState)
+  assert.deepEqual(saved.gameState, currentGameState)
+  assert.equal(saved.gameState.historySeed, 0)
+  assert.equal(randomSeed.mock.callCount(), 0)
+  assert.equal(window.localStorage.getItem(draftKey), null)
 })
 
 test('SVG preserves missing-value gaps and places negative and positive results on opposite sides of zero', () => {

@@ -5,6 +5,7 @@ import {
 } from '../repositories/games.repository.js'
 import { buildFactorySettingsFromSetup } from '../../../shared/factory-settings/setupToFactorySettings.js'
 import { createInitialGameState } from '../../../shared/factory-settings/initialGameState.js'
+import { confirmClassroomRound, parseRoundConfirmation, RoundConfirmationError } from '../services/classroomRound.js'
 import {
   CLASSROOM_SESSION_COOKIE,
   classroomCookieOptions,
@@ -98,6 +99,26 @@ export async function joinGame(req, res) {
 export function getClassroomSession(req, res) {
   res.set('Cache-Control', 'no-store')
   res.json({ sessionId: req.classroomSessionId })
+}
+
+export async function postClassroomRoundConfirmation(req, res) {
+  res.set('Cache-Control', 'no-store')
+  const token = readClassroomToken(req)
+  if (!token) {
+    return res.status(401).json({ status: 'error', code: 'UNAUTHORIZED', message: 'Pelisuorituksen valtuutus epäonnistui' })
+  }
+  try {
+    const input = parseRoundConfirmation(req.body)
+    return res.json(await confirmClassroomRound({ ...input, accessTokenHash: hashClassroomToken(token) }))
+  } catch (error) {
+    if (error instanceof RoundConfirmationError) {
+      return res.status(error.status).json({ status: 'error', code: error.code, message: error.message })
+    }
+    console.error('Kierrosvahvistus epäonnistui:', error.code ?? error.name)
+    return res.status(503).json({
+      status: 'error', code: 'CONFIRMATION_UNAVAILABLE', message: 'Kierrosvahvistuksen tulosta ei voitu varmistaa.',
+    })
+  }
 }
 
 export async function getCurrentClassroomState(req, res) {

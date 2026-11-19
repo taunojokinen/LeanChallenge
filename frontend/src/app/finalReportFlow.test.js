@@ -4,6 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { setImmediate } from 'node:timers'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createServer } from 'vite'
 import { DEFAULT_FACTORY_SETTINGS } from '../../../shared/factory-settings/defaultFactorySettings.js'
@@ -14,6 +15,7 @@ import { buildReportSeries, formatReportValue, REPORT_METRICS } from '../entitie
 import {
   createQuestGameSession, saveQuestGameSession, loadQuestGameSession,
   createTeacherTestGameSession, saveTeacherTestGameSession, loadTeacherTestGameSession,
+  createClassroomGameSession, saveClassroomGameSession, loadClassroomGameSession,
 } from '../features/session/teacherTestGameSession.js'
 
 const HOOKS = 'virtual:final-report-hooks'
@@ -261,6 +263,88 @@ test('report route is unavailable before completion and restarting preserves the
     assert.equal(restarted.gameState.completion, undefined)
     assert.equal((restarted.gameState.history ?? []).length, 0)
     assert.equal(window.location.pathname, '/plan/cockpit')
+  }
+})
+
+test('classroom refresh verifies the saved session and restart clears its ID', async () => {
+  const originalFetch = globalThis.fetch
+  const requests = []
+  globalThis.fetch = async (url) => {
+    requests.push(url)
+    if (url === '/api/games/sessions/42') {
+      return { ok: true, json: async () => ({ sessionId: '42' }) }
+    }
+    return { ok: false, status: 401 }
+  }
+  try {
+    const factorySettings = structuredClone(DEFAULT_FACTORY_SETTINGS)
+    const initialGameState = createInitialGameState(factorySettings)
+    saveClassroomGameSession(createClassroomGameSession({
+      factorySettings, initialGameState, classroomSessionId: '42', pathname: '/act',
+    }), storage)
+    assert.ok(find(renderApp(), (element) => element.props.role === 'status').length)
+    await new Promise((resolve) => setImmediate(resolve))
+    let tree = renderApp()
+    const layout = find(tree, (element) => element.type?.name === 'GameLayout')[0]
+    assert.ok(layout)
+    assert.equal(loadClassroomGameSession(storage).classroomSessionId, '42')
+    assert.equal(requests.filter((url) => url === '/api/games/sessions/42').length, 1)
+    assert.equal(requests.some((url) => url.includes('/join/')), false)
+
+    layout.props.onRestartGame()
+    tree = renderApp()
+    assert.ok(find(tree, (element) => element.type?.name === 'LoginPage').length)
+    assert.equal(loadClassroomGameSession(storage), null)
+    assert.equal(loadQuestGameSession(storage).classroomSessionId, null)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('invalid classroom authorization blocks the game and preserves the local session for retry', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => ({ ok: false, status: 401 })
+  try {
+    const factorySettings = structuredClone(DEFAULT_FACTORY_SETTINGS)
+    const initialGameState = createInitialGameState(factorySettings)
+    saveClassroomGameSession(createClassroomGameSession({
+      factorySettings, initialGameState, classroomSessionId: '42', pathname: '/act',
+    }), storage)
+    renderApp()
+    await new Promise((resolve) => setImmediate(resolve))
+    const tree = renderApp()
+    assert.ok(find(tree, (element) => element.props.role === 'alert').length)
+    assert.equal(find(tree, (element) => element.type?.name === 'ActPage').length, 0)
+    assert.equal(loadClassroomGameSession(storage).classroomSessionId, '42')
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('joining a new classroom replaces the previous session ID', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async (url) => url === '/api/games/sessions/43'
+    ? { ok: true, json: async () => ({ sessionId: '43' }) }
+    : { ok: false, status: 401 }
+  try {
+    const factorySettings = structuredClone(DEFAULT_FACTORY_SETTINGS)
+    const initialGameState = createInitialGameState(factorySettings)
+    saveClassroomGameSession(createClassroomGameSession({
+      factorySettings, initialGameState, classroomSessionId: '42', pathname: '/act',
+    }), storage)
+    renderApp()
+    await new Promise((resolve) => setImmediate(resolve))
+    const errorPage = renderApp()
+    find(errorPage, (element) => element.type === 'button' && element.props.children === 'Palaa liittymiseen')[0]
+      .props.onClick()
+    const login = find(renderApp(), (element) => element.type?.name === 'LoginPage')[0]
+    login.props.onJoinClassroomGame({ playerName: 'Player', game: { sessionId: '43', setup: {} } })
+    renderApp()
+    await new Promise((resolve) => setImmediate(resolve))
+    assert.ok(find(renderApp(), (element) => element.type?.name === 'GameLayout').length)
+    assert.equal(loadClassroomGameSession(storage).classroomSessionId, '43')
+  } finally {
+    globalThis.fetch = originalFetch
   }
 })
 

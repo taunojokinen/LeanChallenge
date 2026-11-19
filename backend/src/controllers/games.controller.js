@@ -1,4 +1,10 @@
 import { findGameByJoinCode, createGameSession } from '../repositories/games.repository.js'
+import {
+  CLASSROOM_SESSION_COOKIE,
+  classroomCookieOptions,
+  createClassroomToken,
+  hashClassroomToken,
+} from '../auth/classroomSession.js'
 
 export async function joinGame(req, res) {
   const { joinCode } = req.params
@@ -22,18 +28,22 @@ export async function joinGame(req, res) {
     }
 
     // Luodaan peli-istunto vasta kun liittymiskoodi on varmistettu oikeaksi
+    const token = createClassroomToken()
     const session = await createGameSession({
       gameId: row.id,
       playerName: playerName.trim(),
+      accessTokenHash: hashClassroomToken(token),
     })
 
+    res.cookie(CLASSROOM_SESSION_COOKIE, token, classroomCookieOptions())
+    res.set('Cache-Control', 'no-store')
     // Muotoillaan vastaus: setup-asetukset omaan objektiinsa.
     // Opettajan tietoja (teacher_id) ei palauteta.
     res.json({
       id: row.id,
       name: row.name,
       joinCode: row.join_code,
-      sessionId: session.id,
+      sessionId: String(session.id),
       setup: {
         id: row.setup_id,
         name: row.setup_name,
@@ -60,4 +70,10 @@ export async function joinGame(req, res) {
       message: 'Pelin hakeminen epäonnistui',
     })
   }
+
+}
+
+export function getClassroomSession(req, res) {
+  res.set('Cache-Control', 'no-store')
+  res.json({ sessionId: req.classroomSessionId })
 }

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizeJoinCode, fetchGameByJoinCode } from './gamesApi.js'
+import { normalizeJoinCode, fetchGameByJoinCode, verifyClassroomSession } from './gamesApi.js'
 
 const originalFetch = globalThis.fetch
 
@@ -85,4 +85,23 @@ test('fetchGameByJoinCode throws 404 for unknown code', async () => {
       return true
     }
   )
+})
+
+test('classroom authorization checks the requested string ID without joining again', async () => {
+  let requested
+  globalThis.fetch = async (url, options) => {
+    requested = { url, options }
+    return { ok: true, json: async () => ({ sessionId: '9007199254740993' }) }
+  }
+  await verifyClassroomSession('9007199254740993')
+  assert.equal(requested.url, '/api/games/sessions/9007199254740993')
+  assert.equal(requested.options.cache, 'no-store')
+  assert.equal(requested.options.method, undefined)
+})
+
+test('classroom authorization reports rejected and mismatched sessions', async () => {
+  mockFetch(401)
+  await assert.rejects(() => verifyClassroomSession('42'), /valtuutus/)
+  mockFetch(200, { sessionId: '43' })
+  await assert.rejects(() => verifyClassroomSession('42'), /ei täsmää/)
 })

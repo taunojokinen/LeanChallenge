@@ -58,3 +58,24 @@ export async function fetchGameByJoinCode(joinCode, playerName) {
 
   return response.json()
 }
+
+export async function verifyClassroomSession(sessionId) {
+  let response
+  try {
+    response = await fetch(`/api/games/sessions/${encodeURIComponent(sessionId)}`, {
+      cache: 'no-store',
+    })
+  } catch {
+    throw new Error('Pelisuoritusta ei voitu tarkistaa. Tarkista verkkoyhteys ja yritä uudelleen.')
+  }
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Pelisuorituksen valtuutus ei ole voimassa. Liity peliin uudelleen.')
+    }
+    throw new Error('Pelisuoritusta ei voitu tarkistaa. Yritä uudelleen.')
+  }
+  const result = await response.json()
+  if (result.sessionId !== sessionId) {
+    throw new Error('Pelisuorituksen tunniste ei täsmää.')
+  }
+}

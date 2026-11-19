@@ -45,7 +45,7 @@ import {
 import { buildFactorySettingsFromSetup } from '../entities/factory-settings/setupToFactorySettings.js'
 import { fetchCurrentTeacher, logoutTeacher } from '../shared/api/authApi.js'
 import { fetchTeacherGames, createTeacherGame } from '../shared/api/teacherGamesApi.js'
-import { fetchSetups } from '../shared/api/gamesApi.js'
+import { fetchSetups, verifyClassroomSession } from '../shared/api/gamesApi.js'
 
 function normalizePath(pathname, shouldReplace = false) {
   const currentPath = pathname || '/'
@@ -129,6 +129,11 @@ function App() {
   const [playerName, setPlayerName] = useState(() => restoredSession?.playerName ?? '')
   const [selectedSetupName, setSelectedSetupName] = useState(() => restoredSession?.setupName ?? '')
   const [classroomSessionId, setClassroomSessionId] = useState(() => restoredSession?.classroomSessionId ?? null)
+  const [classroomAuthStatus, setClassroomAuthStatus] = useState(
+    () => restoredSession?.mode === CLASSROOM_GAME_MODE ? 'checking' : 'idle',
+  )
+  const [classroomAuthError, setClassroomAuthError] = useState('')
+  const [classroomAuthAttempt, setClassroomAuthAttempt] = useState(0)
   const [teacher, setTeacher] = useState(null)
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [teacherGames, setTeacherGames] = useState([])
@@ -203,6 +208,25 @@ function App() {
       window.history.replaceState({}, '', effectivePathname)
     }
   }, [effectivePathname, pathname])
+
+  useEffect(() => {
+    if (gameMode !== CLASSROOM_GAME_MODE) return
+    let cancelled = false
+    const verification = typeof classroomSessionId === 'string' && /^[1-9]\d*$/.test(classroomSessionId)
+      ? verifyClassroomSession(classroomSessionId)
+      : Promise.reject(new Error('Pelisuorituksen tunniste puuttuu. Liity peliin uudelleen.'))
+    verification
+      .then(() => {
+        if (!cancelled) setClassroomAuthStatus('authorized')
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setClassroomAuthError(error.message)
+          setClassroomAuthStatus('error')
+        }
+      })
+    return () => { cancelled = true }
+  }, [gameMode, classroomSessionId, classroomAuthAttempt])
 
   useEffect(() => {
     try {
@@ -294,7 +318,7 @@ function App() {
     return result
   }
 
-  const startNewGameSession = (mode, settings, destination = '/plan/cockpit') => {
+  const startNewGameSession = (mode, settings, destination = '/plan/cockpit', sessionId = null) => {
     const sessionSettings = structuredClone(settings)
     const startState = createInitialGameState(sessionSettings)
     resetGameDecisionStorage()
@@ -302,6 +326,9 @@ function App() {
     clearQuestGameSession()
     clearClassroomGameSession()
     setGameMode(mode)
+    setClassroomSessionId(sessionId)
+    setClassroomAuthStatus(mode === CLASSROOM_GAME_MODE ? 'checking' : 'idle')
+    setClassroomAuthError('')
     setFactorySettings(sessionSettings)
     setInitialGameState(startState)
     setGameState(structuredClone(startState))
@@ -325,13 +352,19 @@ function App() {
   }
 
   const handleJoinClassroomGame = ({ playerName: name, game }) => {
+    if (typeof game.sessionId !== 'string' || !/^[1-9]\d*$/.test(game.sessionId)) {
+      throw new Error('Pelisuorituksen tunniste puuttuu.')
+    }
     const settings = buildFactorySettingsFromSetup(game.setup)
     setPlayerName(name)
-    setClassroomSessionId(game.sessionId ?? null)
-    startNewGameSession(CLASSROOM_GAME_MODE, settings)
+    startNewGameSession(CLASSROOM_GAME_MODE, settings, '/plan/cockpit', game.sessionId)
   }
 
   const handleRestartGame = () => {
+    if (gameMode === CLASSROOM_GAME_MODE) {
+      startNewGameSession('quest', DEFAULT_FACTORY_SETTINGS, '/login')
+      return
+    }
     startNewGameSession(gameMode, factorySettings)
   }
 
@@ -474,6 +507,29 @@ function App() {
   }
 
   if (pageKey in gamePhaseByPageKey) {
+    if (gameMode === CLASSROOM_GAME_MODE && classroomAuthStatus !== 'authorized') {
+      return (
+        <section>
+          {classroomAuthStatus === 'checking' ? (
+            <p role="status">Tarkistetaan pelisuoritusta...</p>
+          ) : (
+            <>
+              <p role="alert">{classroomAuthError}</p>
+              <button type="button" onClick={() => {
+                setClassroomAuthStatus('checking')
+                setClassroomAuthError('')
+                setClassroomAuthAttempt((attempt) => attempt + 1)
+              }}>
+                Yritä uudelleen
+              </button>
+              <button type="button" onClick={() => startNewGameSession('quest', DEFAULT_FACTORY_SETTINGS, '/login')}>
+                Palaa liittymiseen
+              </button>
+            </>
+          )}
+        </section>
+      )
+    }
     const phase = gamePhaseByPageKey[pageKey]
     const placeholderContent = placeholderContentByPageKey[pageKey]
 

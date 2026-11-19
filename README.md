@@ -12,7 +12,7 @@ Opinnäytetyön pohjaprojekti.
 
 - Frontend: React + Vite
 - Backend: Node.js + Express
-- Tietokanta: MongoDB + Mongoose
+- Tietokanta: PostgreSQL
 
 ## Käynnistys
 
@@ -34,9 +34,18 @@ npm run dev
 
 ## Ympäristömuuttujat
 
-Luo backend-kansioon `.env`-tiedosto esimerkiksi näin:
+Kopioi `backend/.env.example` tiedostoksi `backend/.env` ja määritä tietokannan
+yhteysasetukset ja salasana. PostgreSQL voi sijaita toisella koneella.
 
-```env
-PORT=5000
-MONGODB_URI=mongodb://localhost:27017/leanchallenge
-```
+## Luokkahuonepelin tunnistus
+
+Liittyminen luo uuden pelisuorituksen ja selaimelle 30 päivän HttpOnly-evästeen.
+Tietokantaan tallennetaan tunnisteesta vain tiiviste. Sivun päivityksessä
+pelisuoritus palautetaan selaimen istuntotallennuksesta ja valtuutus tarkistetaan
+backendiltä; yhdessä selainprofiilissa on yksi aktiivinen luokkahuonepelin eväste.
+Tuotannossa backend on ajettava asetuksella `NODE_ENV=production` HTTPS-yhteyden
+takana, jolloin evästeelle asetetaan `Secure`.
+
+Tässä vaiheessa pelitila säilytetään edelleen selaimen `sessionStorage`-tilassa.
+Selaimen välilehden sulkemisen jälkeen pelitilaa ei välttämättä voi palauttaa,
+vaikka eväste olisi voimassa. Kierrosten tietokantatallennusta ei ole vielä toteutettu.

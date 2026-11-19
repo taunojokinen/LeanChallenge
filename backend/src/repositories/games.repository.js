@@ -33,13 +33,23 @@ export async function findGameByJoinCode(joinCode) {
 }
 
 // Luo uuden peli-istunnon game_sessions-tauluun.
-export async function createGameSession({ gameId, playerName }) {
+export async function createGameSession({ gameId, playerName, accessTokenHash }) {
   const result = await pool.query(
-    `INSERT INTO game_sessions (game_id, player_name, mode, started_at)
-     VALUES ($1, $2, 'classroom', NOW())
+    `INSERT INTO game_sessions (game_id, player_name, mode, started_at, access_token_hash, access_token_expires_at)
+     VALUES ($1, $2, 'classroom', NOW(), $3, NOW() + INTERVAL '30 days')
      RETURNING id`,
-    [gameId, playerName]
+    [gameId, playerName, accessTokenHash]
   )
 
   return result.rows[0]
+}
+
+export async function findAuthorizedGameSession(sessionId, accessTokenHash) {
+  const result = await pool.query(
+    `SELECT id FROM game_sessions
+     WHERE id = $1 AND mode = 'classroom' AND access_token_hash = $2
+       AND access_token_expires_at > NOW() AND access_token_revoked_at IS NULL`,
+    [sessionId, accessTokenHash]
+  )
+  return result.rows[0] ?? null
 }

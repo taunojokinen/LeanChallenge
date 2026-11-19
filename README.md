@@ -62,3 +62,17 @@ liittymisen jälkeen. Jos haku epäonnistuu, liittymislomakkeella voi uusia
 tilahaun luomatta uutta pelisuoritusta. Sivun päivitys palauttaa edelleen
 paikallisen `sessionStorage`-tilan eikä korvaa etenemistä palvelimen alkutilalla.
 Kierrosten tietokantatallennusta ei ole vielä toteutettu.
+
+## Kierrosvahvistuksen vertailutestit
+
+[Jaetut lähtötilat ja päätökset](./shared/test-fixtures/roundConfirmationCases.js)
+ja [vertailutulokset](./shared/test-fixtures/roundConfirmationExpected.json)
+on tarkoitettu myös tulevan backend-vahvistuksen tarkistamiseen. Vertailutulokset
+on otettu nykyisestä ACT-vahvistuksesta. Alkutilan taloushistoria verrataan
+kokonaisuudessaan suoraan lähtötilaan eikä kopioida tulosfixtureen.
+
+`knlRatio` on laskentamallin suhdeluku (esimerkiksi `0.684` tarkoittaa
+`68,4 %`). `inventoryTurnoverPerYear` on vahvistetun kierroksen nykyinen
+yläpalkin mittari: toimitukset / kierroksen loppuvarasto × 4 (kertaa vuodessa);
+arvo on `null`, jos mittaria ei voi laskea. Nämä ovat testien vertailuyksiköt,
+eivät päätös tietokantaan tallennettavista yksiköistä.

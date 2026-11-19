@@ -9,6 +9,13 @@ import { createServer } from 'vite'
 import { createInitialGameState } from '../../../../shared/factory-settings/initialGameState.js'
 import { DEFAULT_FACTORY_SETTINGS } from '../../../../shared/factory-settings/defaultFactorySettings.js'
 import { calculateRoundForecast } from '../../../../shared/forecast/model.js'
+import { advanceRoundState } from '../../../../shared/game-round/advanceRound.js'
+import {
+  createRoundConfirmationInput, roundConfirmationCases,
+} from '../../../../shared/test-fixtures/roundConfirmationCases.js'
+import expectedRounds from '../../../../shared/test-fixtures/roundConfirmationExpected.json' with { type: 'json' }
+import { loadCheckProductionDecision } from '../../features/check/decisionStore.js'
+import { calculateAnnualConfirmedInventoryTurnover } from '../../entities/history/financialMetrics.js'
 
 const HOOKS_MODULE = 'virtual:act-page-test-hooks'
 const originalWindow = globalThis.window
@@ -389,5 +396,95 @@ test('saved ACT production does not increase automatically when batch size frees
       results.push(approved[0].summary.plantCapacity)
     }
     assert.ok(results[1] > results[0])
+  }
+})
+
+const decisionStorageKeys = {
+  actDecision: 'act', checkProductionDecision: 'check-production', checkStaffingDecision: 'check-staffing',
+  fiveSDecision: 'five-s', projectsDecision: 'projects', investmentsDecision: 'investments',
+}
+
+test('ACT round confirmation matches the shared whole-state reference cases', () => {
+  const observed = {}
+  for (const scenario of roundConfirmationCases) {
+    hooks.reset()
+    const { gameState, factorySettings, decisions } = createRoundConfirmationInput(scenario)
+    const original = structuredClone(gameState)
+    for (const [key, suffix] of Object.entries(decisionStorageKeys)) {
+      const storageKey = `lean-challenge-${suffix}-decision`
+      if (decisions[key]) window.localStorage.setItem(storageKey, JSON.stringify(decisions[key]))
+      else window.localStorage.removeItem(storageKey)
+    }
+
+    const forecasts = []
+    const tree = hooks.render(ActPage, {
+      gameState, factorySettings, onAdvanceRound: (forecast) => forecasts.push(forecast),
+    })
+    findElements(tree, (element) => element.type?.name === 'Button')[0].props.onClick()
+    assert.equal(forecasts.length, 1, scenario.name)
+    const [forecast] = forecasts
+    const totalRounds = factorySettings.game.totalRounds
+    const { nextGameState, historyEntry, confirmedRound, isGameComplete } = advanceRoundState({
+      gameState, forecast, totalRounds,
+      checkProductionDecision: loadCheckProductionDecision(gameState.round),
+    })
+
+    const { initialFinancialHistory, ...state } = nextGameState
+    assert.deepEqual(initialFinancialHistory, original.initialFinancialHistory, scenario.name)
+    assert.equal(nextGameState.historySeed, original.historySeed, scenario.name)
+    assert.deepEqual(gameState, original, scenario.name)
+    assert.equal(confirmedRound, gameState.round, scenario.name)
+    assert.equal(forecast.decisions.market.batchSize, decisions.checkProductionDecision.batchSize, scenario.name)
+    assert.equal(state.market.batchSize, decisions.checkProductionDecision.batchSize, scenario.name)
+    if (isGameComplete) {
+      assert.throws(() => advanceRoundState({ gameState: nextGameState, forecast, totalRounds }), /completed game/)
+    }
+
+    observed[scenario.name] = {
+      nextGameState: state,
+      metrics: {
+        capacity: forecast.summary.plantCapacity,
+        production: historyEntry.production.actualProduction,
+        deliveries: historyEntry.production.deliveries,
+        inventorySales: forecast.summary.inventorySales,
+        revenue: historyEntry.incomeStatement.revenue,
+        result: historyEntry.incomeStatement.result,
+        equity: historyEntry.finance.equity,
+        knlRatio: forecast.forecast.factoryKnl.knl,
+        inventoryTurnoverPerYear: calculateAnnualConfirmedInventoryTurnover(historyEntry),
+      },
+    }
+    const expected = expectedRounds[scenario.name]
+    assert.ok(expected, `Missing reference for ${scenario.name}`)
+    assert.deepEqual(nextGameState, {
+      ...expected.nextGameState,
+      initialFinancialHistory: original.initialFinancialHistory,
+    }, `${scenario.name}: next game state`)
+    assert.deepEqual(observed[scenario.name].metrics, expected.metrics, `${scenario.name}: metrics`)
+  }
+
+  assert.ok(observed['batch-20'].metrics.capacity > observed['batch-10'].metrics.capacity)
+  for (const name of ['batch-10', 'batch-20']) {
+    const { capacity, production } = observed[name].metrics
+    assert.ok(capacity < 10000 && production > 0 && production <= capacity)
+  }
+  assert.equal(observed['batch-20'].metrics.production, observed['batch-20'].metrics.capacity)
+  assert.equal(observed['stock-off'].metrics.inventorySales, 0)
+  assert.ok(observed['stock-on'].metrics.inventorySales > 0)
+  assert.ok(observed['stock-on'].metrics.deliveries > observed['stock-off'].metrics.deliveries)
+  assert.equal(observed['stock-on'].metrics.production, observed['stock-off'].metrics.production)
+
+  const developed = observed['staffing-and-development'].nextGameState
+  assert.deepEqual(developed.staffing, { assembly: 45, shipping: 7 })
+  assert.equal(developed.production.machiningMachines, 5)
+  assert.equal(developed.lean.fiveS.departments.machining.effectiveHours, 90)
+  assert.equal(developed.lean.methods.machining.smed, 100)
+
+  for (const [name, reason, round] of [
+    ['bankruptcy', 'bankruptcy', 1], ['round-limit', 'round-limit', 12], ['bankruptcy-at-limit', 'bankruptcy', 12],
+  ]) {
+    const state = observed[name].nextGameState
+    assert.equal(state.round, round)
+    assert.deepEqual(state.completion, { reason, confirmedRound: round })
   }
 })

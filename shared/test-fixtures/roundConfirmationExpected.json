@@ -1,0 +1,1462 @@
+{
+  "batch-10": {
+    "nextGameState": {
+      "round": 2,
+      "market": {
+        "price": 25000,
+        "activeVariations": 20,
+        "productionRunsPerVariation": 2,
+        "batchSize": 10
+      },
+      "production": {
+        "machiningMachines": 4
+      },
+      "staffing": {
+        "assembly": 38,
+        "shipping": 5
+      },
+      "lean": {
+        "fiveS": {
+          "focusBudgetHours": 400,
+          "departments": {
+            "machining": {
+              "effectiveHours": 0,
+              "weight": 0.42
+            },
+            "assembly": {
+              "effectiveHours": 0,
+              "weight": 0.35
+            },
+            "shipping": {
+              "effectiveHours": 0,
+              "weight": 0.23
+            }
+          }
+        },
+        "methods": {
+          "machining": {
+            "smed": 0,
+            "tpm": 0,
+            "spc": 0
+          },
+          "assembly": {
+            "method-development": 0,
+            "tpm": 0,
+            "poka-yoke": 0
+          },
+          "shipping": {
+            "method-development": 0,
+            "tpm": 0,
+            "poka-yoke": 0
+          }
+        }
+      },
+      "factory": {
+        "totalAreaM2": 10000,
+        "dispatchM2": 250,
+        "officeAndSocialM2": 200,
+        "expansionsCount": 0
+      },
+      "inventory": {
+        "finishedGoodsContainers": 180
+      },
+      "finance": {
+        "cash": 50000,
+        "bankLoans": 5070962.0579833975,
+        "equity": 1533842.1912841806,
+        "otherLiabilities": 804000,
+        "machineryBookValue": 406234.9921875,
+        "buildingsBookValue": 2709369.257080078,
+        "finishedGoodsInventoryBookValue": 3600000,
+        "rawMaterialInventoryBookValue": 643200
+      },
+      "historySeed": 123456789,
+      "history": [
+        {
+          "round": 1,
+          "incomeStatement": {
+            "revenue": 3350000,
+            "materials": 1608000,
+            "labor": 1653750,
+            "fixedCosts": 500000,
+            "inventoryChange": 0,
+            "depreciation": 90851.79565429688,
+            "interest": 37531.01306152343,
+            "result": -540132.8087158203
+          },
+          "finance": {
+            "cash": 50000,
+            "bankLoans": 5070962.0579833975,
+            "equity": 1533842.1912841806,
+            "otherLiabilities": 804000,
+            "machineryBookValue": 406234.9921875,
+            "buildingsBookValue": 2709369.257080078,
+            "finishedGoodsInventoryBookValue": 3600000,
+            "rawMaterialInventoryBookValue": 643200
+          },
+          "market": {
+            "price": 25000,
+            "activeVariations": 20
+          },
+          "production": {
+            "actualProduction": 134,
+            "deliveries": 134,
+            "demand": 200,
+            "lostSalesUnits": 66
+          },
+          "inventory": {
+            "finishedGoodsContainers": 180
+          },
+          "knl": {
+            "machining": {
+              "kPct": 66.20769230769231,
+              "nPct": 90,
+              "lPct": 70,
+              "knl": 0.41710846153846154,
+              "capacityContainers": 144,
+              "changeoverHours": 40,
+              "batchSize": 10,
+              "totalChangeovers": 13.4,
+              "changeoversPerMachine": 3.35,
+              "setupTimeHours": 40,
+              "changeoverHoursPerMachine": 134,
+              "kChangeoverPct": 87.11538461538461,
+              "kMachiningDevelopedPct": 76,
+              "plannedMachineHours": 4160,
+              "totalChangeoverHours": 536,
+              "developmentHours": {
+                "K_machining": 0,
+                "N_machining": 0,
+                "L_machining": 0,
+                "K_changeover": 0
+              }
+            },
+            "assembly": {
+              "kPct": 70,
+              "nPct": 70,
+              "lPct": 70,
+              "knl": 0.3429999999999999,
+              "capacityContainers": 150,
+              "changeoverHours": 0,
+              "developmentHours": {
+                "K_assembly": 0,
+                "N_assembly": 0,
+                "L_assembly": 0
+              }
+            },
+            "shipping": {
+              "kPct": 70,
+              "nPct": 70,
+              "lPct": 70,
+              "knl": 0.3429999999999999,
+              "capacityContainers": 178,
+              "changeoverHours": 0,
+              "developmentHours": {
+                "K_shipping": 0,
+                "N_shipping": 0,
+                "L_shipping": 0
+              }
+            },
+            "totalQualityAverage": {},
+            "openingQualityAverage": {}
+          },
+          "factoryKnl": {
+            "kPct": 68.84302477183833,
+            "nPct": 76.10169491525424,
+            "lPct": 70
+          }
+        }
+      ]
+    },
+    "metrics": {
+      "capacity": 144,
+      "production": 134,
+      "deliveries": 134,
+      "inventorySales": 0,
+      "revenue": 3350000,
+      "result": -540132.8087158203,
+      "equity": 1533842.1912841806,
+      "knlRatio": 0.3667349607760812,
+      "inventoryTurnoverPerYear": 2.977777777777778
+    }
+  },
+  "batch-20": {
+    "nextGameState": {
+      "round": 2,
+      "market": {
+        "price": 25000,
+        "activeVariations": 20,
+        "productionRunsPerVariation": 2,
+        "batchSize": 20
+      },
+      "production": {
+        "machiningMachines": 4
+      },
+      "staffing": {
+        "assembly": 38,
+        "shipping": 5
+      },
+      "lean": {
+        "fiveS": {
+          "focusBudgetHours": 400,
+          "departments": {
+            "machining": {
+              "effectiveHours": 0,
+              "weight": 0.42
+            },
+            "assembly": {
+              "effectiveHours": 0,
+              "weight": 0.35
+            },
+            "shipping": {
+              "effectiveHours": 0,
+              "weight": 0.23
+            }
+          }
+        },
+        "methods": {
+          "machining": {
+            "smed": 0,
+            "tpm": 0,
+            "spc": 0
+          },
+          "assembly": {
+            "method-development": 0,
+            "tpm": 0,
+            "poka-yoke": 0
+          },
+          "shipping": {
+            "method-development": 0,
+            "tpm": 0,
+            "poka-yoke": 0
+          }
+        }
+      },
+      "factory": {
+        "totalAreaM2": 10000,
+        "dispatchM2": 250,
+        "officeAndSocialM2": 200,
+        "expansionsCount": 0
+      },
+      "inventory": {
+        "finishedGoodsContainers": 180
+      },
+      "finance": {
+        "cash": 50000,
+        "bankLoans": 4843762.0579833975,
+        "equity": 1741842.1912841806,
+        "otherLiabilities": 900000,
+        "machineryBookValue": 406234.9921875,
+        "buildingsBookValue": 2709369.257080078,
+        "finishedGoodsInventoryBookValue": 3600000,
+        "rawMaterialInventoryBookValue": 720000
+      },
+      "historySeed": 123456789,
+      "history": [
+        {
+          "round": 1,
+          "incomeStatement": {
+            "revenue": 3750000,
+            "materials": 1800000,
+            "labor": 1653750,
+            "fixedCosts": 500000,
+            "inventoryChange": 0,
+            "depreciation": 90851.79565429688,
+            "interest": 37531.01306152343,
+            "result": -332132.8087158203
+          },
+          "finance": {
+            "cash": 50000,
+            "bankLoans": 4843762.0579833975,
+            "equity": 1741842.1912841806,
+            "otherLiabilities": 900000,
+            "machineryBookValue": 406234.9921875,
+            "buildingsBookValue": 2709369.257080078,
+            "finishedGoodsInventoryBookValue": 3600000,
+            "rawMaterialInventoryBookValue": 720000
+          },
+          "market": {
+            "price": 25000,
+            "activeVariations": 20
+          },
+          "production": {
+            "actualProduction": 150,
+            "deliveries": 150,
+            "demand": 200,
+            "lostSalesUnits": 50
+          },
+          "inventory": {
+            "finishedGoodsContainers": 180
+          },
+          "knl": {
+            "machining": {
+              "kPct": 70.51923076923077,
+              "nPct": 90,
+              "lPct": 70,
+              "knl": 0.4442711538461539,
+              "capacityContainers": 154,
+              "changeoverHours": 40,
+              "batchSize": 20,
+              "totalChangeovers": 7.5,
+              "changeoversPerMachine": 1.875,
+              "setupTimeHours": 40,
+              "changeoverHoursPerMachine": 75,
+              "kChangeoverPct": 92.78846153846155,
+              "kMachiningDevelopedPct": 76,
+              "plannedMachineHours": 4160,
+              "totalChangeoverHours": 300,
+              "developmentHours": {
+                "K_machining": 0,
+                "N_machining": 0,
+                "L_machining": 0,
+                "K_changeover": 0
+              }
+            },
+            "assembly": {
+              "kPct": 70,
+              "nPct": 70,
+              "lPct": 70,
+              "knl": 0.3429999999999999,
+              "capacityContainers": 150,
+              "changeoverHours": 0,
+              "developmentHours": {
+                "K_assembly": 0,
+                "N_assembly": 0,
+                "L_assembly": 0
+              }
+            },
+            "shipping": {
+              "kPct": 70,
+              "nPct": 70,
+              "lPct": 70,
+              "knl": 0.3429999999999999,
+              "capacityContainers": 178,
+              "changeoverHours": 0,
+              "developmentHours": {
+                "K_shipping": 0,
+                "N_shipping": 0,
+                "L_shipping": 0
+              }
+            },
+            "totalQualityAverage": {},
+            "openingQualityAverage": {}
+          },
+          "factoryKnl": {
+            "kPct": 70.16589530801149,
+            "nPct": 76.39004149377594,
+            "lPct": 70
+          }
+        }
+      ]
+    },
+    "metrics": {
+      "capacity": 150,
+      "production": 150,
+      "deliveries": 150,
+      "inventorySales": 0,
+      "revenue": 3750000,
+      "result": -332132.8087158203,
+      "equity": 1741842.1912841806,
+      "knlRatio": 0.3751982957818855,
+      "inventoryTurnoverPerYear": 3.3333333333333335
+    }
+  },
+  "stock-off": {
+    "nextGameState": {
+      "round": 2,
+      "market": {
+        "price": 25000,
+        "activeVariations": 20,
+        "productionRunsPerVariation": 2,
+        "batchSize": 20
+      },
+      "production": {
+        "machiningMachines": 4
+      },
+      "staffing": {
+        "assembly": 38,
+        "shipping": 5
+      },
+      "lean": {
+        "fiveS": {
+          "focusBudgetHours": 400,
+          "departments": {
+            "machining": {
+              "effectiveHours": 0,
+              "weight": 0.42
+            },
+            "assembly": {
+              "effectiveHours": 0,
+              "weight": 0.35
+            },
+            "shipping": {
+              "effectiveHours": 0,
+              "weight": 0.23
+            }
+          }
+        },
+        "methods": {
+          "machining": {
+            "smed": 0,
+            "tpm": 0,
+            "spc": 0
+          },
+          "assembly": {
+            "method-development": 0,
+            "tpm": 0,
+            "poka-yoke": 0
+          },
+          "shipping": {
+            "method-development": 0,
+            "tpm": 0,
+            "poka-yoke": 0
+          }
+        }
+      },
+      "factory": {
+        "totalAreaM2": 10000,
+        "dispatchM2": 250,
+        "officeAndSocialM2": 200,
+        "expansionsCount": 0
+      },
+      "inventory": {
+        "finishedGoodsContainers": 180
+      },
+      "finance": {
+        "cash": 50000,
+        "bankLoans": 6405762.0579833975,
+        "equity": 311842.1912841806,
+        "otherLiabilities": 240000,
+        "machineryBookValue": 406234.9921875,
+        "buildingsBookValue": 2709369.257080078,
+        "finishedGoodsInventoryBookValue": 3600000,
+        "rawMaterialInventoryBookValue": 192000
+      },
+      "historySeed": 123456789,
+      "history": [
+        {
+          "round": 1,
+          "incomeStatement": {
+            "revenue": 1000000,
+            "materials": 480000,
+            "labor": 1653750,
+            "fixedCosts": 500000,
+            "inventoryChange": 0,
+            "depreciation": 90851.79565429688,
+            "interest": 37531.01306152343,
+            "result": -1762132.8087158203
+          },
+          "finance": {
+            "cash": 50000,
+            "bankLoans": 6405762.0579833975,
+            "equity": 311842.1912841806,
+            "otherLiabilities": 240000,
+            "machineryBookValue": 406234.9921875,
+            "buildingsBookValue": 2709369.257080078,
+            "finishedGoodsInventoryBookValue": 3600000,
+            "rawMaterialInventoryBookValue": 192000
+          },
+          "market": {
+            "price": 25000,
+            "activeVariations": 20
+          },
+          "production": {
+            "actualProduction": 40,
+            "deliveries": 40,
+            "demand": 200,
+            "lostSalesUnits": 160
+          },
+          "inventory": {
+            "finishedGoodsContainers": 180
+          },
+          "knl": {
+            "machining": {
+              "kPct": 74.53846153846153,
+              "nPct": 90,
+              "lPct": 70,
+              "knl": 0.4695923076923076,
+              "capacityContainers": 162,
+              "changeoverHours": 40,
+              "batchSize": 20,
+              "totalChangeovers": 2,
+              "changeoversPerMachine": 0.5,
+              "setupTimeHours": 40,
+              "changeoverHoursPerMachine": 20,
+              "kChangeoverPct": 98.07692307692307,
+              "kMachiningDevelopedPct": 76,
+              "plannedMachineHours": 4160,
+              "totalChangeoverHours": 80,
+              "developmentHours": {
+                "K_machining": 0,
+                "N_machining": 0,
+                "L_machining": 0,
+                "K_changeover": 0
+              }
+            },
+            "assembly": {
+              "kPct": 70,
+              "nPct": 70,
+              "lPct": 70,
+              "knl": 0.3429999999999999,
+              "capacityContainers": 150,
+              "changeoverHours": 0,
+              "developmentHours": {
+                "K_assembly": 0,
+                "N_assembly": 0,
+                "L_assembly": 0
+              }
+            },
+            "shipping": {
+              "kPct": 70,
+              "nPct": 70,
+              "lPct": 70,
+              "knl": 0.3429999999999999,
+              "capacityContainers": 178,
+              "changeoverHours": 0,
+              "developmentHours": {
+                "K_shipping": 0,
+                "N_shipping": 0,
+                "L_shipping": 0
+              }
+            },
+            "totalQualityAverage": {},
+            "openingQualityAverage": {}
+          },
+          "factoryKnl": {
+            "kPct": 71.50047095761381,
+            "nPct": 76.61224489795919,
+            "lPct": 70
+          }
+        }
+      ]
+    },
+    "metrics": {
+      "capacity": 150,
+      "production": 40,
+      "deliveries": 40,
+      "inventorySales": 0,
+      "revenue": 1000000,
+      "result": -1762132.8087158203,
+      "equity": 311842.1912841806,
+      "knlRatio": 0.383446811392689,
+      "inventoryTurnoverPerYear": 0.8888888888888888
+    }
+  },
+  "stock-on": {
+    "nextGameState": {
+      "round": 2,
+      "market": {
+        "price": 25000,
+        "activeVariations": 20,
+        "productionRunsPerVariation": 2,
+        "batchSize": 20
+      },
+      "production": {
+        "machiningMachines": 4
+      },
+      "staffing": {
+        "assembly": 38,
+        "shipping": 5
+      },
+      "lean": {
+        "fiveS": {
+          "focusBudgetHours": 400,
+          "departments": {
+            "machining": {
+              "effectiveHours": 0,
+              "weight": 0.42
+            },
+            "assembly": {
+              "effectiveHours": 0,
+              "weight": 0.35
+            },
+            "shipping": {
+              "effectiveHours": 0,
+              "weight": 0.23
+            }
+          }
+        },
+        "methods": {
+          "machining": {
+            "smed": 0,
+            "tpm": 0,
+            "spc": 0
+          },
+          "assembly": {
+            "method-development": 0,
+            "tpm": 0,
+            "poka-yoke": 0
+          },
+          "shipping": {
+            "method-development": 0,
+            "tpm": 0,
+            "poka-yoke": 0
+          }
+        }
+      },
+      "factory": {
+        "totalAreaM2": 10000,
+        "dispatchM2": 250,
+        "officeAndSocialM2": 200,
+        "expansionsCount": 0
+      },
+      "inventory": {
+        "finishedGoodsContainers": 50
+      },
+      "finance": {
+        "cash": 50000,
+        "bankLoans": 3155762.0579833975,
+        "equity": 961842.1912841806,
+        "otherLiabilities": 240000,
+        "machineryBookValue": 406234.9921875,
+        "buildingsBookValue": 2709369.257080078,
+        "finishedGoodsInventoryBookValue": 1000000,
+        "rawMaterialInventoryBookValue": 192000
+      },
+      "historySeed": 123456789,
+      "history": [
+        {
+          "round": 1,
+          "incomeStatement": {
+            "revenue": 4250000,
+            "materials": 480000,
+            "labor": 1653750,
+            "fixedCosts": 500000,
+            "inventoryChange": -2600000,
+            "depreciation": 90851.79565429688,
+            "interest": 37531.01306152343,
+            "result": -1112132.8087158203
+          },
+          "finance": {
+            "cash": 50000,
+            "bankLoans": 3155762.0579833975,
+            "equity": 961842.1912841806,
+            "otherLiabilities": 240000,
+            "machineryBookValue": 406234.9921875,
+            "buildingsBookValue": 2709369.257080078,
+            "finishedGoodsInventoryBookValue": 1000000,
+            "rawMaterialInventoryBookValue": 192000
+          },
+          "market": {
+            "price": 25000,
+            "activeVariations": 20
+          },
+          "production": {
+            "actualProduction": 40,
+            "deliveries": 170,
+            "demand": 200,
+            "lostSalesUnits": 30
+          },
+          "inventory": {
+            "finishedGoodsContainers": 50
+          },
+          "knl": {
+            "machining": {
+              "kPct": 74.53846153846153,
+              "nPct": 90,
+              "lPct": 70,
+              "knl": 0.4695923076923076,
+              "capacityContainers": 162,
+              "changeoverHours": 40,
+              "batchSize": 20,
+              "totalChangeovers": 2,
+              "changeoversPerMachine": 0.5,
+              "setupTimeHours": 40,
+              "changeoverHoursPerMachine": 20,
+              "kChangeoverPct": 98.07692307692307,
+              "kMachiningDevelopedPct": 76,
+              "plannedMachineHours": 4160,
+              "totalChangeoverHours": 80,
+              "developmentHours": {
+                "K_machining": 0,
+                "N_machining": 0,
+                "L_machining": 0,
+                "K_changeover": 0
+              }
+            },
+            "assembly": {
+              "kPct": 70,
+              "nPct": 70,
+              "lPct": 70,
+              "knl": 0.3429999999999999,
+              "capacityContainers": 150,
+              "changeoverHours": 0,
+              "developmentHours": {
+                "K_assembly": 0,
+                "N_assembly": 0,
+                "L_assembly": 0
+              }
+            },
+            "shipping": {
+              "kPct": 70,
+              "nPct": 70,
+              "lPct": 70,
+              "knl": 0.3429999999999999,
+              "capacityContainers": 178,
+              "changeoverHours": 0,
+              "developmentHours": {
+                "K_shipping": 0,
+                "N_shipping": 0,
+                "L_shipping": 0
+              }
+            },
+            "totalQualityAverage": {},
+            "openingQualityAverage": {}
+          },
+          "factoryKnl": {
+            "kPct": 71.50047095761381,
+            "nPct": 76.61224489795919,
+            "lPct": 70
+          }
+        }
+      ]
+    },
+    "metrics": {
+      "capacity": 150,
+      "production": 40,
+      "deliveries": 170,
+      "inventorySales": 130,
+      "revenue": 4250000,
+      "result": -1112132.8087158203,
+      "equity": 961842.1912841806,
+      "knlRatio": 0.383446811392689,
+      "inventoryTurnoverPerYear": 13.6
+    }
+  },
+  "staffing-and-development": {
+    "nextGameState": {
+      "round": 2,
+      "market": {
+        "price": 25000,
+        "activeVariations": 20,
+        "productionRunsPerVariation": 2,
+        "batchSize": 20
+      },
+      "production": {
+        "machiningMachines": 5
+      },
+      "staffing": {
+        "assembly": 45,
+        "shipping": 7
+      },
+      "lean": {
+        "fiveS": {
+          "focusBudgetHours": 400,
+          "departments": {
+            "machining": {
+              "effectiveHours": 90,
+              "weight": 0.42
+            },
+            "assembly": {
+              "effectiveHours": 80,
+              "weight": 0.35
+            },
+            "shipping": {
+              "effectiveHours": 70,
+              "weight": 0.23
+            }
+          }
+        },
+        "methods": {
+          "machining": {
+            "smed": 100,
+            "tpm": 0,
+            "spc": 0
+          },
+          "assembly": {
+            "method-development": 0,
+            "tpm": 0,
+            "poka-yoke": 0
+          },
+          "shipping": {
+            "method-development": 0,
+            "tpm": 0,
+            "poka-yoke": 0
+          }
+        }
+      },
+      "factory": {
+        "totalAreaM2": 10000,
+        "dispatchM2": 250,
+        "officeAndSocialM2": 200,
+        "expansionsCount": 0
+      },
+      "inventory": {
+        "finishedGoodsContainers": 180
+      },
+      "finance": {
+        "cash": 50000,
+        "bankLoans": 5185862.0579833975,
+        "equity": 1830342.1912841806,
+        "otherLiabilities": 1122000,
+        "machineryBookValue": 881234.9921875,
+        "buildingsBookValue": 2709369.257080078,
+        "finishedGoodsInventoryBookValue": 3600000,
+        "rawMaterialInventoryBookValue": 897600
+      },
+      "historySeed": 123456789,
+      "history": [
+        {
+          "round": 1,
+          "incomeStatement": {
+            "revenue": 4675000,
+            "materials": 2244000,
+            "labor": 2021250,
+            "fixedCosts": 500000,
+            "inventoryChange": 0,
+            "depreciation": 115851.79565429688,
+            "interest": 37531.01306152343,
+            "result": -243632.8087158203
+          },
+          "finance": {
+            "cash": 50000,
+            "bankLoans": 5185862.0579833975,
+            "equity": 1830342.1912841806,
+            "otherLiabilities": 1122000,
+            "machineryBookValue": 881234.9921875,
+            "buildingsBookValue": 2709369.257080078,
+            "finishedGoodsInventoryBookValue": 3600000,
+            "rawMaterialInventoryBookValue": 897600
+          },
+          "market": {
+            "price": 25000,
+            "activeVariations": 20
+          },
+          "production": {
+            "actualProduction": 187,
+            "deliveries": 187,
+            "demand": 200,
+            "lostSalesUnits": 13
+          },
+          "inventory": {
+            "finishedGoodsContainers": 180
+          },
+          "knl": {
+            "machining": {
+              "kPct": 72.51632664083554,
+              "nPct": 90.2532893952474,
+              "lPct": 71.26644697623702,
+              "knl": 0.4664272800402856,
+              "capacityContainers": 202,
+              "changeoverHours": 32.129127415213915,
+              "batchSize": 20,
+              "totalChangeovers": 9.35,
+              "changeoversPerMachine": 1.8699999999999999,
+              "setupTimeHours": 32.129127415213915,
+              "changeoverHoursPerMachine": 60.08146826645002,
+              "kChangeoverPct": 94.22293574361058,
+              "kMachiningDevelopedPct": 76.96249970194013,
+              "plannedMachineHours": 5200,
+              "totalChangeoverHours": 300.4073413322501,
+              "developmentHours": {
+                "K_machining": 30,
+                "N_machining": 30,
+                "L_machining": 30,
+                "K_changeover": 100
+              }
+            },
+            "assembly": {
+              "kPct": 71.12895990223959,
+              "nPct": 71.12895990223959,
+              "lPct": 71.12895990223959,
+              "knl": 0.3598648050760672,
+              "capacityContainers": 187,
+              "changeoverHours": 0,
+              "developmentHours": {
+                "K_assembly": 26.666666666666668,
+                "N_assembly": 26.666666666666668,
+                "L_assembly": 26.666666666666668
+              }
+            },
+            "shipping": {
+              "kPct": 70.9906763737249,
+              "nPct": 70.9906763737249,
+              "lPct": 70.9906763737249,
+              "knl": 0.3577700173151225,
+              "capacityContainers": 260,
+              "changeoverHours": 0,
+              "developmentHours": {
+                "K_shipping": 23.333333333333332,
+                "N_shipping": 23.333333333333332,
+                "L_shipping": 23.333333333333332
+              }
+            },
+            "totalQualityAverage": {},
+            "openingQualityAverage": {}
+          },
+          "factoryKnl": {
+            "kPct": 71.50537648742073,
+            "nPct": 77.02597198263058,
+            "lPct": 71.11635384913275
+          }
+        }
+      ]
+    },
+    "metrics": {
+      "capacity": 187,
+      "production": 187,
+      "deliveries": 187,
+      "inventorySales": 0,
+      "revenue": 4675000,
+      "result": -243632.8087158203,
+      "equity": 1830342.1912841806,
+      "knlRatio": 0.3916926003114979,
+      "inventoryTurnoverPerYear": 4.155555555555556
+    }
+  },
+  "bankruptcy": {
+    "nextGameState": {
+      "round": 1,
+      "market": {
+        "price": 25000,
+        "activeVariations": 20,
+        "productionRunsPerVariation": 2,
+        "batchSize": 20
+      },
+      "production": {
+        "machiningMachines": 4
+      },
+      "staffing": {
+        "assembly": 38,
+        "shipping": 5
+      },
+      "lean": {
+        "fiveS": {
+          "focusBudgetHours": 400,
+          "departments": {
+            "machining": {
+              "effectiveHours": 0,
+              "weight": 0.42
+            },
+            "assembly": {
+              "effectiveHours": 0,
+              "weight": 0.35
+            },
+            "shipping": {
+              "effectiveHours": 0,
+              "weight": 0.23
+            }
+          }
+        },
+        "methods": {
+          "machining": {
+            "smed": 0,
+            "tpm": 0,
+            "spc": 0
+          },
+          "assembly": {
+            "method-development": 0,
+            "tpm": 0,
+            "poka-yoke": 0
+          },
+          "shipping": {
+            "method-development": 0,
+            "tpm": 0,
+            "poka-yoke": 0
+          }
+        }
+      },
+      "factory": {
+        "totalAreaM2": 10000,
+        "dispatchM2": 250,
+        "officeAndSocialM2": 200,
+        "expansionsCount": 0
+      },
+      "inventory": {
+        "finishedGoodsContainers": 180
+      },
+      "finance": {
+        "cash": 50000,
+        "bankLoans": 6917736.057983398,
+        "equity": -332131.8087158203,
+        "otherLiabilities": 900000,
+        "machineryBookValue": 406234.9921875,
+        "buildingsBookValue": 2709369.257080078,
+        "finishedGoodsInventoryBookValue": 3600000,
+        "rawMaterialInventoryBookValue": 720000
+      },
+      "historySeed": 123456789,
+      "history": [
+        {
+          "round": 1,
+          "incomeStatement": {
+            "revenue": 3750000,
+            "materials": 1800000,
+            "labor": 1653750,
+            "fixedCosts": 500000,
+            "inventoryChange": 0,
+            "depreciation": 90851.79565429688,
+            "interest": 37531.01306152343,
+            "result": -332132.8087158203
+          },
+          "finance": {
+            "cash": 50000,
+            "bankLoans": 6917736.057983398,
+            "equity": -332131.8087158203,
+            "otherLiabilities": 900000,
+            "machineryBookValue": 406234.9921875,
+            "buildingsBookValue": 2709369.257080078,
+            "finishedGoodsInventoryBookValue": 3600000,
+            "rawMaterialInventoryBookValue": 720000
+          },
+          "market": {
+            "price": 25000,
+            "activeVariations": 20
+          },
+          "production": {
+            "actualProduction": 150,
+            "deliveries": 150,
+            "demand": 200,
+            "lostSalesUnits": 50
+          },
+          "inventory": {
+            "finishedGoodsContainers": 180
+          },
+          "knl": {
+            "machining": {
+              "kPct": 70.51923076923077,
+              "nPct": 90,
+              "lPct": 70,
+              "knl": 0.4442711538461539,
+              "capacityContainers": 154,
+              "changeoverHours": 40,
+              "batchSize": 20,
+              "totalChangeovers": 7.5,
+              "changeoversPerMachine": 1.875,
+              "setupTimeHours": 40,
+              "changeoverHoursPerMachine": 75,
+              "kChangeoverPct": 92.78846153846155,
+              "kMachiningDevelopedPct": 76,
+              "plannedMachineHours": 4160,
+              "totalChangeoverHours": 300,
+              "developmentHours": {
+                "K_machining": 0,
+                "N_machining": 0,
+                "L_machining": 0,
+                "K_changeover": 0
+              }
+            },
+            "assembly": {
+              "kPct": 70,
+              "nPct": 70,
+              "lPct": 70,
+              "knl": 0.3429999999999999,
+              "capacityContainers": 150,
+              "changeoverHours": 0,
+              "developmentHours": {
+                "K_assembly": 0,
+                "N_assembly": 0,
+                "L_assembly": 0
+              }
+            },
+            "shipping": {
+              "kPct": 70,
+              "nPct": 70,
+              "lPct": 70,
+              "knl": 0.3429999999999999,
+              "capacityContainers": 178,
+              "changeoverHours": 0,
+              "developmentHours": {
+                "K_shipping": 0,
+                "N_shipping": 0,
+                "L_shipping": 0
+              }
+            },
+            "totalQualityAverage": {},
+            "openingQualityAverage": {}
+          },
+          "factoryKnl": {
+            "kPct": 70.16589530801149,
+            "nPct": 76.39004149377594,
+            "lPct": 70
+          }
+        }
+      ],
+      "completion": {
+        "reason": "bankruptcy",
+        "confirmedRound": 1
+      }
+    },
+    "metrics": {
+      "capacity": 150,
+      "production": 150,
+      "deliveries": 150,
+      "inventorySales": 0,
+      "revenue": 3750000,
+      "result": -332132.8087158203,
+      "equity": -332131.8087158203,
+      "knlRatio": 0.3751982957818855,
+      "inventoryTurnoverPerYear": 3.3333333333333335
+    }
+  },
+  "round-limit": {
+    "nextGameState": {
+      "round": 12,
+      "market": {
+        "price": 25000,
+        "activeVariations": 20,
+        "productionRunsPerVariation": 2,
+        "batchSize": 20
+      },
+      "production": {
+        "machiningMachines": 4
+      },
+      "staffing": {
+        "assembly": 38,
+        "shipping": 5
+      },
+      "lean": {
+        "fiveS": {
+          "focusBudgetHours": 400,
+          "departments": {
+            "machining": {
+              "effectiveHours": 0,
+              "weight": 0.42
+            },
+            "assembly": {
+              "effectiveHours": 0,
+              "weight": 0.35
+            },
+            "shipping": {
+              "effectiveHours": 0,
+              "weight": 0.23
+            }
+          }
+        },
+        "methods": {
+          "machining": {
+            "smed": 0,
+            "tpm": 0,
+            "spc": 0
+          },
+          "assembly": {
+            "method-development": 0,
+            "tpm": 0,
+            "poka-yoke": 0
+          },
+          "shipping": {
+            "method-development": 0,
+            "tpm": 0,
+            "poka-yoke": 0
+          }
+        }
+      },
+      "factory": {
+        "totalAreaM2": 10000,
+        "dispatchM2": 250,
+        "officeAndSocialM2": 200,
+        "expansionsCount": 0
+      },
+      "inventory": {
+        "finishedGoodsContainers": 180
+      },
+      "finance": {
+        "cash": 93132262.9420166,
+        "bankLoans": 0,
+        "equity": 99667867.19128418,
+        "otherLiabilities": 900000,
+        "machineryBookValue": 406234.9921875,
+        "buildingsBookValue": 2709369.257080078,
+        "finishedGoodsInventoryBookValue": 3600000,
+        "rawMaterialInventoryBookValue": 720000
+      },
+      "historySeed": 123456789,
+      "history": [
+        {
+          "round": 12,
+          "incomeStatement": {
+            "revenue": 3750000,
+            "materials": 1800000,
+            "labor": 1653750,
+            "fixedCosts": 500000,
+            "inventoryChange": 0,
+            "depreciation": 90851.79565429688,
+            "interest": 37531.01306152343,
+            "result": -332132.8087158203
+          },
+          "finance": {
+            "cash": 93132262.9420166,
+            "bankLoans": 0,
+            "equity": 99667867.19128418,
+            "otherLiabilities": 900000,
+            "machineryBookValue": 406234.9921875,
+            "buildingsBookValue": 2709369.257080078,
+            "finishedGoodsInventoryBookValue": 3600000,
+            "rawMaterialInventoryBookValue": 720000
+          },
+          "market": {
+            "price": 25000,
+            "activeVariations": 20
+          },
+          "production": {
+            "actualProduction": 150,
+            "deliveries": 150,
+            "demand": 200,
+            "lostSalesUnits": 50
+          },
+          "inventory": {
+            "finishedGoodsContainers": 180
+          },
+          "knl": {
+            "machining": {
+              "kPct": 70.51923076923077,
+              "nPct": 90,
+              "lPct": 70,
+              "knl": 0.4442711538461539,
+              "capacityContainers": 154,
+              "changeoverHours": 40,
+              "batchSize": 20,
+              "totalChangeovers": 7.5,
+              "changeoversPerMachine": 1.875,
+              "setupTimeHours": 40,
+              "changeoverHoursPerMachine": 75,
+              "kChangeoverPct": 92.78846153846155,
+              "kMachiningDevelopedPct": 76,
+              "plannedMachineHours": 4160,
+              "totalChangeoverHours": 300,
+              "developmentHours": {
+                "K_machining": 0,
+                "N_machining": 0,
+                "L_machining": 0,
+                "K_changeover": 0
+              }
+            },
+            "assembly": {
+              "kPct": 70,
+              "nPct": 70,
+              "lPct": 70,
+              "knl": 0.3429999999999999,
+              "capacityContainers": 150,
+              "changeoverHours": 0,
+              "developmentHours": {
+                "K_assembly": 0,
+                "N_assembly": 0,
+                "L_assembly": 0
+              }
+            },
+            "shipping": {
+              "kPct": 70,
+              "nPct": 70,
+              "lPct": 70,
+              "knl": 0.3429999999999999,
+              "capacityContainers": 178,
+              "changeoverHours": 0,
+              "developmentHours": {
+                "K_shipping": 0,
+                "N_shipping": 0,
+                "L_shipping": 0
+              }
+            },
+            "totalQualityAverage": {},
+            "openingQualityAverage": {}
+          },
+          "factoryKnl": {
+            "kPct": 70.16589530801149,
+            "nPct": 76.39004149377594,
+            "lPct": 70
+          }
+        }
+      ],
+      "completion": {
+        "reason": "round-limit",
+        "confirmedRound": 12
+      }
+    },
+    "metrics": {
+      "capacity": 150,
+      "production": 150,
+      "deliveries": 150,
+      "inventorySales": 0,
+      "revenue": 3750000,
+      "result": -332132.8087158203,
+      "equity": 99667867.19128418,
+      "knlRatio": 0.3751982957818855,
+      "inventoryTurnoverPerYear": 3.3333333333333335
+    }
+  },
+  "bankruptcy-at-limit": {
+    "nextGameState": {
+      "round": 12,
+      "market": {
+        "price": 25000,
+        "activeVariations": 20,
+        "productionRunsPerVariation": 2,
+        "batchSize": 20
+      },
+      "production": {
+        "machiningMachines": 4
+      },
+      "staffing": {
+        "assembly": 38,
+        "shipping": 5
+      },
+      "lean": {
+        "fiveS": {
+          "focusBudgetHours": 400,
+          "departments": {
+            "machining": {
+              "effectiveHours": 0,
+              "weight": 0.42
+            },
+            "assembly": {
+              "effectiveHours": 0,
+              "weight": 0.35
+            },
+            "shipping": {
+              "effectiveHours": 0,
+              "weight": 0.23
+            }
+          }
+        },
+        "methods": {
+          "machining": {
+            "smed": 0,
+            "tpm": 0,
+            "spc": 0
+          },
+          "assembly": {
+            "method-development": 0,
+            "tpm": 0,
+            "poka-yoke": 0
+          },
+          "shipping": {
+            "method-development": 0,
+            "tpm": 0,
+            "poka-yoke": 0
+          }
+        }
+      },
+      "factory": {
+        "totalAreaM2": 10000,
+        "dispatchM2": 250,
+        "officeAndSocialM2": 200,
+        "expansionsCount": 0
+      },
+      "inventory": {
+        "finishedGoodsContainers": 180
+      },
+      "finance": {
+        "cash": 50000,
+        "bankLoans": 6917736.057983398,
+        "equity": -332131.8087158203,
+        "otherLiabilities": 900000,
+        "machineryBookValue": 406234.9921875,
+        "buildingsBookValue": 2709369.257080078,
+        "finishedGoodsInventoryBookValue": 3600000,
+        "rawMaterialInventoryBookValue": 720000
+      },
+      "historySeed": 123456789,
+      "history": [
+        {
+          "round": 12,
+          "incomeStatement": {
+            "revenue": 3750000,
+            "materials": 1800000,
+            "labor": 1653750,
+            "fixedCosts": 500000,
+            "inventoryChange": 0,
+            "depreciation": 90851.79565429688,
+            "interest": 37531.01306152343,
+            "result": -332132.8087158203
+          },
+          "finance": {
+            "cash": 50000,
+            "bankLoans": 6917736.057983398,
+            "equity": -332131.8087158203,
+            "otherLiabilities": 900000,
+            "machineryBookValue": 406234.9921875,
+            "buildingsBookValue": 2709369.257080078,
+            "finishedGoodsInventoryBookValue": 3600000,
+            "rawMaterialInventoryBookValue": 720000
+          },
+          "market": {
+            "price": 25000,
+            "activeVariations": 20
+          },
+          "production": {
+            "actualProduction": 150,
+            "deliveries": 150,
+            "demand": 200,
+            "lostSalesUnits": 50
+          },
+          "inventory": {
+            "finishedGoodsContainers": 180
+          },
+          "knl": {
+            "machining": {
+              "kPct": 70.51923076923077,
+              "nPct": 90,
+              "lPct": 70,
+              "knl": 0.4442711538461539,
+              "capacityContainers": 154,
+              "changeoverHours": 40,
+              "batchSize": 20,
+              "totalChangeovers": 7.5,
+              "changeoversPerMachine": 1.875,
+              "setupTimeHours": 40,
+              "changeoverHoursPerMachine": 75,
+              "kChangeoverPct": 92.78846153846155,
+              "kMachiningDevelopedPct": 76,
+              "plannedMachineHours": 4160,
+              "totalChangeoverHours": 300,
+              "developmentHours": {
+                "K_machining": 0,
+                "N_machining": 0,
+                "L_machining": 0,
+                "K_changeover": 0
+              }
+            },
+            "assembly": {
+              "kPct": 70,
+              "nPct": 70,
+              "lPct": 70,
+              "knl": 0.3429999999999999,
+              "capacityContainers": 150,
+              "changeoverHours": 0,
+              "developmentHours": {
+                "K_assembly": 0,
+                "N_assembly": 0,
+                "L_assembly": 0
+              }
+            },
+            "shipping": {
+              "kPct": 70,
+              "nPct": 70,
+              "lPct": 70,
+              "knl": 0.3429999999999999,
+              "capacityContainers": 178,
+              "changeoverHours": 0,
+              "developmentHours": {
+                "K_shipping": 0,
+                "N_shipping": 0,
+                "L_shipping": 0
+              }
+            },
+            "totalQualityAverage": {},
+            "openingQualityAverage": {}
+          },
+          "factoryKnl": {
+            "kPct": 70.16589530801149,
+            "nPct": 76.39004149377594,
+            "lPct": 70
+          }
+        }
+      ],
+      "completion": {
+        "reason": "bankruptcy",
+        "confirmedRound": 12
+      }
+    },
+    "metrics": {
+      "capacity": 150,
+      "production": 150,
+      "deliveries": 150,
+      "inventorySales": 0,
+      "revenue": 3750000,
+      "result": -332132.8087158203,
+      "equity": -332131.8087158203,
+      "knlRatio": 0.3751982957818855,
+      "inventoryTurnoverPerYear": 3.3333333333333335
+    }
+  }
+}
